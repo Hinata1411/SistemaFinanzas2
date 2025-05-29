@@ -1,0 +1,102 @@
+.usuarios-container {
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 1rem;
+  background-color: #fff;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.usuarios-container h2 {
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+  color: #333;
+}
+
+.form-usuario {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.form-usuario input,
+.form-usuario select {
+  flex: 1 1 200px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 0.375rem;
+  font-size: 1rem;
+}
+
+.form-usuario button {
+  padding: 0.5rem 1.25rem;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 1rem;
+  cursor: pointer;
+  background-color: #4f46e5;
+  color: #fff;
+}
+
+.form-usuario button:hover {
+  background-color: #4338ca;
+}
+
+.acciones-usuario {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.acciones-usuario button {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 1rem;
+  cursor: pointer;
+  color: #fff;
+}
+
+.acciones-usuario button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.acciones-usuario button:first-child {
+  background-color: #10b981;
+}
+
+.acciones-usuario button:last-child {
+  background-color: #ef4444;
+}
+
+.tabla-usuarios {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: #fff;
+  border-radius: 0.375rem;
+  overflow: hidden;
+}
+
+.tabla-usuarios th,
+.tabla-usuarios td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+  font-size: 0.95rem;
+}
+
+.tabla-usuarios th {
+  background-color: #f9fafb;
+  font-weight: 600;
+}
+
+.tabla-usuarios tbody tr:hover {
+  background-color: #f3f4f6;
+}
+
+.tabla-usuarios tr.selected {
+  background-color: #dbeafe;
+}

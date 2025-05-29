@@ -1,0 +1,536 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@100;200;300;400;500;700&display=swap');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: "Poppins", sans-serif;
+}
+
+:root {
+  --color-bg: #0c6a20d0;
+  --color-Surface: #fef8f4;
+  --color-border: #a1c99c;
+  --color-text-primary: #032905;
+  --color-text-secondary: #332e2e;
+  --color-tooltip-bg: #0c6a20d0;
+  --color-tooltip-text: #fff;
+  --shadow-border: rgba(237, 177, 132, 0.1);
+  --user-bg-color: #80d499;
+}
+
+body {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  background-color: var(--color-bg);
+}
+
+/* ==============================
+   SIDEBAR (configuración original)
+   ============================== */
+.sidebar {
+  position: fixed;
+  z-index: 10; /* La sidebar siempre encima */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  width: 16rem;
+  height: 100%;
+  padding: 0.5rem 1rem 0 1rem;
+  background-color: var(--color-Surface);
+  box-shadow: 1px 0px 10px var(--shadow-border);
+  transition: width 0.5s ease;
+}
+
+.sidebar.closed {
+  width: 4.94rem;
+}
+
+.sidebar.closed .brand img {
+  width: 2.5rem;
+}
+.sidebar.closed .menu-item img {
+  width: 2.5rem;
+}
+
+.sidebar.closed .search input {
+  display: none;
+}
+
+.sidebar.closed .menu-link span {
+  display: none;
+}
+
+.sidebar.closed .menu-item.menu-item-dropdown .menu-link img:last-child {
+  display: none;
+}
+
+.menu-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0.44rem 0;
+  padding-left: 40px;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  border-radius: 0.3rem;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.sidebar.closed .menu-item:hover > .menu-link > span {
+  display: inline-flex !important;
+  opacity: 1 !important;
+  position: absolute;
+  left: calc(2.5rem + 0.3rem);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0.5rem;
+  background-color: var(--color-tooltip-bg);
+  border-radius: 0.4rem;
+  color: var(--color-tooltip-text);
+  white-space: nowrap;
+  z-index: 10;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+}
+
+.submenu-tooltip {
+  display: none;
+  position: absolute;
+  left: calc(100% + 0.3rem);
+  top: 0;
+  background-color: var(--color-tooltip-bg);
+  color: var(--color-tooltip-text);
+  padding: 0.5rem;
+  border-radius: 0.4rem;
+  z-index: 10;
+  white-space: nowrap;
+  box-shadow: 0 0 5px rgba(0,0,0,0.2);
+}
+.submenu-tooltip p {
+  margin: 0.3rem 0;
+}
+
+.sidebar.closed .menu-item.submenu-toggle .sub-menu {
+  margin-top: 0.5rem;
+}
+
+/* SUBMENÚ (para sidebar abierta) */
+.sub-menu {
+  list-style: none;
+  display: none;
+  padding-left: 1rem;
+}
+.sub-menu.visible {
+  display: block;
+}
+.sidebar.closed .sub-menu {
+  position: absolute;
+  left: 4.2rem;
+  background-color: var(--color-Surface);
+  border-radius: 0.2rem;
+}
+.sidebar.closed .sub-menu img {
+  display: none;
+}
+.sidebar.closed .sub-menu .sub-menu-link span {
+  display: flex;
+  margin-left: 2rem;
+  padding: 0.3rem 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 0.4rem;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+.sidebar.open .sub-menu {
+  position: static;
+  background-color: transparent;
+  border: none;
+  padding-left: 1rem;
+  box-shadow: none;
+  z-index: 10;
+}
+
+/* FOOTER */
+.footer {
+  width: 100%;
+  padding: 0.5rem 0;
+  box-shadow: 0 -0.2rem 0 0 var(--color-border);
+}
+
+/* HEADER */
+.header {
+  width: 100%;
+}
+
+/* Contenedor del menú */
+.menu-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+/* Botón para ocultar sidebar */
+.menu-btn {
+  position: absolute;
+  top: 3.5%;
+  right: -0.87rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background-color: #fff;
+  color: #757575;
+  box-shadow: 2px 2px 5px var(--shadow-border);
+  cursor: pointer;
+  transition: right 0.3s ease;
+}
+.menu-btn i {
+  font-size: 1.5rem;
+}
+.sidebar.closed .menu-btn img {
+  transform: rotate(180deg);
+  transition: transform 0.3s ease;
+}
+
+/* Marca */
+.brand {
+  width: 100%;
+  height: 4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* Centra horizontalmente */
+  gap: 0.5rem;
+  padding-left: 0.1rem;
+  margin-bottom: 0.5rem;
+  overflow: hidden;
+}
+.brand img {
+  width: 7rem;
+}
+
+/* Buscador */
+.search {
+  display: flex;
+  width: 100%;
+  padding: 0.55rem 0.5rem;
+  margin-bottom: 0.5rem;
+  border-radius: 0.3rem;
+  box-shadow: 0 0 0 1px var(--color-border);
+  cursor: pointer;
+  transition: box-shadow 0.5s ease;
+}
+.search:hover {
+  box-shadow: 0 0 0 1px var(--color-text-primary);
+}
+.search img {
+  color: var(--color-text-secondary);
+  padding: 0 0.2rem;
+}
+.search input {
+  width: 70%;
+  border: none;
+  outline: none;
+  background-color: transparent;
+  color: var(--color-text-primary);
+}
+
+/* Menú principal */
+.menu {
+  display: flex;
+  margin-left: 3.6rem;
+  width: 100%;
+  flex-direction: column;
+  padding: 0.01rem 0.02rem;
+  margin-bottom: 0.05rem;
+  border-radius: 0.3rem;
+  cursor: pointer;
+  transition: box-shadow 0.5s ease;
+}
+
+.menu-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 1rem 1rem;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  border-radius: 0.3rem;
+  transition: background-color 0.3s, color 0.3s;
+}
+.menu .menu-item {
+  width: 100%;
+  margin-left: -1.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.02rem;
+}
+.menu .menu-link {
+  display: flex;
+  padding: 0.44rem 0;
+  padding-left: 40px;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  border-radius: 0.3rem;
+  align-items: center;
+  transition: background-color 0.3s, color 0.3s;
+}
+.menu-item:hover .menu-link,
+.menu-item.active .menu-link,
+.sub-menu .sub-menu-link:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg);
+  filter: brightness(0.8);
+}
+
+.menu-link img {
+  transition: filter 0.3s;
+  padding: 0 0.2rem;
+  margin-left: -40px;
+}
+.menu-link img:last-child {
+  margin-left: auto;
+  transition: transform 0.3s ease;
+}
+.menu-link.sub-menu-toggle img:last-child {
+  transform: rotate(180deg);
+}
+.menu-link span {
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+/* Sub-menú items */
+.sub-menu li {
+  margin: 0.3rem 0;
+}
+.sub-menu .sub-menu-link {
+  display: flex;
+  align-items: center;
+  padding: 0.4rem 0.1rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  border-radius: 0.3rem;
+  position: relative;
+}
+.sub-menu .sub-menu-link img {
+  padding: 0.1rem;
+}
+
+/* Usuario en el footer */
+.user {
+  display: flex;
+  overflow: hidden;
+  margin-top: 1rem;
+}
+.user-img {
+  display: flex;
+  margin: 0 0.7rem 0 0.35rem;
+}
+.user-img img {
+  width: 2.2rem;
+  height: 2.2rem;
+  object-fit: cover;
+}
+.user-data {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.user-data span {
+  display: block;
+}
+.user-data .name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.user-data .email {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+.user-icon {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: var(--color-text-secondary);
+}
+.footer-item {
+  margin-left: -3.5rem;
+  list-style: none;
+}
+.logo-empresa {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+.logo-empresa img {
+  display: block;
+  margin: 10px auto;
+}
+
+/* =======================================
+   Ajustes para la página de Home
+   ======================================= */
+
+/* Área principal: se ajusta el margen y ancho según el estado de la sidebar */
+.admin-content {
+  margin-left: 16rem; /* Sidebar abierta */
+  width: calc(100% - 16rem); /* Ancho restante */
+  padding: 2rem;
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Centra horizontalmente */
+  justify-content: center; /* Centra verticalmente */
+  box-sizing: border-box;
+  transition: margin-left 0.5s ease, width 0.5s ease;
+  z-index: 1;
+}
+
+/* Cuando la sidebar está cerrada, se ajusta el margen y el ancho */
+.sidebar.closed ~ .admin-content {
+  margin-left: 4.94rem;
+  width: calc(100% - 4.94rem);
+}
+
+/* Contenedor global del Home */
+.home-content {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+/* Contenedor de bienvenida: centrado, con imagen en esquina superior derecha */
+.home-welcome {
+  width: 100%;
+  text-align: center;
+  position: relative;
+  margin-bottom: 1rem;
+}
+.home-welcome h1 {
+  margin: 10px auto;
+  font-size: 2rem;
+}
+.home-welcome .welcome-image {
+  position: absolute;
+  top: 0;
+  right: 0;
+  max-width: 200px;
+  max-height: 200px;
+  object-fit: contain;
+}
+
+/* En dispositivos pequeños, la imagen se posiciona fija en la esquina superior derecha */
+@media (max-width: 768px) {
+  .welcome-image {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    max-width: 150px;
+    max-height: 150px;
+    z-index: 999;
+  }
+}
+
+/* Contenedor del calendario: centrado y sin margen lateral extra */
+.admin-content .calendar {
+  width: 100%;
+  max-width: 900px;
+  padding: 1rem;
+  margin: 0 auto;
+  z-index: 1;
+  /* Ocultar scrollbars */
+  overflow: hidden;
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+.admin-content .calendar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ===============================================
+   Ejemplo de estilos para Syncfusion (opcional)
+   =============================================== */
+
+/* Fuente para el calendario Syncfusion */
+.e-schedule {
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Encabezado del calendario */
+.e-schedule .e-header-cells {
+  background-color: #fef8f4;
+  color: #032905;
+  font-weight: 500;
+  border-bottom: 1px solid #a1c99c;
+}
+
+/* Número de semana */
+.e-schedule .e-week-number {
+  background-color: #3ac959d0;
+  color: #e57411;
+  font-weight: bold;
+}
+
+/* Estilo para citas o eventos */
+.e-schedule .e-appointment {
+  background-color: #0e6729;
+  border: 1px solid #a1c99c;
+  color: #470d0d;
+  font-weight: bold;
+}
+
+/* Hover en eventos */
+.e-schedule .e-appointment:hover {
+  opacity: 0.9;
+}
+
+/* Fondo adicional para el calendario Syncfusion */
+.e-schedule {
+  background-color: #e10c0c;
+}
+
+/* ===============================
+   Media Queries para Responsividad
+   =============================== */
+
+@media (max-width: 768px) {
+  .admin-content {
+    margin-left: 0;
+    width: 100%;
+    padding: 1rem;
+  }
+  .home-welcome h1 {
+    font-size: 1.5rem;
+  }
+  .home-welcome .welcome-image {
+    max-width: 100px;
+    max-height: 100px;
+  }
+  .admin-content .calendar {
+    max-width: 100%;
+    padding: 0.5rem;
+  }
+}

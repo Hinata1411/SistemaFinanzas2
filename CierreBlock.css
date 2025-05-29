@@ -1,0 +1,88 @@
+/* Contenedor de las 3 cajas */
+.grid {
+  display: flex;
+  justify-content: center; /* Centra horizontalmente */
+  align-items: flex-start;
+  gap: 20px;
+  /* Muy importante: NO permite que se bajen */
+  overflow-x: auto; /* Para que se pueda hacer scroll si no cabe */
+  padding-bottom: 10px;
+}
+
+/* Cada caja */
+.cierre-sistema-block {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  padding: 15px;
+  min-width: 280px;
+  max-width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* Título de la caja */
+.block-header {
+  text-align: center;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+/* Campos de entrada */
+.input-field {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.input-field label {
+  font-size: 14px;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.input-field input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+/* Total */
+.total-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.total-row label {
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.total-row input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+  background: #f1f1f1;
+  font-size: 14px;
+}
+
+/* ON/OFF */
+.toggle-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+/* Responsivo (opcional si deseas permitir scroll horizontal en móvil) */
+@media (max-width: 900px) {
+  .grid {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+}

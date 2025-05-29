@@ -1,0 +1,56 @@
+/* calendar.css */
+
+/* ----------------- Calendario ----------------- */
+.rbc-calendar {
+  background-color: #f8f9fa;
+  color: #36383a;
+}
+
+.rbc-toolbar {
+  background-color: #93c486;
+  color: white;
+}
+
+.rbc-toolbar-label {
+  font-weight: bold;
+}
+
+.rbc-event {
+  background-color: #36d87f !important;
+  color: white !important;
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+.rbc-selected {
+  background-color: #dc3545 !important;
+}
+
+/* ----------------- Modal Bootstrap puro ----------------- */
+.modal-backdrop.show {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(133, 56, 56, 0.5);
+  z-index: 1040;
+}
+
+.modal.d-block {
+  display: block;
+  position: fixed;
+  inset: 0;
+  overflow: auto;
+  z-index: 1050;
+  padding-top: 5rem;
+}
+
+.modal-dialog {
+  max-width: 600px;
+  margin: auto;
+}
+
+/* ----------------- Hoy (día actual) ----------------- */
+.today-cell {
+  /* color principal para "hoy" en todas las vistas */
+  background-color: #b9f1abd3 !important;
+  color: white !important;
+}

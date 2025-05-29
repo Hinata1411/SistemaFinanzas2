@@ -1,0 +1,114 @@
+/* ===== Contenedor principal ===== */
+.vista-cuadres {
+    padding: 2rem;
+    background-color: #f7f7f7;
+    min-height: 100vh;
+    width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden; /* Previene scroll horizontal */
+  }
+  
+  /* ===== Encabezado ===== */
+  .vista-cuadres h1 {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    color: #2c3e50;
+  }
+  
+  /* ===== Filtro de fecha ===== */
+  .filtros {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  
+  .filtros input[type="date"] {
+    padding: 6px 10px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+  }
+  
+  /* ===== Tabla de cuadres ===== */
+  .tabla-cuadres {
+    width: 100%;
+    max-width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.05);
+    overflow: hidden;
+    table-layout: fixed;
+  }
+  
+  .tabla-cuadres thead {
+    background-color: #2980b9;
+    color: white;
+  }
+  
+  .tabla-cuadres th,
+  .tabla-cuadres td {
+    padding: 12px;
+    text-align: center;
+    border-bottom: 1px solid #ddd;
+    font-size: 14px;
+    word-wrap: break-word;
+  }
+  
+  .tabla-cuadres tbody tr:hover {
+    background-color: #f1f1f1;
+  }
+  
+  .tabla-cuadres button {
+    padding: 6px 12px;
+    margin: 2px;
+    border: none;
+    background-color: #27ae60;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.3s ease;
+  }
+  
+  .tabla-cuadres button:hover {
+    background-color: #1e8449;
+  }
+  
+  /* ===== Detalle del cuadre ===== */
+  .detalle-cuadre {
+    margin-top: 30px;
+    padding: 20px;
+    background: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
+  }
+  
+  .detalle-cuadre h2 {
+    margin-bottom: 20px;
+    color: #2c3e50;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 10px;
+  }
+  
+  .detalle-cuadre h3 {
+    margin-top: 15px;
+    color: #34495e;
+  }
+  
+  .detalle-cuadre pre {
+    background: #f8f9fa;
+    padding: 10px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13px;
+    color: #333;
+    white-space: pre-wrap;
+  }
+  

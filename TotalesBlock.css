@@ -1,0 +1,71 @@
+.totales-block {
+  background: #fff;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  margin-top: 20px;
+}
+
+.totales-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 15px;
+}
+
+.totales-table th {
+  background: #f3f3f3;
+  text-align: left;
+  padding: 8px;
+  font-size: 14px;
+}
+
+.totales-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  font-size: 14px;
+}
+
+.comentario {
+  margin-top: 15px;
+}
+
+.comentario label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: bold;
+}
+
+.comentario textarea {
+  width: 100%;
+  padding: 10px;
+  font-size: 14px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  resize: vertical;
+}
+
+/* Estilo reutilizado para el encabezado con líneas */
+.toggle-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 15px;
+}
+
+.line {
+  flex: 1;
+  height: 1px;
+  background: #ccc;
+}
+
+.header-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+}
