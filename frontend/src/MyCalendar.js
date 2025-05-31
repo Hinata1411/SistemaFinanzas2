@@ -240,6 +240,19 @@ const MyCalendar = () => {
             }
             return {};
           }}
+          messages={{
+            date: 'Fecha',
+            time: 'Hora',
+            event: 'Evento',
+            previous: '‹',
+            next: '›',
+            today: 'Hoy',
+            month: 'Mes',
+            week: 'Semana',
+            day: 'Día',
+            agenda: 'Agenda',
+            showMore: total => `+ ${total} más`
+          }}
         />
       </div>
 
