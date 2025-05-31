@@ -5,6 +5,8 @@ import {
   signInWithEmailAndPassword, 
 } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getMessaging, getToken, onMessage } from 'firebase/messaging';
+
 
 // Tu configuración de Firebase
 const firebaseConfig = {
@@ -20,5 +22,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const messaging = getMessaging(app);
 
 export { app, auth, db, signInWithEmailAndPassword };
+export {messaging, getToken, onMessage };

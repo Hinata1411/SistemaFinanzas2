@@ -1,13 +1,13 @@
 // src/MyCalendar.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
-import 'moment/locale/es'; // Importar locale español
+import 'moment/locale/es';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
-import './calendar.css'; // tus estilos personalizados
+import './calendar.css';
 
-moment.locale('es'); // Configurar moment en español
+moment.locale('es');
 const localizer = momentLocalizer(moment);
 
 const emptyEvent = {
@@ -19,90 +19,33 @@ const emptyEvent = {
   priority:     'Media',
   alert:        false,
   alertTime:    'Al momento',
-  alertChannel: 'Notificación en pantalla',
+  alertChannel: 'Pestaña emergente',
   frequency:    'Nunca',
   category:     '',
   status:       'Pendiente'
 };
 
-// Función helper para capitalizar la primera letra
+// Helper para capitalizar la primera letra
 const capitalize = str =>
   str.charAt(0).toUpperCase() + str.slice(1);
 
-// Custom Toolbar para React Big Calendar
+// Toolbar personalizado de React Big Calendar
 function MyToolbar({ label, onNavigate, onView, openModal }) {
-  // Capitalizamos el label (por ejemplo: "mayo 2025" → "Mayo 2025")
   const capitalizedLabel = capitalize(label);
-
   return (
     <div className="rbc-toolbar d-flex justify-content-between align-items-center mb-3">
-      {/* Botones de navegación: Anterior, Hoy, Siguiente */}
       <div className="rbc-btn-group">
-        <button
-          type="button"
-          className="btn btn-outline-secondary btn-sm me-1"
-          onClick={() => onNavigate('PREV')}
-        >
-          ‹
-        </button>
-        <button
-          type="button"
-          className="btn btn-outline-secondary btn-sm me-1"
-          onClick={() => onNavigate('TODAY')}
-        >
-          Hoy
-        </button>
-        <button
-          type="button"
-          className="btn btn-outline-secondary btn-sm"
-          onClick={() => onNavigate('NEXT')}
-        >
-          ›
-        </button>
+        <button className="btn btn-outline-secondary btn-sm me-1" onClick={() => onNavigate('PREV')}>‹</button>
+        <button className="btn btn-outline-secondary btn-sm me-1" onClick={() => onNavigate('TODAY')}>Hoy</button>
+        <button className="btn btn-outline-secondary btn-sm" onClick={() => onNavigate('NEXT')}>›</button>
       </div>
-
-      {/* Etiqueta del mes/año (capitalizada) */}
-      <div className="rbc-toolbar-label fw-bold">
-        {capitalizedLabel}
-      </div>
-
-      {/* Botones de vista + Agregar Actividad */}
+      <div className="rbc-toolbar-label fw-bold">{capitalizedLabel}</div>
       <div className="rbc-btn-group d-flex align-items-center">
-        <button
-          type="button"
-          className="btn btn-outline-secondary btn-sm me-1"
-          onClick={() => onView('month')}
-        >
-          Mes
-        </button>
-        <button
-          type="button"
-          className="btn btn-outline-secondary btn-sm me-1"
-          onClick={() => onView('week')}
-        >
-          Semana
-        </button>
-        <button
-          type="button"
-          className="btn btn-outline-secondary btn-sm me-1"
-          onClick={() => onView('day')}
-        >
-          Día
-        </button>
-        <button
-          type="button"
-          className="btn btn-outline-secondary btn-sm me-3"
-          onClick={() => onView('agenda')}
-        >
-          Agenda
-        </button>
-        <button
-          type="button"
-          className="btn btn-primary btn-sm"
-          onClick={openModal}
-        >
-          ➕ Agregar Actividad
-        </button>
+        <button className="btn btn-outline-secondary btn-sm me-1" onClick={() => onView('month')}>Mes</button>
+        <button className="btn btn-outline-secondary btn-sm me-1" onClick={() => onView('week')}>Semana</button>
+        <button className="btn btn-outline-secondary btn-sm me-1" onClick={() => onView('day')}>Día</button>
+        <button className="btn btn-outline-secondary btn-sm me-3" onClick={() => onView('agenda')}>Agenda</button>
+        <button className="btn btn-primary btn-sm" onClick={openModal}>➕ Agregar Actividad</button>
       </div>
     </div>
   );
@@ -115,7 +58,10 @@ const MyCalendar = () => {
   const [editIndex, setEditIndex] = useState(null);
   const [newEvent, setNewEvent]   = useState(emptyEvent);
 
-  // Cargar eventos desde localStorage al montar
+  // Para almacenar referencias a los popups abiertos
+  const popupRefs = useRef({}); // { [eventoId]: windowReference }
+
+  // 1) Cargar eventos desde localStorage al montar
   useEffect(() => {
     const saved = localStorage.getItem('events');
     if (saved) {
@@ -128,33 +74,34 @@ const MyCalendar = () => {
     }
   }, []);
 
-  // Guardar eventos en localStorage cuando cambien
+  // 2) Guardar eventos en localStorage cuando cambien
   useEffect(() => {
-    localStorage.setItem('events',
-      JSON.stringify(events.map(evt => ({
-        ...evt,
-        start: evt.start.toISOString(),
-        end:   evt.end.toISOString()
-      })))
+    localStorage.setItem(
+      'events',
+      JSON.stringify(
+        events.map(evt => ({
+          ...evt,
+          start: evt.start.toISOString(),
+          end:   evt.end.toISOString()
+        }))
+      )
     );
   }, [events]);
 
   // Maneja cambios en inputs del modal
   const handleChange = field => e => {
-    const val = e.target.type === 'checkbox'
-      ? e.target.checked
-      : e.target.value;
+    const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     setNewEvent(evt => ({ ...evt, [field]: val }));
   };
 
-  // Abrir modal para agregar
+  // 3) Abrir modal para agregar
   const openAddModal = () => {
     setIsEditing(false);
     setNewEvent(emptyEvent);
     setModalOpen(true);
   };
 
-  // Abrir modal para editar (precarga datos)
+  // 4) Abrir modal para editar (precarga datos)
   const openEditModal = (event, index) => {
     const date      = moment(event.start).format('YYYY-MM-DD');
     const startTime = moment(event.start).format('HH:mm');
@@ -171,31 +118,160 @@ const MyCalendar = () => {
     setModalOpen(true);
   };
 
-  // Guardar evento (nuevo o editado)
+  // 5) Guardar evento (nuevo o editado) + programar popup emergente
   const handleSave = () => {
-    const { title, date, startTime, endTime } = newEvent;
+    const {
+      title,
+      description,
+      date,
+      startTime,
+      endTime,
+      priority,
+      alert,
+      alertTime,
+      frequency,
+      category,
+      status
+    } = newEvent;
+
     if (!title || !date || !startTime || !endTime) {
-      return alert('Completa título, fecha e horas');
+      return window.alert('Completa título, fecha e horas');
     }
+
+    // 5.1) Calcula start y end como Date
     const start = new Date(`${date}T${startTime}`);
     const end   = new Date(`${date}T${endTime}`);
     const evt   = { ...newEvent, start, end };
 
+    // 5.2) Actualiza lista de eventos
+    let eventoId;
     if (isEditing) {
+      // Mantenemos el ID como el índice para referencia en popupRefs
+      eventoId = editIndex;
       setEvents(evts => {
         const copy = [...evts];
         copy[editIndex] = evt;
         return copy;
       });
     } else {
-      setEvents(evts => ([...evts, evt]));
+      setEvents(evts => {
+        const newList = [...evts, evt];
+        eventoId = newList.length - 1;
+        return newList;
+      });
     }
     setModalOpen(false);
+
+    // 5.3) Programar popup emergente si alert === true
+    if (alert) {
+      // Calcula fecha/hora de alerta según alertTime
+      let alertDate = new Date(start);
+      switch (alertTime) {
+        case '10 minutos antes':
+          alertDate.setMinutes(alertDate.getMinutes() - 10);
+          break;
+        case '1 hora antes':
+          alertDate.setHours(alertDate.getHours() - 1);
+          break;
+        case '1 día antes':
+          alertDate.setDate(alertDate.getDate() - 1);
+          break;
+        case '3 días antes':
+          alertDate.setDate(alertDate.getDate() - 3);
+          break;
+        default:
+          // 'Al momento'
+          break;
+      }
+
+      const now = Date.now();
+      const diffMs = alertDate.getTime() - now;
+
+      // Función para abrir o actualizar el popup
+      const showPopup = () => {
+        const popupName = `popup_event_${eventoId}`;
+        const width = 400;
+        const height = 250;
+        const left = window.screenX + (window.innerWidth - width) / 2;
+        const top = window.screenY + (window.innerHeight - height) / 3;
+
+        let popup;
+        // Si ya existe un popup abierto para este evento y no está cerrado, reutilízalo
+        if (popupRefs.current[eventoId] && !popupRefs.current[eventoId].closed) {
+          popup = popupRefs.current[eventoId];
+        } else {
+          // Abre un nuevo popup en blanco
+          popup = window.open(
+            '',
+            popupName,
+            `width=${width},height=${height},left=${left},top=${top}`
+          );
+          popupRefs.current[eventoId] = popup;
+        }
+
+        // Si la ventana se pudo abrir, escribimos el contenido
+        if (popup) {
+          // Contenido HTML sencillo
+          popup.document.title = `Recordatorio: ${title}`;
+          popup.document.body.style.margin = '0';
+          popup.document.body.style.fontFamily = 'Arial, sans-serif';
+          popup.document.body.style.display = 'flex';
+          popup.document.body.style.flexDirection = 'column';
+          popup.document.body.style.justifyContent = 'center';
+          popup.document.body.style.alignItems = 'center';
+          popup.document.body.style.height = '100vh';
+          popup.document.body.style.backgroundColor = '#f8f9fa';
+
+          popup.document.body.innerHTML = `
+            <div style="text-align:center; padding: 1rem;">
+              <h2 style="margin-bottom: 0.5rem;">🔔 Recordatorio</h2>
+              <h4 style="margin-top:0; margin-bottom:1rem;">${title}</h4>
+              <p style="margin:0; font-size:1rem;">${description || ''}</p>
+              <button id="closeBtn" style="
+                margin-top: 1.5rem;
+                padding: 8px 16px;
+                font-size: 1rem;
+                background-color: #007bff;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+              ">Cerrar</button>
+            </div>
+          `;
+
+          // Botón “Cerrar” que cierra la ventana popup
+          const closeBtn = popup.document.getElementById('closeBtn');
+          closeBtn.onclick = () => popup.close();
+
+          // Traer la ventana popup al frente
+          popup.focus();
+        } else {
+          // Si no se pudo abrir (popup bloqueado), como fallback usamos un alert normal
+          window.alert(`🔔 Recordatorio: ${title}\n${description || ''}`);
+        }
+      };
+
+      if (diffMs > 0) {
+        setTimeout(showPopup, diffMs);
+        console.log(
+          `Popup programado para ${alertDate.toLocaleString()} (faltan ${diffMs} ms)`
+        );
+      } else {
+        // Si el momento ya pasó, mostrar popup de inmediato
+        showPopup();
+      }
+    }
   };
 
-  // Eliminar evento en edición
+  // 6) Eliminar evento en edición
   const handleDelete = () => {
     if (isEditing) {
+      // Si existe un popup para este evento, ciérralo
+      if (popupRefs.current[editIndex] && !popupRefs.current[editIndex].closed) {
+        popupRefs.current[editIndex].close();
+      }
+
       setEvents(evts => evts.filter((_, i) => i !== editIndex));
       setModalOpen(false);
     }
@@ -203,7 +279,7 @@ const MyCalendar = () => {
 
   return (
     <div className="p-3">
-      {/* Contenedor para calendario + toolbar personalizado */}
+      {/* Calendario con toolbar personalizado */}
       <div className="calendar-container">
         <Calendar
           localizer={localizer}
@@ -211,20 +287,17 @@ const MyCalendar = () => {
           startAccessor="start"
           endAccessor="end"
           defaultView="month"
-          views={['month','week','day','agenda']}
+          views={['month', 'week', 'day', 'agenda']}
           style={{ height: 500 }}
           components={{
             toolbar: toolbarProps => (
-              <MyToolbar
-                {...toolbarProps}
-                openModal={openAddModal}
-              />
+              <MyToolbar {...toolbarProps} openModal={openAddModal} />
             )
           }}
           onSelectEvent={event => {
             const idx = events.findIndex(e =>
               e.start.getTime() === event.start.getTime() &&
-              e.end.getTime()   === event.end.getTime()   &&
+              e.end.getTime()   === event.end.getTime() &&
               e.title          === event.title
             );
             if (idx > -1) openEditModal(event, idx);
@@ -256,7 +329,7 @@ const MyCalendar = () => {
         />
       </div>
 
-      {/* Modal de Bootstrap */}
+      {/* Modal de Bootstrap para agregar/editar */}
       {modalOpen && (
         <>
           <div className="modal-backdrop show"></div>
@@ -288,6 +361,7 @@ const MyCalendar = () => {
                       onChange={handleChange('title')}
                     />
                   </div>
+
                   {/* Descripción */}
                   <div className="mb-2">
                     <label className="form-label">Descripción</label>
@@ -298,6 +372,7 @@ const MyCalendar = () => {
                       onChange={handleChange('description')}
                     />
                   </div>
+
                   {/* Fecha / Horas */}
                   <div className="row mb-2">
                     <div className="col">
@@ -328,6 +403,7 @@ const MyCalendar = () => {
                       </div>
                     </div>
                   </div>
+
                   {/* Prioridad */}
                   <div className="mb-2">
                     <label className="form-label">Prioridad</label>
@@ -341,6 +417,7 @@ const MyCalendar = () => {
                       <option value="Baja">Baja 🟢</option>
                     </select>
                   </div>
+
                   {/* Alerta */}
                   <div className="form-check mb-2">
                     <input
@@ -355,39 +432,22 @@ const MyCalendar = () => {
                     </label>
                   </div>
                   {newEvent.alert && (
-                    <>
-                      <div className="mb-2">
-                        <label className="form-label">Momento alerta</label>
-                        <select
-                          className="form-select"
-                          value={newEvent.alertTime}
-                          onChange={handleChange('alertTime')}
-                        >
-                          <option value="Al momento">Al momento</option>
-                          <option value="10 minutos antes">10 minutos antes</option>
-                          <option value="1 hora antes">1 hora antes</option>
-                          <option value="1 día antes">1 día antes</option>
-                          <option value="3 días antes">3 días antes</option>
-                        </select>
-                      </div>
-                      <div className="mb-2">
-                        <label className="form-label">Canal alerta</label>
-                        <select
-                          className="form-select"
-                          value={newEvent.alertChannel}
-                          onChange={handleChange('alertChannel')}
-                        >
-                          <option value="Notificación en pantalla">
-                            Notificación en pantalla
-                          </option>
-                          <option value="Correo electrónico">
-                            Correo electrónico
-                          </option>
-                          <option value="WhatsApp">WhatsApp</option>
-                        </select>
-                      </div>
-                    </>
+                    <div className="mb-2">
+                      <label className="form-label">Momento alerta</label>
+                      <select
+                        className="form-select"
+                        value={newEvent.alertTime}
+                        onChange={handleChange('alertTime')}
+                      >
+                        <option value="Al momento">Al momento</option>
+                        <option value="10 minutos antes">10 minutos antes</option>
+                        <option value="1 hora antes">1 hora antes</option>
+                        <option value="1 día antes">1 día antes</option>
+                        <option value="3 días antes">3 días antes</option>
+                      </select>
+                    </div>
                   )}
+
                   {/* Frecuencia */}
                   <div className="mb-2">
                     <label className="form-label">Repetición</label>
@@ -402,6 +462,7 @@ const MyCalendar = () => {
                       <option value="Mensual">Mensual</option>
                     </select>
                   </div>
+
                   {/* Categoría */}
                   <div className="mb-2">
                     <label className="form-label">Categoría</label>
@@ -413,6 +474,7 @@ const MyCalendar = () => {
                       onChange={handleChange('category')}
                     />
                   </div>
+
                   {/* Estado */}
                   <div className="mb-2">
                     <label className="form-label">Estado</label>

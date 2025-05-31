@@ -2,6 +2,8 @@
 import React from 'react';
 import MyCalendar from './MyCalendar';
 import './Home.css';
+import MyNotifications from './MyNotifications';
+
 
 function Home() {
   return (
