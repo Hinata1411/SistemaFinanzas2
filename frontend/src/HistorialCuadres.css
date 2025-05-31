@@ -12,7 +12,7 @@
   min-height: 100vh;
   width: 100%;
   box-sizing: border-box;
-  overflow-x: hidden;         /* Previene scroll horizontal */
+  overflow: visible;         /* Nunca mostrar scroll aquí */
 }
 
 /* Encabezado */
@@ -25,11 +25,10 @@
 /* ============================= */
 /* Contenedor para filtros y tabla */
 /* ============================= */
-/* Aquí centramos ambos (.filtros y .tabla-cuadres) al mismo ancho */
 .centro-contenido {
-  width: 90%;                 /* 90% del ancho disponible */
-  max-width: 1000px;          /* Máximo 1000px */
-  margin: 0 auto;             /* Centra horizontalmente */
+  width: 90%;
+  max-width: 1000px;
+  margin: 0 auto;
   box-sizing: border-box;
 }
 
@@ -38,14 +37,13 @@
 /* ============================= */
 .filtros {
   display: flex;
-  justify-content: space-between; /* Botón a la izquierda, filtro a la derecha */
+  justify-content: space-between;
   align-items: center;
   gap: 10px;
   margin-bottom: 20px;
   flex-wrap: wrap;
 }
 
-/* Botón “Descargar PDF Agrupado” */
 .filtros button {
   background-color: #2980b9;
   color: #fff;
@@ -60,14 +58,12 @@
   background-color: #1f6791;
 }
 
-/* Grupo de fecha (alineado a la derecha) */
 .filtros .fecha-container {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-/* Input de fecha */
 .filtros input[type="date"] {
   padding: 6px 10px;
   font-size: 14px;
@@ -79,13 +75,27 @@
 /* Tabla de cuadres (centrada y más ancha) */
 /* ============================= */
 .tabla-cuadres {
-  width: 100%;               /* Ocupa todo el ancho del contenedor padre (.centro-contenido) */
+  width: 100%;
   border-collapse: collapse;
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 0 10px rgba(0,0,0,0.05);
-  table-layout: fixed;       /* Columnas de ancho fijo */
-  overflow: hidden;
+  table-layout: fixed;
+
+  /* Forzamos desbordamiento siempre visible para que NO aparezca scrollbar */
+  overflow: visible !important;
+  height: auto !important;
+}
+
+.tabla-cuadres::-webkit-scrollbar {
+  display: none; /* Oculta scroll en Chrome/Safari/Edge */
+}
+
+/* Aseguramos que ni thead ni tbody muestren scroll interno */
+.tabla-cuadres,
+.tabla-cuadres thead,
+.tabla-cuadres tbody {
+  overflow: visible !important;
 }
 
 .tabla-cuadres thead {
@@ -95,27 +105,26 @@
 
 .tabla-cuadres th,
 .tabla-cuadres td {
-  padding: 14px;             /* Padding aumentado para legibilidad */
+  padding: 14px;
   text-align: center;
   border-bottom: 1px solid #ddd;
-  font-size: 15px;           /* Fuente ligeramente más grande */
-  word-wrap: break-word;     /* Rompe texto largo */
+  font-size: 15px;
+  word-wrap: break-word;
 }
 
 .tabla-cuadres tbody tr:hover {
   background-color: #f1f1f1;
 }
 
-/* Botones de acción dentro de la tabla */
 .tabla-cuadres button {
-  padding: 8px 14px;         /* Ajusta padding interno */
+  padding: 8px 14px;
   margin: 2px;
   border: none;
   background-color: #27ae60;
   color: white;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;           /* Fuente ligeramente más grande */
+  font-size: 14px;
   transition: background 0.3s ease;
 }
 .tabla-cuadres button:hover {
@@ -131,9 +140,16 @@
   background: #ffffff;
   border-radius: 10px;
   box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-  width: 100%;               /* Ocupa 100% del contenedor padre (.centro-contenido) */
+  width: 100%;
   box-sizing: border-box;
-  overflow-x: auto;
+
+  /* Forzamos que TODO desbordamiento sea visible (no scroll interno) */
+  overflow: visible !important;
+  height: auto !important;
+}
+
+.detalle-cuadre::-webkit-scrollbar {
+  display: none; /* Oculta scrollbar en WebKit */
 }
 
 .detalle-cuadre h2 {
@@ -152,10 +168,23 @@
   background: #f8f9fa;
   padding: 10px;
   border-radius: 6px;
-  overflow-x: auto;
+  overflow-x: auto; /* Permitimos sólo scroll horizontal en <pre> */
   font-size: 13px;
   color: #333;
   white-space: pre-wrap;
+}
+
+/* ============================= */
+/* Asegura que cada “.panel .grid” tenga 3 columnas y sin scroll */
+/* ============================= */
+.panel .grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+
+  /* Todos los desbordamientos internos visibles, sin barras */
+  overflow: visible !important;
+  height: auto !important;
 }
 
 /* ============================= */
@@ -163,9 +192,9 @@
 /* ============================= */
 @media (max-width: 768px) {
   .vista-cuadres {
-    padding: 2rem 2rem 2rem 2rem; /* Elimina el espacio extra en móvil */
-    margin-top: 40px;            /* Espacio superior para navbar */
-    margin-left: 4rem;   
+    padding: 2rem;
+    margin-top: 40px;
+    margin-left: 4rem;
   }
 
   .vista-cuadres h1 {
@@ -173,31 +202,27 @@
     margin-bottom: 1rem;
   }
 
-  /* Contenedor centrado adapta su ancho en móvil */
   .centro-contenido {
     width: 100%;
-    padding: 0 1rem;  
-           /* Pequeño padding lateral */
+    padding: 0 1rem;
   }
 
-  /* Tabla de cuadres en móvil */
+  /* Tabla de cuadres más compacta en móvil */
   .tabla-cuadres {
     font-size: 13px;
+    overflow: visible !important;
+    height: auto !important;
   }
-
   .tabla-cuadres th,
   .tabla-cuadres td {
     padding: 10px 8px;
   }
-
-  /* Botones de la tabla más compactos */
   .tabla-cuadres button {
     padding: 6px 10px;
     font-size: 12px;
     margin: 1px;
   }
 
-  /* Alineación de filtros en móvil: botón arriba, fecha abajo */
   .filtros {
     flex-direction: column;
     align-items: stretch;
@@ -207,28 +232,28 @@
     justify-content: flex-end;
   }
 
-  /* Detalle de cuadre en móvil ocupa todo el ancho */
+  /* Detalle de cuadre en móvil sin scroll vertical */
   .detalle-cuadre {
     padding: 15px;
+    overflow: visible !important;
+    height: auto !important;
   }
-
   .detalle-cuadre h2 {
     font-size: 18px;
     margin-bottom: 15px;
   }
-
   .detalle-cuadre pre {
     font-size: 12px;
     padding: 8px;
+    overflow-x: auto; /* Sólo scroll horizontal en los <pre> si hace falta */
   }
-}
 
-/* ============================= */
-/* Asegura que .grid tenga siempre 3 columnas y no muestre scrollbar */
-/* ============================= */
-.panel .grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-  overflow-x: hidden;   /* Evita la barra horizontal en Cierre de Sistema */
+  /* ============================= */
+  /* En móvil, cada “caja” (Arqueo y Cierre) en bloque apilado */
+  /* ============================= */
+  .panel .grid {
+    grid-template-columns: 1fr;  /* Una sola columna: Caja1, Caja2, Caja3 */
+    overflow: visible !important;
+    height: auto !important;
+  }
 }

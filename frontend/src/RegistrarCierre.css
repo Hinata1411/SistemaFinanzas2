@@ -317,42 +317,49 @@ html, body {
 /* ======================== */
 /* Responsive ajustes        */
 /* ======================== */
+/* ======================== */
+/* Responsive ajustes para móvil */
+/* ======================== */
 @media (max-width: 768px) {
   /* Contenedor principal ocupa todo el ancho */
   .container-principal {
-    margin-left: 3rem;
-    width: 100%;
-    padding: 0px;
-    margin-top: 10px; /* Reduce espacio superior en móvil */
+    margin-left: 10rem;          /* Eliminamos margen lateral fijo */
+    width: 100%;             /* Ocupa todo el ancho disponible */
+    padding: 10px;           /* Ajustamos un poco el padding */
+    margin-top: 10px;        /* Reduce espacio superior en móvil */
+    box-sizing: border-box;
   }
 
-  /* Encabezado: fecha + sucursal al centro/derecha */
+  /* Encabezado: fecha + sucursal en columna centrado */
   .encabezado-cuadre {
     flex-direction: column;
-    align-items: flex-start;
-    margin-right: 3rem;
-    gap: 10px;
-    padding: 2px 5px; /* Menos padding en móvil */
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px 10px;       /* Menos padding en móvil */
   }
 
-  /* Selector Group alineado a la derecha */
+  .encabezado-cuadre h2 {
+    font-size: 20px;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+
+  /* Selector Group ocupa todo el ancho, centrado */
   .selector-group {
-    width: 100%;
+    width: 90%;
     display: flex;
-    justify-content: flex-end;
-    gap: 15px;
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
   }
 
   .date-selector,
   .sucursal-selector {
-    justify-content: center;
-  }
-
-  /* Ajuste en fuentes y márgenes */
-  .encabezado-cuadre h2 {
-    font-size: 20px;
-    width: 100%;
-    text-align: center;
+    width: 60%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
   }
 
   .date-selector label,
@@ -363,25 +370,21 @@ html, body {
   .date-selector input[type="date"],
   .sucursal-selector select {
     font-size: 13px;
-    padding: 5px 8px;
+    padding: 6px 8px;
+    flex: 1;
   }
 
-  /* Paneles en columna */
-  .grid {
-    flex-direction: column;
+  /* Paneles en columna: las cajas de Arqueo y Cierre */
+   .panel .grid {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch;
+    gap: 12px;
   }
-
-  /* Arqueo Físico y Cierre de Sistema: centrar cajas */
-  .panel .grid {
-    flex-direction: column;
-    gap: 15px;
-  }
-
-  /* Limitar ancho de cada caja en Arqueo y Cierre */
   .panel .grid > * {
-    width: 100%;
-    max-width: 450px;
-    margin-bottom: 12px;
+    width: 100% !important;
+    max-width: 100%;
+    margin-bottom: 0;
   }
 
   .panel-title {
@@ -389,66 +392,88 @@ html, body {
     text-align: center;
   }
 
+  /* Ajustes para la sección “footer-section” (totales y diferencias) */
   .footer-section {
-    gap: 15px;
+    flex-direction: column;
+    gap: 20px;
+    margin-top: 30px;
   }
 
+  .footer-section .section {
+    width: 100%;
+    padding: 16px;
+    box-sizing: border-box;
+  }
+
+  /* Botones guardar/descargar en columna */
   .guardar-cuadre {
     flex-direction: column;
     align-items: center;
     gap: 10px;
+    margin-top: 20px;
   }
 
-  /* ================================
+  .guardar-cuadre button {
+    width: 100%;
+    max-width: 300px;
+    font-size: 14px;
+    padding: 8px 12px;
+  }
+
+  /* ================================ 
      Mobile: ajustes finales para Gastos
      ================================ */
 
   /* Elimina scroll horizontal en Gastos */
   .panel:nth-of-type(3) .grid {
-    overflow-x: hidden;
+    overflow-x: auto;           /* Permitimos scroll en caso necesario */
     flex-direction: column;
     align-items: center;
     gap: 12px;
+    padding-left: 0;
   }
 
   /* Limitar ancho los bloques de Gastos */
   .panel:nth-of-type(3) .grid > * {
     width: 100%;
     max-width: 450px;
-    
   }
 
   /* Ajustes de tabla Gastos en móvil */
   .panel:nth-of-type(3) .grid table {
-    display: block;       /* Permite que la tabla se ajuste */
-    width: 400%;
-    max-width: 450%;
+    display: block;            /* Permite ajustar en contenedores estrechos */
+    width: 100%;               /* Que ocupe el 100% de su contenedor padre */
+    max-width: 100%;
     font-size: 12px;
   }
 
   .panel:nth-of-type(3) .grid table::-webkit-scrollbar {
-    display: none;       /* Oculta scrollbar en WebKit */
+    display: none;       /* Oculta scrollbar en WebKit si sobra contenido */
   }
 
   .panel:nth-of-type(3) .grid th,
   .panel:nth-of-type(3) .grid td {
-    padding: 6px;
+    padding: 6px;        /* Reduce padding para que entre mejor */
+    font-size: 12px;
   }
 
   .panel:nth-of-type(3) .agregar-gasto-container {
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
     gap: 8px;
   }
 
   .panel:nth-of-type(3) .agregar-gasto-container button {
     width: 100%;
     max-width: 300px;
+    font-size: 13px;
+    padding: 6px 10px;
   }
 
   .panel:nth-of-type(3) .total-gastos {
     width: 100%;
     text-align: center;
+    font-size: 14px;
   }
 }
 

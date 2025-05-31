@@ -25,7 +25,7 @@ import TotalesBlock from './TotalesBlock';
 import './HistorialCuadres.css';
 
 export default function HistorialCuadres() {
-  const [fechaFiltro, setFechaFiltro] = useState('');
+  const [fechaFiltro, setFechaFiltro] = useState(new Date().toISOString().split('T')[0]);
   const [cuadres, setCuadres] = useState([]);
   const [cuadreSeleccionado, setCuadreSeleccionado] = useState(null);
 
@@ -39,7 +39,7 @@ export default function HistorialCuadres() {
 
   // Mapa sucursalId → nombre/ubicación
   const [sucursalesMap, setSucursalesMap] = useState({});
-
+const [cajaChicaMap, setCajaChicaMap] = useState({});
   // Estados para PDF agrupado
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [selectedCierresIds, setSelectedCierresIds] = useState([]);
@@ -83,7 +83,8 @@ export default function HistorialCuadres() {
       const idsUnicos = Array.from(
         new Set(cuadres.map((c) => c.sucursalId).filter(Boolean))
       );
-      const nuevoMap = {};
+      const nuevoMapUbicacion = {};
+      const nuevoMapCajaChica = {};
 
       await Promise.all(
         idsUnicos.map(async (sucId) => {
@@ -91,24 +92,31 @@ export default function HistorialCuadres() {
             const sucDoc = await getDoc(doc(db, 'sucursales', sucId));
             if (sucDoc.exists()) {
               const datos = sucDoc.data();
-              nuevoMap[sucId] = datos.ubicacion || 'Sin lugar';
-            } else {
-              nuevoMap[sucId] = 'Sucursal no encontrada';
+              // Guardamos la ubicación
+            nuevoMapUbicacion[sucId] = datos.ubicacion || 'Sin lugar';
+            // Guardamos el saldo de caja chica (0 si no existe)
+            nuevoMapCajaChica[sucId] = parseFloat(datos.cajaChica) || 0;
+          } else {
+              nuevoMapUbicacion[sucId] = 'Sucursal no encontrada';
+              nuevoMapCajaChica[sucId] = 0; 
             }
           } catch (err) {
-            console.error(`Error al leer sucursal ${sucId}:`, err);
-            nuevoMap[sucId] = 'Error al cargar';
+          console.error(`Error al leer sucursal ${sucId}:`, err);
+          nuevoMapUbicacion[sucId] = 'Error al cargar';
+          nuevoMapCajaChica[sucId] = 0;
           }
         })
       );
 
-      setSucursalesMap(nuevoMap);
+      setSucursalesMap(nuevoMapUbicacion);
+    setCajaChicaMap(nuevoMapCajaChica);
     };
 
-    if (cuadres.length > 0) {
+      if (cuadres.length > 0) {
       fetchSucursales();
     } else {
       setSucursalesMap({});
+      setCajaChicaMap({});
     }
   }, [cuadres]);
 
@@ -526,7 +534,7 @@ export default function HistorialCuadres() {
                         : cuadreSeleccionado.diferenciaEfectivo
                     }
                     sucursalId={cuadreSeleccionado.sucursalId}
-                    balanceCajaChica={0}
+                    balanceCajaChica={cajaChicaMap[cuadreSeleccionado.sucursalId] || 0}
                       onCoverWithCajaChica={() => {}}
                     
                     inicialComentario={
