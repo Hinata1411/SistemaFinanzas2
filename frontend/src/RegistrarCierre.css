@@ -1,24 +1,28 @@
-/* ======================== */
-/* Estilos generales        */
-/* ======================== */
+/* RegistrarCierre.css */
+
+/* ============================= */
+/* Estilos generales para Registro */
+/* ============================= */
 html, body {
-  font-family: 'Arial', sans-serif;
-  background: #f7f7f7;
   margin: 0;
   padding: 0;
   width: 100%;
   min-height: 100%;
+  font-family: 'Arial', sans-serif;
+  background: #f7f7f7;
 }
 
+/* Contenedor principal desplazado para no quedar detrás de la sidebar */
 .container-principal {
   padding: 20px;
-  margin-top: 5px;
+  margin-left: 6rem;                /* Deja espacio para la sidebar en desktop */
+  width: calc(100% - 16rem);
   box-sizing: border-box;
 }
 
-/* ======================== */
-/* Encabezado Cuadre + Fecha */
-/* ======================== */
+/* ----------------------------- */
+/* Encabezado de Cuadre + Fecha  */
+/* ----------------------------- */
 .encabezado-cuadre {
   background: #f7f7f7;
   padding: 10px 20px;
@@ -29,6 +33,7 @@ html, body {
   flex-wrap: wrap;
 }
 
+/* Título del cuadro */
 .encabezado-cuadre h2 {
   margin: 0;
   font-size: 22px;
@@ -36,16 +41,26 @@ html, body {
   color: #333;
 }
 
-.encabezado-cuadre .date-selector {
+/* Grupo de selectores (Fecha + Sucursal) */
+.selector-group {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+/* ----------------------------- */
+/* Selector de Fecha             */
+/* ----------------------------- */
+.date-selector {
   display: flex;
   gap: 10px;
   align-items: center;
-  margin-bottom: 0; /* Ya no empuja hacia abajo */
 }
 
 .date-selector label {
   font-weight: bold;
   font-size: 14px;
+  color: #444;
 }
 
 .date-selector input[type="date"] {
@@ -53,11 +68,65 @@ html, body {
   border-radius: 6px;
   border: 1px solid #ccc;
   font-size: 14px;
+  background: #fff;
+  transition: border-color 0.2s ease;
 }
 
-/* ======================== */
-/* Secciones tipo panel     */
-/* ======================== */
+.date-selector input[type="date"]:focus {
+  border-color: #007bff;
+  outline: none;
+  box-shadow: 0 0 4px rgba(0, 123, 255, 0.4);
+}
+
+/* ----------------------------- */
+/* Selector de Sucursal          */
+/* ----------------------------- */
+.sucursal-selector {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.sucursal-selector label {
+  font-weight: bold;
+  font-size: 14px;
+  color: #444;
+}
+
+.sucursal-selector select {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+  background: #fff;
+  transition: border-color 0.2s ease, background 0.2s ease;
+  cursor: pointer;
+}
+
+.sucursal-selector select:focus {
+  border-color: #007bff;
+  outline: none;
+  box-shadow: 0 0 4px rgba(0, 123, 255, 0.4);
+}
+
+/* Ícono de flecha personalizada para el select */
+.sucursal-selector select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,<svg fill='%23666' height='12' viewBox='0 0 24 24' width='12' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px;
+}
+
+.sucursal-selector select::-ms-expand {
+  display: none;
+}
+
+/* ----------------------------- */
+/* Paneles y secciones internas  */
+/* ----------------------------- */
 .panel {
   background: #fff;
   border-radius: 12px;
@@ -102,9 +171,7 @@ html, body {
   color: #333;
 }
 
-/* ======================== */
-/* Grids internas           */
-/* ======================== */
+/* Grids internas */
 .grid {
   display: flex;
   flex-wrap: wrap;
@@ -112,9 +179,7 @@ html, body {
   justify-content: space-between;
 }
 
-/* ======================== */
 /* Sección inferior: totales y diferencias */
-/* ======================== */
 .footer-section {
   display: flex;
   flex-direction: column;
@@ -129,9 +194,7 @@ html, body {
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
-/* ======================== */
 /* Botones guardar/descargar */
-/* ======================== */
 .guardar-cuadre {
   display: flex;
   justify-content: center;
@@ -150,23 +213,175 @@ html, body {
   cursor: pointer;
   transition: background 0.3s ease;
 }
-
 .guardar-cuadre button:hover {
   background: #0056b3;
+}
+
+/* ======================== */
+/* Ajustes de estilo para Tabla de Gastos */
+/* ======================== */
+.panel:nth-of-type(3) .grid {
+  /* Asegura que no aparezca scroll horizontal */
+  overflow-x: hidden;
+  padding-left: 0;
+}
+
+/* Hace que la tabla no exceda el ancho del contenedor */
+.panel:nth-of-type(3) .grid table {
+  width: 100%;
+  max-width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed; /* Fuerza columnas a distribuirse uniformemente */
+  margin: 0 auto;
+  display: block;      /* Permite flexibilidad en contenedores estrechos */
+}
+
+.panel:nth-of-type(3) .grid table::-webkit-scrollbar {
+  display: none; /* Oculta scrollbar en WebKit */
+}
+
+.panel:nth-of-type(3) .grid th,
+.panel:nth-of-type(3) .grid td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+  word-wrap: break-word; /* Rompe texto demasiado largo */
+  font-size: 14px;
+}
+
+.panel:nth-of-type(3) .grid th {
+  background-color: #f5f5f5;
+  color: #333;
+  font-weight: bold;
+}
+
+.panel:nth-of-type(3) .grid td input,
+.panel:nth-of-type(3) .grid td select {
+  width: 100%;
+  padding: 4px 6px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+/* Botón eliminar en cada fila */
+.panel:nth-of-type(3) .grid td .btn-eliminar {
+  background: #dc3545;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.panel:nth-of-type(3) .grid td .btn-eliminar:hover {
+  background: #c82333;
+}
+
+/* Contenedor "Agregar Gasto" y "Total Gastos" */
+.panel:nth-of-type(3) .agregar-gasto-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+
+/* Botón "+ Agregar Gasto" */
+.panel:nth-of-type(3) .agregar-gasto-container button {
+  background: #28a745;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.panel:nth-of-type(3) .agregar-gasto-container button:hover {
+  background: #218838;
+}
+
+/* Texto "Total Gastos" */
+.panel:nth-of-type(3) .total-gastos {
+  font-weight: bold;
+  font-size: 16px;
+  color: #333;
 }
 
 /* ======================== */
 /* Responsive ajustes        */
 /* ======================== */
 @media (max-width: 768px) {
+  /* Contenedor principal ocupa todo el ancho */
+  .container-principal {
+    margin-left: 3rem;
+    width: 100%;
+    padding: 0px;
+    margin-top: 10px; /* Reduce espacio superior en móvil */
+  }
+
+  /* Encabezado: fecha + sucursal al centro/derecha */
+  .encabezado-cuadre {
+    flex-direction: column;
+    align-items: flex-start;
+    margin-right: 3rem;
+    gap: 10px;
+    padding: 2px 5px; /* Menos padding en móvil */
+  }
+
+  /* Selector Group alineado a la derecha */
+  .selector-group {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+    gap: 15px;
+  }
+
+  .date-selector,
+  .sucursal-selector {
+    justify-content: center;
+  }
+
+  /* Ajuste en fuentes y márgenes */
+  .encabezado-cuadre h2 {
+    font-size: 20px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .date-selector label,
+  .sucursal-selector label {
+    font-size: 13px;
+  }
+
+  .date-selector input[type="date"],
+  .sucursal-selector select {
+    font-size: 13px;
+    padding: 5px 8px;
+  }
+
+  /* Paneles en columna */
   .grid {
     flex-direction: column;
   }
 
-  .encabezado-cuadre {
+  /* Arqueo Físico y Cierre de Sistema: centrar cajas */
+  .panel .grid {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
+    gap: 15px;
+  }
+
+  /* Limitar ancho de cada caja en Arqueo y Cierre */
+  .panel .grid > * {
+    width: 100%;
+    max-width: 450px;
+    margin-bottom: 12px;
   }
 
   .panel-title {
@@ -181,9 +396,65 @@ html, body {
   .guardar-cuadre {
     flex-direction: column;
     align-items: center;
+    gap: 10px;
+  }
+
+  /* ================================
+     Mobile: ajustes finales para Gastos
+     ================================ */
+
+  /* Elimina scroll horizontal en Gastos */
+  .panel:nth-of-type(3) .grid {
+    overflow-x: hidden;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  /* Limitar ancho los bloques de Gastos */
+  .panel:nth-of-type(3) .grid > * {
+    width: 100%;
+    max-width: 450px;
+    
+  }
+
+  /* Ajustes de tabla Gastos en móvil */
+  .panel:nth-of-type(3) .grid table {
+    display: block;       /* Permite que la tabla se ajuste */
+    width: 400%;
+    max-width: 450%;
+    font-size: 12px;
+  }
+
+  .panel:nth-of-type(3) .grid table::-webkit-scrollbar {
+    display: none;       /* Oculta scrollbar en WebKit */
+  }
+
+  .panel:nth-of-type(3) .grid th,
+  .panel:nth-of-type(3) .grid td {
+    padding: 6px;
+  }
+
+  .panel:nth-of-type(3) .agregar-gasto-container {
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel:nth-of-type(3) .agregar-gasto-container button {
+    width: 100%;
+    max-width: 300px;
+  }
+
+  .panel:nth-of-type(3) .total-gastos {
+    width: 100%;
+    text-align: center;
   }
 }
 
+/* ======================== */
+/* Impresión                */
+/* ======================== */
 @media print {
   body {
     overflow: visible !important;
