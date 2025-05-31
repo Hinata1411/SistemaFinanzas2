@@ -222,3 +222,13 @@
     padding: 8px;
   }
 }
+
+/* ============================= */
+/* Asegura que .grid tenga siempre 3 columnas y no muestre scrollbar */
+/* ============================= */
+.panel .grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  overflow-x: hidden;   /* Evita la barra horizontal en Cierre de Sistema */
+}

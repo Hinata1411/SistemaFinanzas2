@@ -9,6 +9,7 @@ import {
   doc,
   deleteDoc,
   getDoc,
+  updateDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
 import html2canvas from 'html2canvas';
@@ -27,6 +28,13 @@ export default function HistorialCuadres() {
   const [fechaFiltro, setFechaFiltro] = useState('');
   const [cuadres, setCuadres] = useState([]);
   const [cuadreSeleccionado, setCuadreSeleccionado] = useState(null);
+
+  // Nuevo estado para controlar si estamos en modo edición
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Estado local donde guardaremos los datos que estamos editando
+  const [datosEditados, setDatosEditados] = useState(null);
+
   const detalleRef = useRef();
 
   // Mapa sucursalId → nombre/ubicación
@@ -37,7 +45,7 @@ export default function HistorialCuadres() {
   const [selectedCierresIds, setSelectedCierresIds] = useState([]);
   const [selectAll, setSelectAll] = useState(true);
 
-  // Refs para los bloques en modo “ver”
+  // Refs para los bloques en modo “ver” o “editar”
   const arqueoRefs = [useRef(), useRef(), useRef()];
   const cierreRefs = [useRef(), useRef(), useRef()];
   const gastosRef = useRef();
@@ -107,7 +115,10 @@ export default function HistorialCuadres() {
   // Descargar PDF de un cuadre individual (“Ver”)
   const handleDescargarPDF = async (cuadre) => {
     setCuadreSeleccionado(cuadre);
-    // Esperamos un instante para que el contenido aparezca en pantalla
+    setIsEditing(false);
+    setDatosEditados(null);
+
+    // Esperamos un instante para que el contenido se renderice
     setTimeout(async () => {
       if (!detalleRef.current) return;
       const canvas = await html2canvas(detalleRef.current);
@@ -141,6 +152,8 @@ export default function HistorialCuadres() {
         Swal.fire('Eliminado', 'El cuadre ha sido eliminado.', 'success');
         obtenerCuadres();
         setCuadreSeleccionado(null);
+        setIsEditing(false);
+        setDatosEditados(null);
       } catch (err) {
         console.error(err);
         Swal.fire('Error', 'No se pudo eliminar el cuadre.', 'error');
@@ -259,9 +272,77 @@ export default function HistorialCuadres() {
     setShowGroupModal(false);
   };
 
-  // Cuando el usuario hace clic en “Ver”, cargamos el cuadre completo
+  // -------------------------------
+  // Al presionar “Ver”
+  // -------------------------------
   const handleVer = async (cuadre) => {
     setCuadreSeleccionado(cuadre);
+    setIsEditing(false);
+    setDatosEditados(null);
+  };
+
+  // -------------------------------
+  // Al presionar “Editar”
+  // -------------------------------
+  const handleEditar = (cuadre) => {
+    setCuadreSeleccionado(cuadre);
+    setIsEditing(true);
+
+    // Creamos copias de los objetos (para editar sin mutar el original)
+    setDatosEditados({
+      arqueo: cuadre.arqueo.map((caja) => ({ ...caja })),
+      cierre: cuadre.cierre.map((caja) => ({ ...caja })),
+      gastos: cuadre.gastos.map((g) => ({ ...g })),
+      comentario: cuadre.comentario || '',
+    });
+  };
+
+  // -------------------------------
+  // Al presionar “Actualizar Cuadre”
+  // -------------------------------
+  const handleActualizar = async () => {
+    if (!cuadreSeleccionado || !datosEditados) return;
+
+    const { arqueo, cierre, gastos, comentario } = datosEditados;
+
+    // Validar campos numéricos como en RegistrarCierre
+    const validBoxes = [...arqueo, ...cierre].every((b) =>
+      ['efectivo', 'tarjeta', 'motorista'].every(
+        (f) => b[f] !== undefined && !isNaN(parseFloat(b[f]))
+      )
+    );
+    const validGastos = gastos.every((g) => !isNaN(parseFloat(g.cantidad)));
+
+    if (!validBoxes || !validGastos) {
+      return Swal.fire('Datos inválidos', 'Revisa montos y gastos.', 'warning');
+    }
+
+    try {
+      // Actualizamos el documento Firestore
+      const docRef = doc(db, 'cierres', cuadreSeleccionado.id);
+      await updateDoc(docRef, {
+        arqueo,
+        cierre,
+        gastos,
+        comentario,
+      });
+
+      Swal.fire({
+        icon: 'success',
+        title: 'Actualizado',
+        text: `Cuadre del ${formatDate(cuadreSeleccionado.fecha)} actualizado.`,
+        timer: 2000,
+        showConfirmButton: false,
+      });
+
+      // Volver a modo solo lectura y recargar lista
+      setIsEditing(false);
+      setDatosEditados(null);
+      obtenerCuadres();
+    } catch (err) {
+      console.error(err);
+      Swal.fire('Error', err.message, 'error');
+    }
   };
 
   return (
@@ -296,34 +377,30 @@ export default function HistorialCuadres() {
             {cuadres.map((cuadre, idx) => {
               const nombreSucursal = sucursalesMap[cuadre.sucursalId] || 'Sin sucursal';
               return (
-                // Aquí eliminamos cada salto de línea/indentación entre <tr> y <td>
-                <tr key={idx}><td>{formatDate(cuadre.fecha)}</td><td>{nombreSucursal}</td><td>
-                  <button onClick={() => handleVer(cuadre)}>Ver</button>
-                  <button
-                    onClick={() =>
-                      (window.location.href = `/registrar-cierre?editar=${cuadre.id}`)
-                    }
-                  >
-                    Editar
-                  </button>
-                  <button onClick={() => handleDescargarPDF(cuadre)}>
-                    Descargar
-                  </button>
-                  <button onClick={() => handleEliminar(cuadre.id)}>
-                    Eliminar
-                  </button>
-                </td></tr>
+                <tr key={idx}>
+                  <td>{formatDate(cuadre.fecha)}</td>
+                  <td>{nombreSucursal}</td>
+                  <td>
+                    <button onClick={() => handleVer(cuadre)}>Ver</button>
+                    <button onClick={() => handleEditar(cuadre)}>Editar</button>
+                    <button onClick={() => handleDescargarPDF(cuadre)}>Descargar</button>
+                    <button onClick={() => handleEliminar(cuadre.id)}>Eliminar</button>
+                  </td>
+                </tr>
               );
             })}
           </tbody>
         </table>
 
-        {/* Si el usuario eligió “Ver”, mostramos la vista completa de RegistrarCierre (modo lectura) */}
+        {/* Si el usuario eligió “Ver” o “Editar”, mostramos la vista completa */}
         {cuadreSeleccionado && (
           <div className="detalle-cuadre" ref={detalleRef}>
             {/* ----- Título con fecha y sucursal ----- */}
             <h2>
-              Cuadre del {formatDate(cuadreSeleccionado.fecha)} &nbsp;|&nbsp; Sucursal:{' '}
+              {isEditing
+                ? `Editando cuadre del ${formatDate(cuadreSeleccionado.fecha)}`
+                : `Cuadre del ${formatDate(cuadreSeleccionado.fecha)}`}
+              &nbsp;|&nbsp; Sucursal:{' '}
               {sucursalesMap[cuadreSeleccionado.sucursalId] || 'Sin sucursal'}
             </h2>
 
@@ -337,15 +414,29 @@ export default function HistorialCuadres() {
                 <div className="line" />
               </div>
               <div className="grid">
-                {cuadreSeleccionado.arqueo.map((caja, i) => (
-                  <ArqueoBlock
-                    key={i}
-                    ref={arqueoRefs[i]}
-                    title={`Caja ${i + 1}`}
-                    inicialData={caja}
-                    readonly={true}
-                  />
-                ))}
+                {(isEditing ? datosEditados.arqueo : cuadreSeleccionado.arqueo).map(
+                  (caja, i) => (
+                    <ArqueoBlock
+                      key={i}
+                      ref={arqueoRefs[i]}
+                      title={`Caja ${i + 1}`}
+                      inicialData={caja}
+                      readonly={!isEditing}
+                      onDataChange={
+                        isEditing
+                          ? (nuevo) => {
+                              const copia = datosEditados.arqueo.slice();
+                              copia[i] = nuevo;
+                              setDatosEditados((prev) => ({
+                                ...prev,
+                                arqueo: copia,
+                              }));
+                            }
+                          : undefined
+                      }
+                    />
+                  )
+                )}
               </div>
             </div>
 
@@ -359,15 +450,29 @@ export default function HistorialCuadres() {
                 <div className="line" />
               </div>
               <div className="grid">
-                {cuadreSeleccionado.cierre.map((caja, i) => (
-                  <CierreBlock
-                    key={i}
-                    ref={cierreRefs[i]}
-                    title={`Caja ${i + 1}`}
-                    inicialData={caja}
-                    readonly={true}
-                  />
-                ))}
+                {(isEditing ? datosEditados.cierre : cuadreSeleccionado.cierre).map(
+                  (caja, i) => (
+                    <CierreBlock
+                      key={i}
+                      ref={cierreRefs[i]}
+                      title={`Caja ${i + 1}`}
+                      inicialData={caja}
+                      readonly={!isEditing}
+                      onDataChange={
+                        isEditing
+                          ? (nuevo) => {
+                              const copiaCierre = datosEditados.cierre.slice();
+                              copiaCierre[i] = nuevo;
+                              setDatosEditados((prev) => ({
+                                ...prev,
+                                cierre: copiaCierre,
+                              }));
+                            }
+                          : undefined
+                      }
+                    />
+                  )
+                )}
               </div>
             </div>
 
@@ -384,8 +489,18 @@ export default function HistorialCuadres() {
                 <GastosBlock
                   ref={gastosRef}
                   title="Gastos"
-                  inicialData={cuadreSeleccionado.gastos}
-                  readonly={true}
+                  inicialData={isEditing ? datosEditados.gastos : cuadreSeleccionado.gastos}
+                  readonly={!isEditing}
+                  onDataChange={
+                    isEditing
+                      ? (nuevo) => {
+                          setDatosEditados((prev) => ({
+                            ...prev,
+                            gastos: nuevo.gastos,
+                          }));
+                        }
+                      : undefined
+                  }
                 />
               </div>
             </div>
@@ -395,24 +510,65 @@ export default function HistorialCuadres() {
               <div className="footer-section">
                 <div className="section diferencias">
                   <DiferenciasTable
-                    arqueoData={cuadreSeleccionado.arqueo}
-                    cierreData={cuadreSeleccionado.cierre}
+                    arqueoData={isEditing ? datosEditados.arqueo : cuadreSeleccionado.arqueo}
+                    cierreData={isEditing ? datosEditados.cierre : cuadreSeleccionado.cierre}
                   />
                 </div>
                 <div className="section totales">
                   <TotalesBlock
                     ref={totalesRef}
-                    arqueoData={cuadreSeleccionado.arqueo}
-                    cierreData={cuadreSeleccionado.cierre}
-                    gastosData={cuadreSeleccionado.gastos}
-                    sumDifEfectivo={cuadreSeleccionado.diferenciaEfectivo}
+                    arqueoData={isEditing ? datosEditados.arqueo : cuadreSeleccionado.arqueo}
+                    cierreData={isEditing ? datosEditados.cierre : cuadreSeleccionado.cierre}
+                    gastosData={isEditing ? datosEditados.gastos : cuadreSeleccionado.gastos}
+                    sumDifEfectivo={
+                      isEditing 
+                        ? undefined 
+                        : cuadreSeleccionado.diferenciaEfectivo
+                    }
                     sucursalId={cuadreSeleccionado.sucursalId}
-                    inicialComentario={cuadreSeleccionado.comentario || ''}
-                    readonly={true}
+                    balanceCajaChica={0}
+                      onCoverWithCajaChica={() => {}}
+                    
+                    inicialComentario={
+                      isEditing 
+                        ? datosEditados.comentario 
+                        : cuadreSeleccionado.comentario || ''
+                    }
+                    readonly={!isEditing}
+                    onDataChange={
+                      isEditing
+                        ? (nuevoComentario) => {
+                            setDatosEditados((prev) => ({
+                              ...prev,
+                              comentario: nuevoComentario
+                            }));
+                          }
+                        : undefined
+                    }
                   />
                 </div>
               </div>
             </div>
+
+            {/* ===== BOTÓN “Actualizar Cuadre” (solo en modo edición) ===== */}
+            {isEditing && (
+              <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
+                <button
+                  onClick={handleActualizar}
+                  style={{
+                    backgroundColor: '#27ae60',
+                    color: '#fff',
+                    border: 'none',
+                    padding: '10px 20px',
+                    borderRadius: '6px',
+                    fontSize: '16px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Actualizar Cuadre
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
