@@ -20,6 +20,7 @@ const TotalesBlock = forwardRef(
   ) => {
     const [comentario, setComentario] = useState(inicialComentario);
     const [yaCubierto, setYaCubierto] = useState(false);
+    const [montoPagar, setMontoPagar] = useState('');
 
     useEffect(() => {
       setComentario(inicialComentario);
@@ -29,24 +30,17 @@ const TotalesBlock = forwardRef(
       arr.reduce((sum, item) => sum + (parseFloat(item[field]) || 0), 0);
 
     // ==== ARQUEO FÍSICO MODIFICADO ====
-    // Efectivo: suma de efectivo de arqueo físico (3 cajas)
     const efectivoArqueo = sumField(arqueoData, 'efectivo');
-    // Motorista: suma de motorista de las 3 cajas de arqueo físico
     const motoristaArqueo = sumField(arqueoData, 'motorista');
-    // Tarjeta: suma de tarjeta de arqueo físico
     const tarjetaArqueo = sumField(arqueoData, 'tarjeta');
-    // Datosapertura: suma del campo "apertura" de las 3 cajas en cierre de sistema
     const datosAperturaArqueo = sumField(cierreData, 'apertura');
-    // Total Efectivo en Arqueo Físico: efectivoArqueo - datosAperturaArqueo
     const totalEfectivoArqueo = efectivoArqueo - datosAperturaArqueo;
 
     // ==== CIERRE DE SISTEMA MODIFICADO ====
     const totalEfectivoCierre = sumField(cierreData, 'efectivo');
     const totalTarjetaCierre = sumField(cierreData, 'tarjeta');
     const totalMotoristaCierre = sumField(cierreData, 'motorista');
-    // Apertura de cajas: suma del campo "apertura" en cierreData
     const aperturaCierre = sumField(cierreData, 'apertura');
-    // Total Sistema: efectivo + tarjeta − apertura de cajas
     const totalCierreSistema = totalEfectivoCierre + totalTarjetaCierre - aperturaCierre;
 
     // ==== GASTOS (solo total) ====
@@ -55,8 +49,10 @@ const TotalesBlock = forwardRef(
       0
     );
 
-    // ==== DIFERENCIA DE EFECTIVO ====
-    const diferenciaEfectivo = sumDifEfectivo;
+    // ==== DIFERENCIA DE EFECTIVO (calculada aquí) ====
+// AHORA (Total a depositar menos Total Sistema):
+    const diferenciaEfectivo = totalEfectivoArqueo - totalCierreSistema;
+
 
     useImperativeHandle(
       ref,
@@ -69,8 +65,11 @@ const TotalesBlock = forwardRef(
     );
 
     const handleCoverClick = async () => {
-      const faltante = Math.abs(diferenciaEfectivo);
-      if (typeof onCoverWithCajaChica !== 'function') return;
+      const faltante = parseFloat(montoPagar);
+      if (isNaN(faltante) || faltante <= 0) {
+        Swal.fire('Cantidad inválida', 'Ingresa un monto válido.', 'warning');
+        return;
+      }
       if (balanceCajaChica < faltante) {
         Swal.fire(
           'Saldo insuficiente',
@@ -83,6 +82,7 @@ const TotalesBlock = forwardRef(
       }
       await onCoverWithCajaChica(faltante);
       setYaCubierto(true);
+      setMontoPagar('');
     };
 
     return (
@@ -111,13 +111,13 @@ const TotalesBlock = forwardRef(
           >
             <h4>Arqueo Físico</h4>
             <p>
-              <strong>Efectivo:</strong> Q{efectivoArqueo.toFixed(2)}
+              <strong>Efectivo (Sum. cajas):</strong> Q{efectivoArqueo.toFixed(2)}
             </p>
             <p>
-              <strong>Motorista:</strong> Q{motoristaArqueo.toFixed(2)}
+              <strong>Motorista (Sum. cajas):</strong> Q{motoristaArqueo.toFixed(2)}
             </p>
             <p>
-              <strong>Tarjeta:</strong> Q{tarjetaArqueo.toFixed(2)}
+              <strong>Tarjeta (Sum. cajas):</strong> Q{tarjetaArqueo.toFixed(2)}
             </p>
             <p>
               <strong>Apertura de cajas:</strong> Q{datosAperturaArqueo.toFixed(2)}
@@ -186,6 +186,47 @@ const TotalesBlock = forwardRef(
             <p>
               <strong>Q{totalGastos.toFixed(2)}</strong>
             </p>
+            {/* Si los gastos exceden el total a depositar, mostrar botón para cubrir */}
+            {!readonly && totalGastos > totalEfectivoArqueo && !yaCubierto && (
+              <div style={{ marginTop: '0.5rem' }}>
+                <label htmlFor="monto-pagar">
+                  <strong>Pagar Faltante con Caja Chica:</strong>
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+                  <input
+                    id="monto-pagar"
+                    type="number"
+                    placeholder="Q"
+                    value={montoPagar}
+                    onChange={(e) => setMontoPagar(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '0.25rem',
+                      borderRadius: '4px',
+                      border: '1px solid #ccc'
+                    }}
+                  />
+                  <button
+                    onClick={handleCoverClick}
+                    style={{
+                      padding: '0.4rem 0.8rem',
+                      backgroundColor: '#d9534f',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Pagar Faltante
+                  </button>
+                </div>
+              </div>
+            )}
+            {!readonly && totalGastos > totalEfectivoArqueo && yaCubierto && (
+              <p style={{ marginTop: '0.5rem', color: 'green', fontWeight: 'bold' }}>
+                Faltante de gastos cubierto con Caja Chica.
+              </p>
+            )}
           </div>
 
           {/* Diferencia de Efectivo */}
@@ -200,32 +241,54 @@ const TotalesBlock = forwardRef(
           >
             <h4>Diferencia de Efectivo</h4>
             <p>
-              <strong>{diferenciaEfectivo >= 0 ? 'Sobrante:' : 'Faltante:'}</strong>{' '}
-              <span style={{ color: diferenciaEfectivo < 0 ? 'red' : 'green' }}>
-                Q{Math.abs(diferenciaEfectivo).toFixed(2)}
-              </span>
+              <strong
+                style={{ color: diferenciaEfectivo < 0 ? 'red' : 'green' }}
+              >
+                {diferenciaEfectivo >= 0 ? 'Sobrante:' : 'Faltante:'}
+              </strong>{' '}
+              Q{Math.abs(diferenciaEfectivo).toFixed(2)}
             </p>
 
+            {/* Si hay faltante en efectivo, mostrar campo para pagar */}
             {!readonly && diferenciaEfectivo < 0 && !yaCubierto && (
-              <button
-                onClick={handleCoverClick}
-                style={{
-                  marginTop: '0.5rem',
-                  padding: '0.4rem 0.8rem',
-                  backgroundColor: '#d9534f',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
-              >
-                Cubrir con Caja Chica (Q{Math.abs(diferenciaEfectivo).toFixed(2)})
-              </button>
+              <div style={{ marginTop: '0.5rem' }}>
+                <label htmlFor="monto-pagar-dif">
+                  <strong>Pagar Faltante con Caja Chica:</strong>
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+                  <input
+                    id="monto-pagar-dif"
+                    type="number"
+                    placeholder="Q"
+                    value={montoPagar}
+                    onChange={(e) => setMontoPagar(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '0.25rem',
+                      borderRadius: '4px',
+                      border: '1px solid #ccc'
+                    }}
+                  />
+                  <button
+                    onClick={handleCoverClick}
+                    style={{
+                      padding: '0.4rem 0.8rem',
+                      backgroundColor: '#d9534f',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Pagar Faltante
+                  </button>
+                </div>
+              </div>
             )}
 
             {!readonly && diferenciaEfectivo < 0 && yaCubierto && (
               <p style={{ marginTop: '0.5rem', color: 'green', fontWeight: 'bold' }}>
-                Faltante cubierto con Caja Chica.
+                Faltante de efectivo cubierto con Caja Chica.
               </p>
             )}
           </div>
