@@ -32,27 +32,32 @@ export default function RegistrarCierre() {
   const [selectedDate, setSelectedDate] = useState(todayISO);
   const [sucursales, setSucursales] = useState([]);
   const [selectedSucursal, setSelectedSucursal] = useState('');
+  const [balanceCajaChica, setBalanceCajaChica] = useState(0);
   const [saving, setSaving] = useState(false);
   const [hasSavedClosure, setHasSavedClosure] = useState(false);
 
-  // Ahora mantenemos los datos de cada bloque en estado, actualizando
-  // únicamente cuando el bloque notifique un cambio:
+  // Estados para los bloques (se actualizan vía onDataChange)
   const [arqueoData, setArqueoData] = useState([{}, {}, {}]);
   const [cierreData, setCierreData] = useState([{}, {}, {}]);
   const [gastosData, setGastosData] = useState([]);
 
-  // Refs para “leer” getData() en el momento de guardar o imprimir PDF:
+  // Referencias para getData() si el usuario no ha “propagado” el último cambio
   const arqueoRefs = [useRef(), useRef(), useRef()];
   const cierreRefs = [useRef(), useRef(), useRef()];
   const gastosRef = useRef();
   const totalesRef = useRef();
 
+  // -----------------------------------
+  //  Función para formatear fechas
+  // -----------------------------------
   const formatDate = iso => {
     const [y, m, d] = iso.split('-');
     return `${d}/${m}/${y}`;
   };
 
-  // 1) Carga inicial de sucursales
+  // -----------------------------------
+  //  1) Carga inicial de sucursales
+  // -----------------------------------
   useEffect(() => {
     (async () => {
       try {
@@ -69,7 +74,35 @@ export default function RegistrarCierre() {
     })();
   }, []);
 
-  // 2) Verificar existencia de cierre guardado para la fecha y sucursal
+  // -----------------------------------
+  //  2) Cuando cambie la sucursal, obtener SALDO de CAJA CHICA
+  // -----------------------------------
+  useEffect(() => {
+    const fetchCajaChica = async () => {
+      if (!selectedSucursal) {
+        setBalanceCajaChica(0);
+        return;
+      }
+      try {
+        const sucRef = doc(db, 'sucursales', selectedSucursal);
+        const snap = await getDoc(sucRef);
+        if (snap.exists()) {
+          const datos = snap.data();
+          setBalanceCajaChica(parseFloat(datos.cajaChica) || 0);
+        } else {
+          setBalanceCajaChica(0);
+        }
+      } catch (err) {
+        console.error(err);
+        setBalanceCajaChica(0);
+      }
+    };
+    fetchCajaChica();
+  }, [selectedSucursal]);
+
+  // -----------------------------------
+  //  3) Verificar si ya hay un cierre para esta fecha y sucursal
+  // -----------------------------------
   useEffect(() => {
     const checkClosure = async () => {
       if (!selectedSucursal) {
@@ -91,20 +124,24 @@ export default function RegistrarCierre() {
     checkClosure();
   }, [selectedDate, selectedSucursal]);
 
-  // Función auxiliar para sumar un campo dentro de un array de objetos
+  // -----------------------------------
+  //  4) Sumar campos numéricos (helper)
+  // -----------------------------------
   const sumField = (arr, field) =>
     arr.reduce((sum, item) => sum + (parseFloat(item[field]) || 0), 0);
 
-  // Diferencia de efectivo (arqueo - cierre)
-  const sumDifEfectivo = () => sumField(arqueoData, 'efectivo') - sumField(cierreData, 'efectivo');
+  // -----------------------------------
+  //  5) Calcular diferencia de efectivo
+  //     (uso directo en TotalesBlock)
+  // -----------------------------------
+  const diferenciaEfectivo = () => sumField(cierreData, 'efectivo') - sumField(arqueoData, 'efectivo');
 
-  // -----------------------------------------------------------
-  //  EN LUGAR DE setInterval, capturamos “onDataChange” en cada bloque
-  //  de Arqueo y Cierre, y en GastosBlock
-  // -----------------------------------------------------------
+  // -----------------------------------
+  //  6) Callbacks para “onDataChange” de cada bloque
+  // -----------------------------------
 
-  const handleArqueoChange = index => (data) => {
-    // data viene como { efectivo, tarjeta, motorista, active }
+  // Cuando ArqueoBlock notifica un cambio, actualizamos ese índice en arqueoData
+  const handleArqueoChange = index => data => {
     setArqueoData(prev => {
       const copy = [...prev];
       copy[index] = data;
@@ -112,10 +149,8 @@ export default function RegistrarCierre() {
     });
   };
 
-  const handleCierreChange = index => (data) => {
-    // data: { ventaEfectivo, ventaTarjeta, ventaMotorista, apertura,
-    //          efectivo, tarjeta, motorista, total, active }
-    // (CierreBlock expone en getData exactamente esa forma)
+  // Cuando CierreBlock notifica un cambio, actualizamos ese índice en cierreData
+  const handleCierreChange = index => data => {
     setCierreData(prev => {
       const copy = [...prev];
       copy[index] = data;
@@ -123,15 +158,60 @@ export default function RegistrarCierre() {
     });
   };
 
-  const handleGastosChange = (data) => {
-    // data: { title, gastos: [ { cantidad, descripcion, categoria, hasNIT, nitReference }, … ] }
-    setGastosData(data.gastos);
+  // Cuando GastosBlock notifica un cambio, actualizamos gastosData completo
+  const handleGastosChange = data => {
+    // data debería tener la forma { title, gastos: [...] }
+    setGastosData(data.gastos || []);
   };
 
-  // -----------------------------------------------------------
-  //  Guardar el cuadre en Firestore
-  // -----------------------------------------------------------
+  // -----------------------------------
+  //  7) Función para “Cubrir con Caja Chica”
+  // -----------------------------------
+  const handleCoverWithCajaChica = async montoFaltante => {
+    if (!selectedSucursal) {
+      Swal.fire('Error', 'Primero selecciona una sucursal.', 'warning');
+      return;
+    }
+    try {
+      const sucRef = doc(db, 'sucursales', selectedSucursal);
+      const snap = await getDoc(sucRef);
+      if (!snap.exists()) {
+        Swal.fire('Error', 'Sucursal no encontrada.', 'error');
+        return;
+      }
+      const datos = snap.data();
+      const saldoActual = parseFloat(datos.cajaChica) || 0;
+      if (saldoActual < montoFaltante) {
+        Swal.fire(
+          'Saldo insuficiente',
+          `Tu saldo de caja chica es Q${saldoActual.toFixed(
+            2
+          )}, no puedes cubrir Q${montoFaltante.toFixed(2)}.`,
+          'warning'
+        );
+        return;
+      }
+      // Actualizar Firestore restando el faltante
+      await updateDoc(sucRef, {
+        cajaChica: saldoActual - montoFaltante
+      });
+      // Actualizar estado local
+      setBalanceCajaChica(saldoActual - montoFaltante);
 
+      Swal.fire(
+        'Hecho',
+        `Q${montoFaltante.toFixed(2)} cubiertos con Caja Chica.`,
+        'success'
+      );
+    } catch (err) {
+      console.error(err);
+      Swal.fire('Error', 'No se pudo usar caja chica.', 'error');
+    }
+  };
+
+  // -----------------------------------
+  //  8) Guardar el cuadre en Firestore
+  // -----------------------------------
   const handleGuardar = async () => {
     if (!auth.currentUser) {
       return Swal.fire('No autenticado', 'Inicia sesión para guardar.', 'warning');
@@ -140,7 +220,7 @@ export default function RegistrarCierre() {
       return Swal.fire('Selección requerida', 'Elige una sucursal.', 'warning');
     }
 
-    // Comprobar que no exista ya un cierre para la misma fecha y sucursal
+    // Validar que no exista ya un cierre para esta fecha y sucursal
     try {
       const qCheck = query(
         collection(db, 'cierres'),
@@ -159,19 +239,18 @@ export default function RegistrarCierre() {
       return Swal.fire('Error', 'No se pudo verificar cuadres existentes.', 'error');
     }
 
-    // Recuperar los datos “al momento” usando los refs de cada bloque
-    // (por si el usuario no terminó de “propagar” el último cambio)
+    // Obtener datos “al momento” de cada ref, por si no se propagó el último cambio
     const arqueo = arqueoRefs.map(r => r.current?.getData() || {});
     const cierre = cierreRefs.map(r => r.current?.getData() || {});
     const gastos = gastosRef.current?.getData()?.gastos || [];
 
-    // Recogemos el comentario actual desde TotalesBlock:
+    // Obtener comentario desde TotalesBlock
     const comentario = totalesRef.current?.getData()?.comentario?.trim() || '';
 
-    // Validar que todos los campos numéricos estén bien
+    // Validar datos numéricos
     const validBoxes = [...arqueo, ...cierre].every(b =>
-      ['efectivo', 'tarjeta', 'motorista'].every(f =>
-        b[f] !== undefined && !isNaN(parseFloat(b[f]))
+      ['efectivo', 'tarjeta', 'motorista'].every(
+        f => b[f] !== undefined && !isNaN(parseFloat(b[f]))
       )
     );
     const validGastos = gastos.every(g => !isNaN(parseFloat(g.cantidad)));
@@ -181,7 +260,6 @@ export default function RegistrarCierre() {
     }
 
     setSaving(true);
-
     try {
       await addDoc(collection(db, 'cierres'), {
         fecha: selectedDate,
@@ -189,14 +267,14 @@ export default function RegistrarCierre() {
         arqueo,
         cierre,
         gastos,
-        diferenciaEfectivo: sumDifEfectivo(),
+        diferenciaEfectivo: diferenciaEfectivo(),
         comentario,
         creado: serverTimestamp(),
         uid: auth.currentUser.uid
       });
       setHasSavedClosure(true);
 
-      // Si hay gastos de “Caja chica”, actualizamos la caja chica en la sucursal
+      // Si hay gastos de “Caja chica”, sumarlos al campo cajaChica de la sucursal
       const totalCajaChica = gastos
         .filter(g => g.categoria === 'Caja chica')
         .reduce((s, g) => s + parseFloat(g.cantidad || 0), 0);
@@ -207,6 +285,10 @@ export default function RegistrarCierre() {
           await updateDoc(sucRef, {
             cajaChica: (parseFloat(snapRef.data().cajaChica) || 0) + totalCajaChica
           });
+          // Actualizar estado local para ver inmediatamente el nuevo saldo
+          setBalanceCajaChica(
+            (prev) => prev + totalCajaChica
+          );
         }
       }
 
@@ -224,10 +306,9 @@ export default function RegistrarCierre() {
     }
   };
 
-  // -----------------------------------------------------------
-  //  Descargar PDF (igual que antes, pero ahora no dependemos de interval)
-  // -----------------------------------------------------------
-
+  // -----------------------------------
+  //  9) Descargar PDF (igual que antes)
+  // -----------------------------------
   const handleDescargarPDF = async () => {
     if (!hasSavedClosure) {
       return Swal.fire(
@@ -237,7 +318,6 @@ export default function RegistrarCierre() {
       );
     }
     try {
-      // Recuperar de Firestore el cierre que acabamos de guardar
       const snap = await getDocs(
         query(
           collection(db, 'cierres'),
@@ -253,7 +333,9 @@ export default function RegistrarCierre() {
       const cajaChica = parseFloat(suc.cajaChica) || 0;
       const comentario = data.comentario || '';
 
-      // Funciones auxiliares para tabla PDF (exactamente como antes)
+      const sumFieldLocal = (arr, field) =>
+        arr.reduce((sum, item) => sum + (parseFloat(item[field]) || 0), 0);
+
       const sumCol = idx =>
         ['efectivo', 'tarjeta', 'motorista'].reduce(
           (s, f) => s + (parseFloat(arqueo[idx]?.[f]) || 0),
@@ -265,16 +347,14 @@ export default function RegistrarCierre() {
           0
         );
       const totalGastos = gastos.reduce((s, g) => s + parseFloat(g.cantidad || 0), 0);
-
-      const totalEfectivoSist  = sumField(arqueo, 'efectivo');
-      const totalTarjetaSist   = sumField(arqueo, 'tarjeta');
-      const totalMotoristaSist = sumField(arqueo, 'motorista');
-      const totalSist          = totalEfectivoSist + totalTarjetaSist;
-
-      const totalEfectivoCi  = sumField(cierre, 'efectivo');
-      const totalMotoristaCi = sumField(cierre, 'motorista');
-      const diferencia       = totalEfectivoCi - totalEfectivoSist;
-      const aDepositar       = totalEfectivoCi - totalGastos;
+      const totalEfectivoSist = sumFieldLocal(arqueo, 'efectivo');
+      const totalTarjetaSist = sumFieldLocal(arqueo, 'tarjeta');
+      const totalMotoristaSist = sumFieldLocal(arqueo, 'motorista');
+      const totalSist = totalEfectivoSist + totalTarjetaSist;
+      const totalEfectivoCi = sumFieldLocal(cierre, 'efectivo');
+      const totalMotoristaCi = sumFieldLocal(cierre, 'motorista');
+      const diferencia = totalEfectivoCi - totalEfectivoSist;
+      const aDepositar = totalEfectivoCi - totalGastos;
 
       const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
       const w = pdf.internal.pageSize.getWidth();
@@ -284,78 +364,112 @@ export default function RegistrarCierre() {
       pdf.text(`Sucursal: ${suc.ubicacion}`, w / 2, 45, { align: 'center' });
       let y = 60;
 
-      // Arqueo físico
-      pdf.setFontSize(12); pdf.text('Arqueo físico', 40, y); y += 14;
+      // Arqueo Físico
+      pdf.setFontSize(12);
+      pdf.text('Arqueo físico', 40, y);
+      y += 14;
       autoTable(pdf, {
         startY: y,
-        head: [['Concepto','Caja 1','Caja 2','Caja 3','Total']],
+        head: [['Concepto', 'Caja 1', 'Caja 2', 'Caja 3', 'Total']],
         body: [
-          ['Efectivo',  sumCol(0),  sumCol(1),  sumCol(2),  totalEfectivoSist],
-          ['Tarjeta',   sumCol(0),  sumCol(1),  sumCol(2),  totalTarjetaSist],
-          ['Motorista', sumCol(0),  sumCol(1),  sumCol(2),  totalMotoristaSist],
-          ['Totales',   sumCol(0),  sumCol(1),  sumCol(2),  totalSist]
+          ['Efectivo', sumCol(0), sumCol(1), sumCol(2), totalEfectivoSist],
+          ['Tarjeta', sumCol(0), sumCol(1), sumCol(2), totalTarjetaSist],
+          ['Motorista', sumCol(0), sumCol(1), sumCol(2), totalMotoristaSist],
+          ['Totales', sumCol(0), sumCol(1), sumCol(2), totalSist]
         ],
-        margin:{left:30,right:30}, styles:{fontSize:9,cellPadding:3}
+        margin: { left: 30, right: 30 },
+        styles: { fontSize: 9, cellPadding: 3 }
       });
       y = pdf.lastAutoTable.finalY + 10;
 
       // Cierre de Sistema
-      pdf.setFontSize(12); pdf.text('Cierre de Sistema', 40, y); y += 14;
+      pdf.setFontSize(12);
+      pdf.text('Cierre de Sistema', 40, y);
+      y += 14;
       autoTable(pdf, {
         startY: y,
-        head: [['Concepto','Caja 1','Caja 2','Caja 3','Total']],
+        head: [['Concepto', 'Caja 1', 'Caja 2', 'Caja 3', 'Total']],
         body: [
-          ['Efectivo',  sumColCi(0), sumColCi(1), sumColCi(2), totalEfectivoCi],
-          ['Tarjeta',   sumColCi(0), sumColCi(1), sumColCi(2), sumField(cierre,'tarjeta')],
+          ['Efectivo', sumColCi(0), sumColCi(1), sumColCi(2), totalEfectivoCi],
+          ['Tarjeta', sumColCi(0), sumColCi(1), sumColCi(2), sumFieldLocal(cierre, 'tarjeta')],
           ['Motorista', sumColCi(0), sumColCi(1), sumColCi(2), totalMotoristaCi],
-          ['Totales',   sumColCi(0), sumColCi(1), sumColCi(2), totalEfectivoCi + sumField(cierre,'tarjeta') + totalMotoristaCi]
+          [
+            'Totales',
+            sumColCi(0),
+            sumColCi(1),
+            sumColCi(2),
+            totalEfectivoCi + sumFieldLocal(cierre, 'tarjeta') + totalMotoristaCi
+          ]
         ],
-        margin:{left:30,right:30}, styles:{fontSize:9,cellPadding:3}
+        margin: { left: 30, right: 30 },
+        styles: { fontSize: 9, cellPadding: 3 }
       });
       y = pdf.lastAutoTable.finalY + 10;
 
       // Gastos
-      pdf.setFontSize(12); pdf.text('Gastos', 40, y); y += 14;
+      pdf.setFontSize(12);
+      pdf.text('Gastos', 40, y);
+      y += 14;
       autoTable(pdf, {
         startY: y,
-        head: [['Descripción','Categoría','Total']],
+        head: [['Descripción', 'Categoría', 'Total']],
         body: [
-          ...gastos.map(g => [g.descripcion || g.concepto || '', g.categoria, parseFloat(g.cantidad) || 0]),
-          [{content:'Totales',colSpan:2,styles:{fontStyle:'bold',halign:'right'}}, totalGastos]
+          ...gastos.map(g => [g.descripcion || '', g.categoria, parseFloat(g.cantidad) || 0]),
+          [
+            { content: 'Totales', colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } },
+            totalGastos
+          ]
         ],
-        margin:{left:30,right:30}, styles:{fontSize:9,cellPadding:3}
+        margin: { left: 30, right: 30 },
+        styles: { fontSize: 9, cellPadding: 3 }
       });
       y = pdf.lastAutoTable.finalY + 20;
 
       // Ventas Total Sistema
-      pdf.setFontSize(12); pdf.setFont(undefined,'bold'); pdf.text('Ventas Total Sistema',40,y); pdf.setFont(undefined,'normal'); y += 14;
-      autoTable(pdf,{
-        startY:y,
-        head:[['Concepto','Total']],
-        body:[
+      pdf.setFontSize(12);
+      pdf.setFont(undefined, 'bold');
+      pdf.text('Ventas Total Sistema', 40, y);
+      pdf.setFont(undefined, 'normal');
+      y += 14;
+      autoTable(pdf, {
+        startY: y,
+        head: [['Concepto', 'Total']],
+        body: [
           ['Venta Efectivo', totalEfectivoSist],
-          ['Venta Tarjeta',  totalTarjetaSist],
-          ['Venta Motorista',totalMotoristaSist],
-          [{content:'Total Sistema',styles:{fontStyle:'bold'}}, totalSist]
+          ['Venta Tarjeta', totalTarjetaSist],
+          ['Venta Motorista', totalMotoristaSist],
+          [{ content: 'Total Sistema', styles: { fontStyle: 'bold' } }, totalSist]
         ],
-        margin:{left:30,right:30}, styles:{fontSize:9,cellPadding:3}
+        margin: { left: 30, right: 30 },
+        styles: { fontSize: 9, cellPadding: 3 }
       });
       y = pdf.lastAutoTable.finalY + 20;
 
       // Control Administración
-      pdf.setFontSize(12); pdf.setFont(undefined,'bold'); pdf.text('Control Administración',40,y); pdf.setFont(undefined,'normal'); y += 14;
-      autoTable(pdf,{
-        startY:y,
-        head:[['Concepto','Total']],
-        body:[
-          ['Caja chica',   cajaChica],
-          ['Venta Efectivo',totalEfectivoCi],
-          ['Venta Motorista',totalMotoristaCi],
-          ['Gastos',         totalGastos],
-          [{content:'Sobrante/Faltante',styles:{textColor:diferencia<0?[255,0,0]:[0,128,0]}},Math.abs(diferencia)],
-          [{content:'Total a Depositar',styles:{fontStyle:'bold'}}, aDepositar]
+      pdf.setFontSize(12);
+      pdf.setFont(undefined, 'bold');
+      pdf.text('Control Administración', 40, y);
+      pdf.setFont(undefined, 'normal');
+      y += 14;
+      autoTable(pdf, {
+        startY: y,
+        head: [['Concepto', 'Total']],
+        body: [
+          ['Caja chica', cajaChica],
+          ['Venta Efectivo', totalEfectivoCi],
+          ['Venta Motorista', totalMotoristaCi],
+          ['Gastos', totalGastos],
+          [
+            {
+              content: 'Sobrante/Faltante',
+              styles: { textColor: diferencia < 0 ? [255, 0, 0] : [0, 128, 0] }
+            },
+            Math.abs(diferencia)
+          ],
+          [{ content: 'Total a Depositar', styles: { fontStyle: 'bold' } }, aDepositar]
         ],
-        margin:{left:30,right:30}, styles:{fontSize:9,cellPadding:3}
+        margin: { left: 30, right: 30 },
+        styles: { fontSize: 9, cellPadding: 3 }
       });
       y = pdf.lastAutoTable.finalY + 20;
 
@@ -401,7 +515,9 @@ export default function RegistrarCierre() {
         </div>
       </div>
 
-      {/* ----- Sección Arqueo Físico ----- */}
+      {/* ============================= */}
+      {/*  Sección: Arqueo Físico       */}
+      {/* ============================= */}
       <Section title="Arqueo Físico">
         {arqueoRefs.map((r, i) => (
           <ArqueoBlock
@@ -413,7 +529,9 @@ export default function RegistrarCierre() {
         ))}
       </Section>
 
-      {/* ----- Sección Cierre de Sistema ----- */}
+      {/* ============================= */}
+      {/*  Sección: Cierre de Sistema    */}
+      {/* ============================= */}
       <Section title="Cierre de Sistema">
         {cierreRefs.map((r, i) => (
           <CierreBlock
@@ -425,12 +543,20 @@ export default function RegistrarCierre() {
         ))}
       </Section>
 
-      {/* ----- Sección Gastos ----- */}
+      {/* ============================= */}
+      {/*  Sección: Gastos              */}
+      {/* ============================= */}
       <Section title="Gastos">
-        <GastosBlock ref={gastosRef} title="Gastos" onDataChange={handleGastosChange} />
+        <GastosBlock
+          ref={gastosRef}
+          title="Gastos"
+          onDataChange={handleGastosChange}
+        />
       </Section>
 
-      {/* ----- Sección Diferencias y Totales ----- */}
+      {/* ============================= */}
+      {/*  Sección: Diferencias y Totales */}
+      {/* ============================= */}
       <div className="cuadre">
         <div className="footer-section">
           <div className="section diferencias">
@@ -442,14 +568,18 @@ export default function RegistrarCierre() {
               arqueoData={arqueoData}
               cierreData={cierreData}
               gastosData={gastosData}
-              sumDifEfectivo={sumDifEfectivo()}
+              sumDifEfectivo={diferenciaEfectivo()}
               sucursalId={selectedSucursal}
+              balanceCajaChica={balanceCajaChica}
+              onCoverWithCajaChica={handleCoverWithCajaChica}
             />
           </div>
         </div>
       </div>
 
-      {/* ----- Botones Guardar / Descargar PDF ----- */}
+      {/* ============================= */}
+      {/*  Botones: Guardar / Descargar PDF */}
+      {/* ============================= */}
       <div className="guardar-cuadre">
         <button onClick={handleGuardar} disabled={saving}>
           {saving ? 'Guardando…' : 'Guardar Cuadre'}

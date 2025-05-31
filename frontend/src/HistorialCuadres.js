@@ -8,7 +8,7 @@ import {
   getDocs,
   doc,
   deleteDoc,
-  getDoc,            // <-- necesario para leer una sucursal individual
+  getDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import html2canvas from 'html2canvas';
@@ -29,7 +29,7 @@ export default function HistorialCuadres() {
   const [cuadreSeleccionado, setCuadreSeleccionado] = useState(null);
   const detalleRef = useRef();
 
-  // Nuevo estado para mapear sucursalId → nombre de sucursal
+  // Mapa sucursalId → nombre/ubicación
   const [sucursalesMap, setSucursalesMap] = useState({});
 
   // Estados para PDF agrupado
@@ -37,7 +37,7 @@ export default function HistorialCuadres() {
   const [selectedCierresIds, setSelectedCierresIds] = useState([]);
   const [selectAll, setSelectAll] = useState(true);
 
-  // Refs para cada bloque en modo “ver”
+  // Refs para los bloques en modo “ver”
   const arqueoRefs = [useRef(), useRef(), useRef()];
   const cierreRefs = [useRef(), useRef(), useRef()];
   const gastosRef = useRef();
@@ -72,18 +72,17 @@ export default function HistorialCuadres() {
   // 2) Cuando cambie la lista de cuadres, obtenemos los nombres de sucursal
   useEffect(() => {
     const fetchSucursales = async () => {
-      // Extraemos todos los sucursalId únicos de los cuadres
-      const idsUnicos = Array.from(new Set(cuadres.map((c) => c.sucursalId).filter(Boolean)));
+      const idsUnicos = Array.from(
+        new Set(cuadres.map((c) => c.sucursalId).filter(Boolean))
+      );
       const nuevoMap = {};
 
-      // Para cada id, traemos el doc de Firestore y guardamos el campo 'nombre'
       await Promise.all(
         idsUnicos.map(async (sucId) => {
           try {
             const sucDoc = await getDoc(doc(db, 'sucursales', sucId));
             if (sucDoc.exists()) {
               const datos = sucDoc.data();
-              // Asumimos que cada documento de 'sucursales' tiene al menos el campo 'nombre'
               nuevoMap[sucId] = datos.ubicacion || 'Sin lugar';
             } else {
               nuevoMap[sucId] = 'Sucursal no encontrada';
@@ -190,7 +189,6 @@ export default function HistorialCuadres() {
       y += 30;
       pdf.setFontSize(12);
 
-      // En lugar de 'Usuario', mostramos el nombre de la sucursal
       const nombreSuc = sucursalesMap[c.sucursalId] || 'Sin sucursal';
       pdf.text(`Sucursal: ${nombreSuc}`, 40, y);
       y += 20;
@@ -290,35 +288,31 @@ export default function HistorialCuadres() {
           <thead>
             <tr>
               <th>Fecha</th>
-              <th>Sucursal</th> {/* <-- Cambiado de "Usuario" a "Sucursal" */}
+              <th>Sucursal</th>
               <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {cuadres.map((cuadre, idx) => {
-              // Obtenemos el nombre de sucursal; si no lo tenemos, mostramos 'Sin sucursal'
               const nombreSucursal = sucursalesMap[cuadre.sucursalId] || 'Sin sucursal';
               return (
-                <tr key={idx}>
-                  <td>{formatDate(cuadre.fecha)}</td>
-                  <td>{nombreSucursal}</td>
-                  <td>
-                    <button onClick={() => handleVer(cuadre)}>Ver</button>
-                    <button
-                      onClick={() =>
-                        (window.location.href = `/registrar-cierre?editar=${cuadre.id}`)
-                      }
-                    >
-                      Editar
-                    </button>
-                    <button onClick={() => handleDescargarPDF(cuadre)}>
-                      Descargar
-                    </button>
-                    <button onClick={() => handleEliminar(cuadre.id)}>
-                      Eliminar
-                    </button>
-                  </td>
-                </tr>
+                // Aquí eliminamos cada salto de línea/indentación entre <tr> y <td>
+                <tr key={idx}><td>{formatDate(cuadre.fecha)}</td><td>{nombreSucursal}</td><td>
+                  <button onClick={() => handleVer(cuadre)}>Ver</button>
+                  <button
+                    onClick={() =>
+                      (window.location.href = `/registrar-cierre?editar=${cuadre.id}`)
+                    }
+                  >
+                    Editar
+                  </button>
+                  <button onClick={() => handleDescargarPDF(cuadre)}>
+                    Descargar
+                  </button>
+                  <button onClick={() => handleEliminar(cuadre.id)}>
+                    Eliminar
+                  </button>
+                </td></tr>
               );
             })}
           </tbody>
@@ -348,8 +342,8 @@ export default function HistorialCuadres() {
                     key={i}
                     ref={arqueoRefs[i]}
                     title={`Caja ${i + 1}`}
-                    inicialData={caja}    
-                    readonly={true}       
+                    inicialData={caja}
+                    readonly={true}
                   />
                 ))}
               </div>
@@ -370,8 +364,8 @@ export default function HistorialCuadres() {
                     key={i}
                     ref={cierreRefs[i]}
                     title={`Caja ${i + 1}`}
-                    inicialData={caja}    
-                    readonly={true}        
+                    inicialData={caja}
+                    readonly={true}
                   />
                 ))}
               </div>
@@ -390,8 +384,8 @@ export default function HistorialCuadres() {
                 <GastosBlock
                   ref={gastosRef}
                   title="Gastos"
-                  inicialData={cuadreSeleccionado.gastos}  
-                  readonly={true}                        
+                  inicialData={cuadreSeleccionado.gastos}
+                  readonly={true}
                 />
               </div>
             </div>

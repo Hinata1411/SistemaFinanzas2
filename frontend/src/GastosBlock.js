@@ -1,4 +1,5 @@
 // src/GastosBlock.jsx
+
 import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import './GastosBlock.css';
 
@@ -18,21 +19,23 @@ const GastosBlock = forwardRef(
   (
     {
       title = "Gastos",
-      inicialData = null, // Si viene, es un arreglo [{ cantidad, descripcion, categoria, hasNIT, nitReference }, ...]
+      inicialData = null,   // Si viene, es un arreglo: [{ cantidad, descripcion, categoria, hasNIT, nitReference }, ...]
       readonly = false,
+      onDataChange          // <-- callback que el padre debe pasar
     },
     ref
   ) => {
+    // Estado interno de gastos (cada gasto: { cantidad, descripcion, categoria, hasNIT, nitReference })
     const [gastos, setGastos] = useState([
       { cantidad: "", descripcion: "", categoria: defaultCategories[0], hasNIT: false, nitReference: "" },
       { cantidad: "", descripcion: "", categoria: defaultCategories[0], hasNIT: false, nitReference: "" }
     ]);
     const [categories, setCategories] = useState(defaultCategories);
 
-    // Si llega inicialData en modo solo lectura, precargamos el estado:
+    // 1) Si llega `inicialData` y el componente está en modo readonly,
+    //    pre-llenamos el estado con esos valores.
     useEffect(() => {
-      if (readonly && Array.isArray(inicialData)) {
-        // Copy para no mutar la prop directamente
+      if (Array.isArray(inicialData)) {
         const copia = inicialData.map((g) => ({
           cantidad: g.cantidad?.toString() || "",
           descripcion: g.descripcion || "",
@@ -42,16 +45,24 @@ const GastosBlock = forwardRef(
         }));
         setGastos(copia);
       }
-    }, [inicialData, readonly]);
+    }, [inicialData]);
 
-    // Manejo de cambios en los campos
+    // 2) NOTIFICAR AL PADRE cada vez que cambie `gastos`
+    useEffect(() => {
+      if (typeof onDataChange === "function") {
+        onDataChange({ title, gastos });
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [gastos]);
+
+    // 3) Manejo de cambios en cada gasto
     const handleChange = (index, field, value) => {
-      const newGastos = [...gastos];
-      newGastos[index][field] = value;
-      setGastos(newGastos);
+      const nuevaLista = [...gastos];
+      nuevaLista[index][field] = value;
+      setGastos(nuevaLista);
     };
 
-    // Cuando cambias categoría, si seleccionas "agregar", pide prompt
+    // 4) Manejo de cambio de categoría (con opción de “Agregar categoría”)
     const handleCategoryChange = (index, value) => {
       if (value === "agregar" && !readonly) {
         const nuevaCat = window.prompt("Ingrese la nueva categoría:");
@@ -64,6 +75,7 @@ const GastosBlock = forwardRef(
       }
     };
 
+    // 5) Agregar nueva fila de gasto
     const handleAddGasto = () => {
       if (readonly) return;
       setGastos((prev) => [
@@ -72,18 +84,19 @@ const GastosBlock = forwardRef(
       ]);
     };
 
+    // 6) Eliminar un gasto por índice
     const handleRemoveGasto = (index) => {
       if (readonly) return;
       setGastos((prev) => prev.filter((_, i) => i !== index));
     };
 
-    // Suma de todos los gastos
+    // 7) Cálculo del total de todos los gastos
     const totalGastos = gastos.reduce(
       (sum, item) => sum + (parseFloat(item.cantidad) || 0),
       0
     );
 
-    // Exponer getData() para el padre
+    // 8) Exponer getData() al componente padre
     useImperativeHandle(ref, () => ({
       getData: () => ({
         title,
@@ -184,17 +197,25 @@ const GastosBlock = forwardRef(
           </tbody>
         </table>
 
-        <div className="gastos-total">
+        <div className="gastos-total" style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.5rem' }}>
           {!readonly && (
             <button
               type="button"
               onClick={handleAddGasto}
               className="add-gasto-btn"
+              style={{
+                padding: '0.3rem 0.6rem',
+                backgroundColor: '#28a745',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
             >
               + Agregar Gasto
             </button>
           )}
-          <strong>Total Gastos: Q. {totalGastos.toFixed(2)}</strong>
+          <strong>Total Gastos: Q {totalGastos.toFixed(2)}</strong>
         </div>
       </div>
     );
