@@ -1,0 +1,191 @@
+/* ======================== */
+/* Estilos generales        */
+/* ======================== */
+html, body {
+  font-family: 'Arial', sans-serif;
+  background: #f7f7f7;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+}
+
+.container-principal {
+  padding: 20px;
+  margin-top: 2050px;
+  box-sizing: border-box;
+}
+
+/* ======================== */
+/* Encabezado Cuadre + Fecha */
+/* ======================== */
+.encabezado-cuadre {
+  background: #f7f7f7;
+  padding: 10px 20px;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.encabezado-cuadre h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: bold;
+  color: #333;
+}
+
+.encabezado-cuadre .date-selector {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 0; /* Ya no empuja hacia abajo */
+}
+
+.date-selector label {
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.date-selector input[type="date"] {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+}
+
+/* ======================== */
+/* Secciones tipo panel     */
+/* ======================== */
+.panel {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  margin-bottom: 25px;
+}
+
+.toggle-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  margin-bottom: 15px;
+}
+
+.line {
+  flex: 1;
+  height: 1px;
+  background: #ccc;
+}
+
+.header-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggle-icon {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.3s ease;
+}
+
+.toggle-icon.open {
+  transform: rotate(180deg);
+}
+
+.panel-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+}
+
+/* ======================== */
+/* Grids internas           */
+/* ======================== */
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  justify-content: space-between;
+}
+
+/* ======================== */
+/* Sección inferior: totales y diferencias */
+/* ======================== */
+.footer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+  margin-top: 40px;
+}
+
+.footer-section .section {
+  background: #fff;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+/* ======================== */
+/* Botones guardar/descargar */
+/* ======================== */
+.guardar-cuadre {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  flex-wrap: wrap;
+  margin-top: 40px;
+}
+
+.guardar-cuadre button {
+  padding: 10px 20px;
+  font-size: 16px;
+  background: #007bff;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.guardar-cuadre button:hover {
+  background: #0056b3;
+}
+
+/* ======================== */
+/* Responsive ajustes        */
+/* ======================== */
+@media (max-width: 768px) {
+  .grid {
+    flex-direction: column;
+  }
+
+  .encabezado-cuadre {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .panel-title {
+    font-size: 16px;
+    text-align: center;
+  }
+
+  .footer-section {
+    gap: 15px;
+  }
+
+  .guardar-cuadre {
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+@media print {
+  body {
+    overflow: visible !important;
+  }
+}

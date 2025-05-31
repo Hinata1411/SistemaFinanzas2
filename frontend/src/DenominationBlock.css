@@ -1,0 +1,142 @@
+/* Contenedor del bloque */
+.denomination-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1; /* Que ocupe proporcionalmente el espacio */
+  min-width: 250px;
+  max-width: 320px;
+  margin-top: 10px; /* Separación superior */
+  padding: 15px;
+  border-radius: 20px;
+  background: #f9f9f9;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Título de la caja */
+.box-title {
+  margin: 0;
+  font-size: 18px;
+  margin-bottom: 10px;
+  text-align: center;
+  font-weight: bold;
+  color: #333;
+}
+
+/* Cada fila: etiqueta e input */
+.input-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Etiqueta */
+.input-item label {
+  font-weight: bold;
+  font-size: 14px;
+  flex: 1;
+  text-align: left;
+}
+
+/* Campo de texto */
+.input-item input {
+  width: 80px;
+  padding: 6px 8px;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+  text-align: center;
+  transition: border-color 0.3s ease;
+  font-size: 14px;
+}
+
+.input-item input:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+/* Total */
+.total label {
+  color: #000;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.cash-input {
+  width: 80px;
+  padding: 6px 8px;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 14px;
+  background: #f1f1f1;
+}
+
+/* Botón / Toggle */
+.toggle-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.toggle-button {
+  background: #28a745;
+  border: none;
+  border-radius: 20px;
+  padding: 6px 0;
+  width: 80px;
+  color: #fff;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.toggle-button:hover {
+  background: #218838;
+}
+
+.toggle-button.inactive {
+  background: #dc3545;
+}
+
+/* Campos adicionales (tarjeta/motorista) */
+.input-item.extra-field input {
+  width: 80px;
+}
+
+/* Inactivo */
+.denomination-block.inactive {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* ========================= */
+/* Responsive (pantallas pequeñas) */
+/* ========================= */
+@media (max-width: 768px) {
+  .denomination-block {
+    max-width: 100%;
+    margin: 10px auto;
+  }
+
+  .input-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .input-item label {
+    margin-bottom: 5px;
+  }
+
+  .input-item input {
+    width: 100%;
+  }
+
+  .cash-input {
+    width: 100%;
+  }
+
+  .toggle-button {
+    width: 100px;
+  }
+}

@@ -39,8 +39,11 @@ function LoginSelect() {
     fetchUsers();
   }, []);
 
+  
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log("handleSubmit iniciado");
 
     if (!selectedEmail || !password) {
       alert("Por favor, completa todos los campos.");
@@ -48,34 +51,39 @@ function LoginSelect() {
     }
 
     try {
+      console.log("Autenticando con Firebase Auth...");
       // Autentica con Firebase Authentication en el cliente
       const userCredential = await signInWithEmailAndPassword(auth, selectedEmail, password);
       const user = userCredential.user;
+      console.log("Usuario autenticado:", user.email);
       
       // Obtén el ID token de Firebase
+      console.log("Obteniendo ID token...");
       const idToken = await user.getIdToken();
+      console.log("ID token obtenido:", idToken);
 
+      
       // Envía el ID token al backend
+      console.log("Enviando ID token al backend...");
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken })
       });
       
+      console.log("Respuesta del backend status:", response.status);
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
       
       const data = await response.json();
+      console.log("Respuesta del backend:", data);
 
       if (data.token) {
         localStorage.setItem('token', data.token);
-        if (data.role === "admin") {
-          navigate('/paginaadmin');
-        } else {
-          navigate('/paginavisual');
-        }
+        console.log("Token guardado, redirigiendo a /home");
+        navigate('/home');
       } else {
         alert("Error en autenticación: " + data.message);
       }
@@ -84,6 +92,7 @@ function LoginSelect() {
       alert("Error en el login: " + error.message);
     }
   };
+  
 
   return (
     <div className="d-flex flex-column align-items-center justify-content-center vh-100 bg-light">

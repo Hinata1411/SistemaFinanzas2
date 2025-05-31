@@ -6,6 +6,7 @@ import { db } from "./firebase-config";
 import { doc, getDoc } from 'firebase/firestore';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './Login.css';
+import logo from './Logosempresa.png'; // Asegúrate de que la imagen esté en la carpeta src
 
 function Login() {
   const navigate = useNavigate();
@@ -30,7 +31,8 @@ function Login() {
           if (userData.role === "admin") {
             navigate('/paginaadmin');
           } else {
-            navigate('/paginavisual');
+            // Puedes redirigir a otra ruta según el rol
+            navigate('/dashboard');
           }
         } else {
           alert("No existe información del usuario en Firestore.");
@@ -49,7 +51,8 @@ function Login() {
       <div className="container" style={{ maxWidth: '450px' }}>
         <div className="card shadow p-4">
           <div className="text-center">
-            <img src="/Logosempresa.png" alt="Logo de la empresa" className="logo" style={{ width: '250px', height: 'auto', display: 'block', margin: '0 auto 20px' }} />
+            {/* Se asigna la clase "logo" para que se apliquen los estilos definidos en tu CSS */}
+            <img src={logo} alt="logo" className="logo" width="43px" />
           </div>
           <h2 className="text-center mb-4">Tracking Ventas</h2>
           <form onSubmit={handleLogin}>
