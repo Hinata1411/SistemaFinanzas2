@@ -35,28 +35,33 @@ export default function RegistrarCierre() {
   const [saving, setSaving] = useState(false);
   const [hasSavedClosure, setHasSavedClosure] = useState(false);
 
-  const [arqueoData, setArqueoData] = useState([]);
-  const [cierreData, setCierreData] = useState([]);
+  // Ahora mantenemos los datos de cada bloque en estado, actualizando
+  // únicamente cuando el bloque notifique un cambio:
+  const [arqueoData, setArqueoData] = useState([{}, {}, {}]);
+  const [cierreData, setCierreData] = useState([{}, {}, {}]);
   const [gastosData, setGastosData] = useState([]);
 
+  // Refs para “leer” getData() en el momento de guardar o imprimir PDF:
   const arqueoRefs = [useRef(), useRef(), useRef()];
   const cierreRefs = [useRef(), useRef(), useRef()];
   const gastosRef = useRef();
-  const totalesRef = useRef();                 // <<-- cambio: ref para TotalesBlock
+  const totalesRef = useRef();
 
   const formatDate = iso => {
     const [y, m, d] = iso.split('-');
     return `${d}/${m}/${y}`;
   };
 
-  // Carga inicial de sucursales
+  // 1) Carga inicial de sucursales
   useEffect(() => {
     (async () => {
       try {
         const snap = await getDocs(collection(db, 'sucursales'));
         const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setSucursales(list);
-        if (list.length && !selectedSucursal) setSelectedSucursal(list[0].id);
+        if (list.length && !selectedSucursal) {
+          setSelectedSucursal(list[0].id);
+        }
       } catch (err) {
         console.error(err);
         Swal.fire('Error', 'No se pudieron cargar sucursales', 'error');
@@ -64,7 +69,7 @@ export default function RegistrarCierre() {
     })();
   }, []);
 
-  // Verifica existencia de cierre guardado para fecha y sucursal
+  // 2) Verificar existencia de cierre guardado para la fecha y sucursal
   useEffect(() => {
     const checkClosure = async () => {
       if (!selectedSucursal) {
@@ -86,22 +91,47 @@ export default function RegistrarCierre() {
     checkClosure();
   }, [selectedDate, selectedSucursal]);
 
-  // Sincroniza datos de bloques cada medio segundo
-  useEffect(() => {
-    const iv = setInterval(() => {
-      setArqueoData(arqueoRefs.map(r => r.current?.getData() || {}));
-      setCierreData(cierreRefs.map(r => r.current?.getData() || {}));
-      setGastosData(gastosRef.current?.getData()?.gastos || []);
-    }, 500);
-    return () => clearInterval(iv);
-  }, []);
-
+  // Función auxiliar para sumar un campo dentro de un array de objetos
   const sumField = (arr, field) =>
     arr.reduce((sum, item) => sum + (parseFloat(item[field]) || 0), 0);
-  const sumDifEfectivo = () =>
-    sumField(arqueoData, 'efectivo') - sumField(cierreData, 'efectivo');
 
-  // Guardar cuadre (solo uno por sucursal y día)
+  // Diferencia de efectivo (arqueo - cierre)
+  const sumDifEfectivo = () => sumField(arqueoData, 'efectivo') - sumField(cierreData, 'efectivo');
+
+  // -----------------------------------------------------------
+  //  EN LUGAR DE setInterval, capturamos “onDataChange” en cada bloque
+  //  de Arqueo y Cierre, y en GastosBlock
+  // -----------------------------------------------------------
+
+  const handleArqueoChange = index => (data) => {
+    // data viene como { efectivo, tarjeta, motorista, active }
+    setArqueoData(prev => {
+      const copy = [...prev];
+      copy[index] = data;
+      return copy;
+    });
+  };
+
+  const handleCierreChange = index => (data) => {
+    // data: { ventaEfectivo, ventaTarjeta, ventaMotorista, apertura,
+    //          efectivo, tarjeta, motorista, total, active }
+    // (CierreBlock expone en getData exactamente esa forma)
+    setCierreData(prev => {
+      const copy = [...prev];
+      copy[index] = data;
+      return copy;
+    });
+  };
+
+  const handleGastosChange = (data) => {
+    // data: { title, gastos: [ { cantidad, descripcion, categoria, hasNIT, nitReference }, … ] }
+    setGastosData(data.gastos);
+  };
+
+  // -----------------------------------------------------------
+  //  Guardar el cuadre en Firestore
+  // -----------------------------------------------------------
+
   const handleGuardar = async () => {
     if (!auth.currentUser) {
       return Swal.fire('No autenticado', 'Inicia sesión para guardar.', 'warning');
@@ -109,7 +139,8 @@ export default function RegistrarCierre() {
     if (!selectedSucursal) {
       return Swal.fire('Selección requerida', 'Elige una sucursal.', 'warning');
     }
-    // Regla: un cuadre por sucursal por día
+
+    // Comprobar que no exista ya un cierre para la misma fecha y sucursal
     try {
       const qCheck = query(
         collection(db, 'cierres'),
@@ -128,26 +159,29 @@ export default function RegistrarCierre() {
       return Swal.fire('Error', 'No se pudo verificar cuadres existentes.', 'error');
     }
 
-    const arqueo = arqueoData;
-    const cierre = cierreData;
-    const gastos = gastosData;
+    // Recuperar los datos “al momento” usando los refs de cada bloque
+    // (por si el usuario no terminó de “propagar” el último cambio)
+    const arqueo = arqueoRefs.map(r => r.current?.getData() || {});
+    const cierre = cierreRefs.map(r => r.current?.getData() || {});
+    const gastos = gastosRef.current?.getData()?.gastos || [];
 
-    // <<-- cambio: sacamos el comentario desde el TotalesBlock mediante su ref:
-    const comentario =
-      totalesRef.current?.getData()?.comentario?.trim() || '';
+    // Recogemos el comentario actual desde TotalesBlock:
+    const comentario = totalesRef.current?.getData()?.comentario?.trim() || '';
 
-    // Validación de datos
+    // Validar que todos los campos numéricos estén bien
     const validBoxes = [...arqueo, ...cierre].every(b =>
       ['efectivo', 'tarjeta', 'motorista'].every(f =>
         b[f] !== undefined && !isNaN(parseFloat(b[f]))
       )
     );
     const validGastos = gastos.every(g => !isNaN(parseFloat(g.cantidad)));
+
     if (!validBoxes || !validGastos) {
       return Swal.fire('Datos inválidos', 'Revisa montos y gastos.', 'warning');
     }
 
     setSaving(true);
+
     try {
       await addDoc(collection(db, 'cierres'), {
         fecha: selectedDate,
@@ -156,13 +190,13 @@ export default function RegistrarCierre() {
         cierre,
         gastos,
         diferenciaEfectivo: sumDifEfectivo(),
-        comentario,                              // <<-- cambio: aquí guardamos el comentario correcto
+        comentario,
         creado: serverTimestamp(),
         uid: auth.currentUser.uid
       });
       setHasSavedClosure(true);
 
-      // Actualiza caja chica si hay gastos de 'Caja chica'
+      // Si hay gastos de “Caja chica”, actualizamos la caja chica en la sucursal
       const totalCajaChica = gastos
         .filter(g => g.categoria === 'Caja chica')
         .reduce((s, g) => s + parseFloat(g.cantidad || 0), 0);
@@ -190,7 +224,10 @@ export default function RegistrarCierre() {
     }
   };
 
-  // Descargar PDF
+  // -----------------------------------------------------------
+  //  Descargar PDF (igual que antes, pero ahora no dependemos de interval)
+  // -----------------------------------------------------------
+
   const handleDescargarPDF = async () => {
     if (!hasSavedClosure) {
       return Swal.fire(
@@ -200,7 +237,7 @@ export default function RegistrarCierre() {
       );
     }
     try {
-      // Recupera datos de Firestore
+      // Recuperar de Firestore el cierre que acabamos de guardar
       const snap = await getDocs(
         query(
           collection(db, 'cierres'),
@@ -214,9 +251,9 @@ export default function RegistrarCierre() {
       const gastos = data.gastos || [];
       const suc = sucursales.find(s => s.id === selectedSucursal) || {};
       const cajaChica = parseFloat(suc.cajaChica) || 0;
-      const comentario = data.comentario || '';   // <<-- ahora se “leyó” por Firestore
+      const comentario = data.comentario || '';
 
-      // Cálculos por columna
+      // Funciones auxiliares para tabla PDF (exactamente como antes)
       const sumCol = idx =>
         ['efectivo', 'tarjeta', 'motorista'].reduce(
           (s, f) => s + (parseFloat(arqueo[idx]?.[f]) || 0),
@@ -229,7 +266,6 @@ export default function RegistrarCierre() {
         );
       const totalGastos = gastos.reduce((s, g) => s + parseFloat(g.cantidad || 0), 0);
 
-      // Ventas Total Sistema
       const totalEfectivoSist  = sumField(arqueo, 'efectivo');
       const totalTarjetaSist   = sumField(arqueo, 'tarjeta');
       const totalMotoristaSist = sumField(arqueo, 'motorista');
@@ -240,13 +276,12 @@ export default function RegistrarCierre() {
       const diferencia       = totalEfectivoCi - totalEfectivoSist;
       const aDepositar       = totalEfectivoCi - totalGastos;
 
-      // Genera PDF
       const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
       const w = pdf.internal.pageSize.getWidth();
       pdf.setFontSize(14);
-      pdf.text(`Cuadre - ${formatDate(selectedDate)}`, w/2, 30, { align: 'center' });
+      pdf.text(`Cuadre - ${formatDate(selectedDate)}`, w / 2, 30, { align: 'center' });
       pdf.setFontSize(10);
-      pdf.text(`Sucursal: ${suc.ubicacion}`, w/2, 45, { align: 'center' });
+      pdf.text(`Sucursal: ${suc.ubicacion}`, w / 2, 45, { align: 'center' });
       let y = 60;
 
       // Arqueo físico
@@ -369,20 +404,30 @@ export default function RegistrarCierre() {
       {/* ----- Sección Arqueo Físico ----- */}
       <Section title="Arqueo Físico">
         {arqueoRefs.map((r, i) => (
-          <ArqueoBlock key={i} ref={r} title={`Caja ${i+1}`} />
+          <ArqueoBlock
+            key={i}
+            ref={r}
+            title={`Caja ${i + 1}`}
+            onDataChange={handleArqueoChange(i)}
+          />
         ))}
       </Section>
 
       {/* ----- Sección Cierre de Sistema ----- */}
       <Section title="Cierre de Sistema">
         {cierreRefs.map((r, i) => (
-          <CierreBlock key={i} ref={r} title={`Caja ${i+1}`} />
+          <CierreBlock
+            key={i}
+            ref={r}
+            title={`Caja ${i + 1}`}
+            onDataChange={handleCierreChange(i)}
+          />
         ))}
       </Section>
 
       {/* ----- Sección Gastos ----- */}
       <Section title="Gastos">
-        <GastosBlock ref={gastosRef} title="Gastos" />
+        <GastosBlock ref={gastosRef} title="Gastos" onDataChange={handleGastosChange} />
       </Section>
 
       {/* ----- Sección Diferencias y Totales ----- */}
@@ -393,7 +438,7 @@ export default function RegistrarCierre() {
           </div>
           <div className="section totales">
             <TotalesBlock
-              ref={totalesRef}                               // <<-- cambio: asignamos ref aquí
+              ref={totalesRef}
               arqueoData={arqueoData}
               cierreData={cierreData}
               gastosData={gastosData}
