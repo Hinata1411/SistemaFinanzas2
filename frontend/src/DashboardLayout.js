@@ -73,7 +73,7 @@ function DashboardLayout({ userEmail }) {
               </ul>
             </li>
 
-            <li className="menu-item menu-item-dropdown">
+            {/* <li className="menu-item menu-item-dropdown">
               <Link className="menu-link" onClick={() => setOpenEfectivo(!openEfectivo)}>
                 <img src="/transferencia.png" alt="Efectivo" width="43px" />
                 <span>Efectivo</span>
@@ -93,7 +93,7 @@ function DashboardLayout({ userEmail }) {
                   </Link>
                 </li>
               </ul>
-            </li>
+            </li> */}
 
             <li className="menu-item menu-item-static">
               <Link to="Sucursales" className="menu-link">
@@ -109,12 +109,12 @@ function DashboardLayout({ userEmail }) {
               </Link>
             </li>
 
-            <li className="menu-item menu-item-static">
+            {/* <li className="menu-item menu-item-static">
               <Link to="/reportes" className="menu-link">
                 <img src="/reporte.png" alt="Reportes" width="43px" />
                 <span>Reportes</span>
               </Link>
-            </li>
+            </li> */}
 
             <li className="menu-item menu-item-static">
               <Link to="/graficas" className="menu-link">
