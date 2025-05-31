@@ -49,10 +49,16 @@ const TotalesBlock = forwardRef(
       0
     );
 
-    // ==== DIFERENCIA DE EFECTIVO (calculada aquí) ====
-// AHORA (Total a depositar menos Total Sistema):
+    // ==== DIFERENCIA DE EFECTIVO (Total a depositar − Total Sistema) ====
     const diferenciaEfectivo = totalEfectivoArqueo - totalCierreSistema;
 
+    // Si gastaste más que lo a depositar, prellenar montoPagar = totalGastos − totalEfectivoArqueo
+    useEffect(() => {
+      if (!readonly && totalGastos > totalEfectivoArqueo && !yaCubierto) {
+        const faltanteGastos = totalGastos - totalEfectivoArqueo;
+        setMontoPagar(faltanteGastos.toFixed(2));
+      }
+    }, [totalGastos, totalEfectivoArqueo, readonly, yaCubierto]);
 
     useImperativeHandle(
       ref,
@@ -82,8 +88,16 @@ const TotalesBlock = forwardRef(
       }
       await onCoverWithCajaChica(faltante);
       setYaCubierto(true);
+      Swal.fire(
+        'Hecho',
+        `Faltante de gastos cubierto con Caja Chica Q${faltante.toFixed(2)}`,
+        'success'
+      );
       setMontoPagar('');
     };
+
+    // ==== NUEVO: Total a depositar tras gastos ====
+    const totalDespuesGastos = totalEfectivoArqueo - totalGastos;
 
     return (
       <div
@@ -123,7 +137,7 @@ const TotalesBlock = forwardRef(
               <strong>Apertura de cajas:</strong> Q{datosAperturaArqueo.toFixed(2)}
             </p>
             <p>
-              <strong>Total a depositar:</strong> Q{totalEfectivoArqueo.toFixed(2)}
+              <strong>Total Efectivo:</strong> Q{totalEfectivoArqueo.toFixed(2)}
             </p>
             <div
               style={{
@@ -183,9 +197,15 @@ const TotalesBlock = forwardRef(
             }}
           >
             <h4>Total Gastos</h4>
-            <p>
+            <p style={{ fontSize: '0.9rem' }}>
               <strong>Q{totalGastos.toFixed(2)}</strong>
             </p>
+
+            {/* === NUEVO: Total a depositar tras gastos === */}
+            <p style={{ marginTop: '0.5rem', fontSize: '1.1rem' }}>
+              <strong>Total a depositar:</strong> Q{totalDespuesGastos.toFixed(2)}
+            </p>
+
             {/* Si los gastos exceden el total a depositar, mostrar botón para cubrir */}
             {!readonly && totalGastos > totalEfectivoArqueo && !yaCubierto && (
               <div style={{ marginTop: '0.5rem' }}>
@@ -224,7 +244,8 @@ const TotalesBlock = forwardRef(
             )}
             {!readonly && totalGastos > totalEfectivoArqueo && yaCubierto && (
               <p style={{ marginTop: '0.5rem', color: 'green', fontWeight: 'bold' }}>
-                Faltante de gastos cubierto con Caja Chica.
+                Faltante de gastos cubierto con Caja Chica Q
+                {(totalGastos - totalEfectivoArqueo).toFixed(2)}
               </p>
             )}
           </div>
@@ -288,7 +309,8 @@ const TotalesBlock = forwardRef(
 
             {!readonly && diferenciaEfectivo < 0 && yaCubierto && (
               <p style={{ marginTop: '0.5rem', color: 'green', fontWeight: 'bold' }}>
-                Faltante de efectivo cubierto con Caja Chica.
+                Faltante de efectivo cubierto con Caja Chica Q
+                {Math.abs(diferenciaEfectivo).toFixed(2)}
               </p>
             )}
           </div>
