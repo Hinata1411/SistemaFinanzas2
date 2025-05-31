@@ -1,114 +1,224 @@
-/* ===== Contenedor principal ===== */
+/* HistorialCuadres.css */
+
+/* ============================= */
+/* Estilos generales para Historial */
+/* ============================= */
+
+/* Contenedor principal: ocupa todo el ancho completo,
+   con padding-left para dejar espacio a la sidebar */
 .vista-cuadres {
-    padding: 2rem;
-    background-color: #f7f7f7;
-    min-height: 100vh;
-    width: 100%;
-    box-sizing: border-box;
-    overflow-x: hidden; /* Previene scroll horizontal */
+  padding: 2rem 2rem 2rem calc(6rem + 2rem);
+  background-color: #f7f7f7;
+  min-height: 100vh;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;         /* Previene scroll horizontal */
+}
+
+/* Encabezado */
+.vista-cuadres h1 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  color: #2c3e50;
+}
+
+/* ============================= */
+/* Contenedor para filtros y tabla */
+/* ============================= */
+/* Aquí centramos ambos (.filtros y .tabla-cuadres) al mismo ancho */
+.centro-contenido {
+  width: 90%;                 /* 90% del ancho disponible */
+  max-width: 1000px;          /* Máximo 1000px */
+  margin: 0 auto;             /* Centra horizontalmente */
+  box-sizing: border-box;
+}
+
+/* ============================= */
+/* Barra de filtros – botón a izquierda, fecha a derecha */
+/* ============================= */
+.filtros {
+  display: flex;
+  justify-content: space-between; /* Botón a la izquierda, filtro a la derecha */
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+/* Botón “Descargar PDF Agrupado” */
+.filtros button {
+  background-color: #2980b9;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.3s ease;
+}
+.filtros button:hover {
+  background-color: #1f6791;
+}
+
+/* Grupo de fecha (alineado a la derecha) */
+.filtros .fecha-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Input de fecha */
+.filtros input[type="date"] {
+  padding: 6px 10px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+/* ============================= */
+/* Tabla de cuadres (centrada y más ancha) */
+/* ============================= */
+.tabla-cuadres {
+  width: 100%;               /* Ocupa todo el ancho del contenedor padre (.centro-contenido) */
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.05);
+  table-layout: fixed;       /* Columnas de ancho fijo */
+  overflow: hidden;
+}
+
+.tabla-cuadres thead {
+  background-color: #2980b9;
+  color: white;
+}
+
+.tabla-cuadres th,
+.tabla-cuadres td {
+  padding: 14px;             /* Padding aumentado para legibilidad */
+  text-align: center;
+  border-bottom: 1px solid #ddd;
+  font-size: 15px;           /* Fuente ligeramente más grande */
+  word-wrap: break-word;     /* Rompe texto largo */
+}
+
+.tabla-cuadres tbody tr:hover {
+  background-color: #f1f1f1;
+}
+
+/* Botones de acción dentro de la tabla */
+.tabla-cuadres button {
+  padding: 8px 14px;         /* Ajusta padding interno */
+  margin: 2px;
+  border: none;
+  background-color: #27ae60;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;           /* Fuente ligeramente más grande */
+  transition: background 0.3s ease;
+}
+.tabla-cuadres button:hover {
+  background-color: #1e8449;
+}
+
+/* ============================= */
+/* Detalle del cuadre (ajustable) */
+/* ============================= */
+.detalle-cuadre {
+  margin-top: 30px;
+  padding: 20px;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+  width: 100%;               /* Ocupa 100% del contenedor padre (.centro-contenido) */
+  box-sizing: border-box;
+  overflow-x: auto;
+}
+
+.detalle-cuadre h2 {
+  margin-bottom: 20px;
+  color: #2c3e50;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 10px;
+}
+
+.detalle-cuadre h3 {
+  margin-top: 15px;
+  color: #34495e;
+}
+
+.detalle-cuadre pre {
+  background: #f8f9fa;
+  padding: 10px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 13px;
+  color: #333;
+  white-space: pre-wrap;
+}
+
+/* ============================= */
+/* Responsive ajustes para móvil  */
+/* ============================= */
+@media (max-width: 768px) {
+  .vista-cuadres {
+    padding: 2rem 2rem 2rem 2rem; /* Elimina el espacio extra en móvil */
+    margin-top: 40px;            /* Espacio superior para navbar */
+    margin-left: 4rem;   
   }
-  
-  /* ===== Encabezado ===== */
+
   .vista-cuadres h1 {
-    text-align: center;
-    margin-bottom: 1.5rem;
-    color: #2c3e50;
+    font-size: 20px;
+    margin-bottom: 1rem;
   }
-  
-  /* ===== Filtro de fecha ===== */
-  .filtros {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-  }
-  
-  .filtros input[type="date"] {
-    padding: 6px 10px;
-    font-size: 14px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-  }
-  
-  /* ===== Tabla de cuadres ===== */
-  .tabla-cuadres {
+
+  /* Contenedor centrado adapta su ancho en móvil */
+  .centro-contenido {
     width: 100%;
-    max-width: 100%;
-    border-collapse: collapse;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 0 10px rgba(0,0,0,0.05);
-    overflow: hidden;
-    table-layout: fixed;
+    padding: 0 1rem;  
+           /* Pequeño padding lateral */
   }
-  
-  .tabla-cuadres thead {
-    background-color: #2980b9;
-    color: white;
+
+  /* Tabla de cuadres en móvil */
+  .tabla-cuadres {
+    font-size: 13px;
   }
-  
+
   .tabla-cuadres th,
   .tabla-cuadres td {
-    padding: 12px;
-    text-align: center;
-    border-bottom: 1px solid #ddd;
-    font-size: 14px;
-    word-wrap: break-word;
+    padding: 10px 8px;
   }
-  
-  .tabla-cuadres tbody tr:hover {
-    background-color: #f1f1f1;
-  }
-  
+
+  /* Botones de la tabla más compactos */
   .tabla-cuadres button {
-    padding: 6px 12px;
-    margin: 2px;
-    border: none;
-    background-color: #27ae60;
-    color: white;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
-    transition: background 0.3s ease;
+    padding: 6px 10px;
+    font-size: 12px;
+    margin: 1px;
   }
-  
-  .tabla-cuadres button:hover {
-    background-color: #1e8449;
+
+  /* Alineación de filtros en móvil: botón arriba, fecha abajo */
+  .filtros {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
   }
-  
-  /* ===== Detalle del cuadre ===== */
+  .filtros .fecha-container {
+    justify-content: flex-end;
+  }
+
+  /* Detalle de cuadre en móvil ocupa todo el ancho */
   .detalle-cuadre {
-    margin-top: 30px;
-    padding: 20px;
-    background: #ffffff;
-    border-radius: 10px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-    width: 100%;
-    box-sizing: border-box;
-    overflow-x: auto;
+    padding: 15px;
   }
-  
+
   .detalle-cuadre h2 {
-    margin-bottom: 20px;
-    color: #2c3e50;
-    border-bottom: 1px solid #ddd;
-    padding-bottom: 10px;
+    font-size: 18px;
+    margin-bottom: 15px;
   }
-  
-  .detalle-cuadre h3 {
-    margin-top: 15px;
-    color: #34495e;
-  }
-  
+
   .detalle-cuadre pre {
-    background: #f8f9fa;
-    padding: 10px;
-    border-radius: 6px;
-    overflow-x: auto;
-    font-size: 13px;
-    color: #333;
-    white-space: pre-wrap;
+    font-size: 12px;
+    padding: 8px;
   }
-  
+}

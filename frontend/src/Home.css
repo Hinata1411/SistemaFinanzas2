@@ -55,7 +55,7 @@
 .home-welcome {
   /* Ocupa todo el ancho de la ventana */
   margin-left: 16rem;
-   width: calc(100% - 16rem);   
+  width: calc(100% - 16rem);   
   padding: 2rem;
   height: 100vh;
   background-color: var(--color-Surface);
@@ -103,21 +103,12 @@
   }
 }
 
-/* ---------------------------------------
-   Contenedor del calendario (.calendar)
-   --------------------------------------- */
-
-/* 
-  - Sin scrollbar propio.
-  - Se centra con position: fixed, left:50%, translateX(-50%).
-  - Ajustamos 'top' para que esté más arriba.
-  - No se mueve al abrir/cerrar sidebar.
-*/
 .admin-content .calendar {
   width: 100%;
   max-width: 1000px;
   padding: 1rem;
-  margin: 0;                /* Sin margin:auto, centrado con left/transform */
+  margin: 0;     
+  margin-left: 2rem;           /* Sin margin:auto, centrado con left/transform */
   z-index: 1;
   overflow: visible;        /* Sin scrollbar interno */
   position: fixed;          /* Fijo al viewport, siempre centrado */
