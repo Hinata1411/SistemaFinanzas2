@@ -1,4 +1,4 @@
-// ArqueoBlock.jsx
+// src/ArqueoBlock.jsx
 import React, {
   useState,
   useMemo,
@@ -17,125 +17,203 @@ const denominations = [
   { label: 'Q. 1',   id: 'q1' },
 ];
 
-const ArqueoBlock = forwardRef(({ title = 'Caja', onDataChange }, ref) => {
-  /* ─────────── Estado ─────────── */
-  const [values, setValues] = useState(() =>
-    denominations.reduce((acc, { id }) => ({ ...acc, [id]: '' }), {})
-  );
-  const [tarjeta,    setTarjeta]    = useState('');
-  const [motorista,  setMotorista]  = useState('');
-  const [isActive,   setIsActive]   = useState(true);
+const ArqueoBlock = forwardRef(
+  (
+    {
+      title = 'Caja',
+      onDataChange,
+      inicialData = null, // { values: {q100,q50,...}, tarjeta, motorista, active }
+      readonly = false,
+    },
+    ref
+  ) => {
+    /* ─────────── Estado ─────────── */
 
-  /* ─────────── Cálculos ─────────── */
-  const efectivo = useMemo(
-    () =>
-      Object.values(values).reduce(
-        (acc, val) => acc + (parseFloat(val) || 0),
-        0
-      ),
-    [values]
-  );
+    // 1) Mantener un objeto “values” con cada denominación (solo en editable)
+    const [values, setValues] = useState(() =>
+      denominations.reduce((acc, { id }) => ({ ...acc, [id]: '' }), {})
+    );
 
-  /* ─────────── Callbacks ─────────── */
-  const handleDenominationChange = ({ target: { id, value } }) =>
-    setValues((prev) => ({ ...prev, [id]: value }));
+    // 2) Campos “tarjeta” y “motorista”
+    const [tarjeta,   setTarjeta]   = useState('');
+    const [motorista, setMotorista] = useState('');
 
-  /* ─────────── Notificar al padre ─────────── */
-  useEffect(() => {
-    onDataChange?.({
-      efectivo,
-      tarjeta:   parseFloat(tarjeta)   || 0,
-      motorista: parseFloat(motorista) || 0,
-      active:    isActive,
-    });
-  }, [efectivo, tarjeta, motorista, isActive, onDataChange]);
+    // 3) “isActive” para marcar ON/OFF de la caja
+    const [isActive, setIsActive] = useState(true);
 
-  /* ─────────── Ref API ─────────── */
-  useImperativeHandle(ref, () => ({
-    getData: () => ({
-      title,
-      efectivo,
-      tarjeta:   parseFloat(tarjeta)   || 0,
-      motorista: parseFloat(motorista) || 0,
-      active:    isActive,
-    }),
-  }));
+    /* ─────────── Cálculo del efectivo total ─────────── */
+    // Solo sumamos las “values” si estamos en modo editable.
+    // En modo readonly, confiamos en `inicialData.efectivo`.
+    const computedEfectivo = useMemo(
+      () =>
+        Object.values(values).reduce(
+          (acc, val) => acc + (parseFloat(val) || 0),
+          0
+        ),
+      [values]
+    );
 
-  /* ─────────── UI ─────────── */
-  return (
-    <div className="denomination-block">
-      <div className="box-title">{title}</div>
+    /* ─────────── Cargar “inicialData” en modo readonly ─────────── */
+    useEffect(() => {
+      if (inicialData) {
+        // 1) Rellenar cada denominación si inicialData.values existe
+        if (inicialData.values) {
+          setValues(inicialData.values);
+        }
+        // 2) Rellenar tarjeta/motorista
+        setTarjeta(inicialData.tarjeta?.toString() ?? '');
+        setMotorista(inicialData.motorista?.toString() ?? '');
+        // 3) Rellenar el estado ON/OFF
+        setIsActive(inicialData.active === false ? false : true);
+      }
+    }, [inicialData]);
 
-      <div className="denomination-list">
-        {denominations.map(({ label, id }) => (
-          <div key={id} className="input-item">
-            <label htmlFor={id}>{label}</label>
-            <input
-              type="number"
-              id={id}
-              min="0"
-              step="0.01"
-              value={values[id]}
-              onChange={handleDenominationChange}
-              placeholder="0"
-              disabled={!isActive}
-              className="denomination-input"
-            />
-          </div>
-        ))}
+    /* ─────────── Notificar al padre ─────────── */
+    useEffect(() => {
+      if (readonly && inicialData) {
+        // En readonly, devolvemos exactamente lo que vino de Firestore
+        onDataChange?.({
+          values: inicialData.values ?? {},       // objeto con cantidades por billete
+          efectivo: inicialData.efectivo,         // el total que guardamos
+          tarjeta: inicialData.tarjeta,
+          motorista: inicialData.motorista,
+          active: inicialData.active,
+        });
+      } else {
+        // Modo completamente editable: reenviamos “values” +
+        // el total calculado + tarjeta + motorista + active
+        onDataChange?.({
+          values,                                  // el objeto con cada denominación
+          efectivo: computedEfectivo,
+          tarjeta: parseFloat(tarjeta) || 0,
+          motorista: parseFloat(motorista) || 0,
+          active: isActive,
+        });
+      }
+    }, [
+      values,
+      computedEfectivo,
+      tarjeta,
+      motorista,
+      isActive,
+      onDataChange,
+      readonly,
+      inicialData,
+    ]);
+
+    /* ─────────── Handler denominación ─────────── */
+    const handleDenominationChange = ({ target: { id, value } }) => {
+      setValues((prev) => ({ ...prev, [id]: value }));
+    };
+
+    /* ─────────── Ref API: exponer getData() ─────────── */
+    useImperativeHandle(ref, () => ({
+      getData: () => {
+        if (readonly && inicialData) {
+          // En readonly devolvemos EXACTAMENTE la misma forma que vino de Firestore:
+          // { title, values, efectivo, tarjeta, motorista, active }
+          return {
+            title,
+            values: inicialData.values ?? {},
+            efectivo: inicialData.efectivo,
+            tarjeta: inicialData.tarjeta,
+            motorista: inicialData.motorista,
+            active: inicialData.active,
+          };
+        }
+        // En editable devolvemos el estado actual:
+        return {
+          title,
+          values,                        // objeto con { q100, q50, ... }
+          efectivo: computedEfectivo,    // suma automática de “values”
+          tarjeta: parseFloat(tarjeta) || 0,
+          motorista: parseFloat(motorista) || 0,
+          active: isActive,
+        };
+      },
+    }));
+
+    /* ─────────── Renderizado ─────────── */
+    return (
+      <div className="denomination-block">
+        <div className="box-title">{title}</div>
+
+        <div className="denomination-list">
+          {denominations.map(({ label, id }) => (
+            <div key={id} className="input-item">
+              <label htmlFor={id}>{label}</label>
+              <input
+                type="number"
+                id={id}
+                min="0"
+                step="0.01"
+                value={values[id]}
+                onChange={handleDenominationChange}
+                placeholder="0"
+                disabled={readonly || !isActive}
+                className="denomination-input"
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="total">
+          <label>Total Q.</label>
+          <input
+            type="number"
+            readOnly
+            value={
+              readonly && inicialData
+                ? parseFloat(inicialData.efectivo).toFixed(2)
+                : computedEfectivo.toFixed(2)
+            }
+            className="cash-input"
+          />
+        </div>
+
+        <div className="input-item extra-field">
+          <label htmlFor="tarjeta">Tarjeta:</label>
+          <input
+            type="number"
+            id="tarjeta"
+            min="0"
+            step="0.01"
+            value={tarjeta}
+            onChange={(e) => setTarjeta(e.target.value)}
+            placeholder="0"
+            disabled={readonly || !isActive}
+            className="denomination-input"
+          />
+        </div>
+
+        <div className="input-item extra-field">
+          <label htmlFor="motorista">Motorista:</label>
+          <input
+            type="number"
+            id="motorista"
+            min="0"
+            step="0.01"
+            value={motorista}
+            onChange={(e) => setMotorista(e.target.value)}
+            placeholder="0"
+            disabled={readonly || !isActive}
+            className="denomination-input"
+          />
+        </div>
+
+        <div className="toggle-row">
+          <button
+            type="button"
+            onClick={() => setIsActive((prev) => !prev)}
+            disabled={readonly}
+            className={`toggle-button ${isActive ? 'active' : 'inactive'}`}
+          >
+            {isActive ? 'ON' : 'OFF'}
+          </button>
+        </div>
       </div>
-
-      <div className="total">
-        <label>Total&nbsp;Q.</label>
-        <input
-          type="number"
-          readOnly
-          value={efectivo.toFixed(2)}
-          className="cash-input"
-        />
-      </div>
-
-      <div className="input-item extra-field">
-        <label htmlFor="tarjeta">Tarjeta:</label>
-        <input
-          type="number"
-          id="tarjeta"
-          min="0"
-          step="0.01"
-          value={tarjeta}
-          onChange={(e) => setTarjeta(e.target.value)}
-          placeholder="0"
-          disabled={!isActive}
-          className="denomination-input"
-        />
-      </div>
-
-      <div className="input-item extra-field">
-        <label htmlFor="motorista">Motorista:</label>
-        <input
-          type="number"
-          id="motorista"
-          min="0"
-          step="0.01"
-          value={motorista}
-          onChange={(e) => setMotorista(e.target.value)}
-          placeholder="0"
-          disabled={!isActive}
-          className="denomination-input"
-        />
-      </div>
-
-      <div className="toggle-row">
-        <button
-          type="button"
-          onClick={() => setIsActive((prev) => !prev)}
-          className={`toggle-button ${isActive ? 'active' : 'inactive'}`}
-        >
-          {isActive ? 'ON' : 'OFF'}
-        </button>
-      </div>
-    </div>
-  );
-});
+    );
+  }
+);
 
 export default ArqueoBlock;

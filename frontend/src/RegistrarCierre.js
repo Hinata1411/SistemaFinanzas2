@@ -1,3 +1,5 @@
+// src/RegistrarCierre.jsx
+
 import React, { useState, useRef, useEffect } from 'react';
 import {
   addDoc,
@@ -40,6 +42,7 @@ export default function RegistrarCierre() {
   const arqueoRefs = [useRef(), useRef(), useRef()];
   const cierreRefs = [useRef(), useRef(), useRef()];
   const gastosRef = useRef();
+  const totalesRef = useRef();                 // <<-- cambio: ref para TotalesBlock
 
   const formatDate = iso => {
     const [y, m, d] = iso.split('-');
@@ -128,8 +131,10 @@ export default function RegistrarCierre() {
     const arqueo = arqueoData;
     const cierre = cierreData;
     const gastos = gastosData;
-    // Extraer comentario
-    const comentario = cierre.find(c => c.comentario)?.comentario || '';
+
+    // <<-- cambio: sacamos el comentario desde el TotalesBlock mediante su ref:
+    const comentario =
+      totalesRef.current?.getData()?.comentario?.trim() || '';
 
     // Validación de datos
     const validBoxes = [...arqueo, ...cierre].every(b =>
@@ -151,7 +156,7 @@ export default function RegistrarCierre() {
         cierre,
         gastos,
         diferenciaEfectivo: sumDifEfectivo(),
-        comentario,
+        comentario,                              // <<-- cambio: aquí guardamos el comentario correcto
         creado: serverTimestamp(),
         uid: auth.currentUser.uid
       });
@@ -209,7 +214,7 @@ export default function RegistrarCierre() {
       const gastos = data.gastos || [];
       const suc = sucursales.find(s => s.id === selectedSucursal) || {};
       const cajaChica = parseFloat(suc.cajaChica) || 0;
-      const comentario = data.comentario || '';
+      const comentario = data.comentario || '';   // <<-- ahora se “leyó” por Firestore
 
       // Cálculos por columna
       const sumCol = idx =>
@@ -361,20 +366,26 @@ export default function RegistrarCierre() {
         </div>
       </div>
 
+      {/* ----- Sección Arqueo Físico ----- */}
       <Section title="Arqueo Físico">
         {arqueoRefs.map((r, i) => (
           <ArqueoBlock key={i} ref={r} title={`Caja ${i+1}`} />
         ))}
       </Section>
+
+      {/* ----- Sección Cierre de Sistema ----- */}
       <Section title="Cierre de Sistema">
         {cierreRefs.map((r, i) => (
           <CierreBlock key={i} ref={r} title={`Caja ${i+1}`} />
         ))}
       </Section>
+
+      {/* ----- Sección Gastos ----- */}
       <Section title="Gastos">
         <GastosBlock ref={gastosRef} title="Gastos" />
       </Section>
 
+      {/* ----- Sección Diferencias y Totales ----- */}
       <div className="cuadre">
         <div className="footer-section">
           <div className="section diferencias">
@@ -382,6 +393,7 @@ export default function RegistrarCierre() {
           </div>
           <div className="section totales">
             <TotalesBlock
+              ref={totalesRef}                               // <<-- cambio: asignamos ref aquí
               arqueoData={arqueoData}
               cierreData={cierreData}
               gastosData={gastosData}
@@ -392,6 +404,7 @@ export default function RegistrarCierre() {
         </div>
       </div>
 
+      {/* ----- Botones Guardar / Descargar PDF ----- */}
       <div className="guardar-cuadre">
         <button onClick={handleGuardar} disabled={saving}>
           {saving ? 'Guardando…' : 'Guardar Cuadre'}
