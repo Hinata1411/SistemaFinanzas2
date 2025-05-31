@@ -1,56 +1,75 @@
-/* calendar.css */
+/* =======================================
+   calendar.css
+   (Estilos personalizados para React Big Calendar)
+   ======================================= */
 
-/* ----------------- Calendario ----------------- */
-.rbc-calendar {
-  background-color: #f8f9fa;
-  color: #36383a;
-}
-
-.rbc-toolbar {
-  background-color: #93c486;
-  color: white;
-}
-
+/* Aumentar aún más el tamaño del mes/año */
 .rbc-toolbar-label {
+  font-size: 2rem; /* Texto más grande */
+  text-transform: capitalize; /* Por si acaso alguna parte no venga capitalizada */
+}
+
+/* Celdas de “hoy” */
+.today-cell {
+  background-color: #e6ffe6;
+}
+
+/* Ajustar la parrilla del calendario para que no tenga scrollbar vertical */
+.rbc-month-view, 
+.rbc-time-view, 
+.rbc-agenda-view {
+  overflow: visible !important;
+}
+
+/* Ocultar bordes de scrollbar en contenedor del calendario */
+.rbc-calendar {
+  -ms-overflow-style: none;  /* IE / Edge */
+  scrollbar-width: none;     /* Firefox */
+}
+
+.rbc-calendar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ===============================================
+   Estilos específicos para Syncfusion Calendar
+   =============================================== */
+.e-schedule {
+  font-family: 'Poppins', sans-serif;
+
+  /* Oculta scrollbar interna si la genera Syncfusion */
+  -ms-overflow-style: none;  /* IE y Edge */
+  scrollbar-width: none;     /* Firefox */
+}
+.e-schedule::-webkit-scrollbar {
+  display: none;
+}
+
+.e-schedule .e-header-cells {
+  background-color: #fef8f4;
+  color: #032905;
+  font-weight: 500;
+  border-bottom: 1px solid #a1c99c;
+}
+
+.e-schedule .e-week-number {
+  background-color: #3ac959d0;
+  color: #e57411;
   font-weight: bold;
 }
 
-.rbc-event {
-  background-color: #36d87f !important;
-  color: white !important;
-  border-radius: 6px;
-  padding: 2px 6px;
+.e-schedule .e-appointment {
+  background-color: #0e6729;
+  border: 1px solid #a1c99c;
+  color: #470d0d;
+  font-weight: bold;
 }
 
-.rbc-selected {
-  background-color: #dc3545 !important;
+.e-schedule .e-appointment:hover {
+  opacity: 0.9;
 }
 
-/* ----------------- Modal Bootstrap puro ----------------- */
-.modal-backdrop.show {
-  position: fixed;
-  inset: 0;
-  background-color: rgba(133, 56, 56, 0.5);
-  z-index: 1040;
-}
-
-.modal.d-block {
-  display: block;
-  position: fixed;
-  inset: 0;
-  overflow: auto;
-  z-index: 1050;
-  padding-top: 5rem;
-}
-
-.modal-dialog {
-  max-width: 600px;
-  margin: auto;
-}
-
-/* ----------------- Hoy (día actual) ----------------- */
-.today-cell {
-  /* color principal para "hoy" en todas las vistas */
-  background-color: #b9f1abd3 !important;
-  color: white !important;
-}
+/* Si quieres mantener fondo rojo, úsalo; si no, coméntalo */
+/* .e-schedule {
+  background-color: #e10c0c;
+} */

@@ -2,10 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
+import 'moment/locale/es'; // Importar locale español
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import './calendar.css'; // tus estilos personalizados
 
+moment.locale('es'); // Configurar moment en español
 const localizer = momentLocalizer(moment);
 
 const emptyEvent = {
@@ -23,6 +25,89 @@ const emptyEvent = {
   status:       'Pendiente'
 };
 
+// Función helper para capitalizar la primera letra
+const capitalize = str =>
+  str.charAt(0).toUpperCase() + str.slice(1);
+
+// Custom Toolbar para React Big Calendar
+function MyToolbar({ label, onNavigate, onView, openModal }) {
+  // Capitalizamos el label (por ejemplo: "mayo 2025" → "Mayo 2025")
+  const capitalizedLabel = capitalize(label);
+
+  return (
+    <div className="rbc-toolbar d-flex justify-content-between align-items-center mb-3">
+      {/* Botones de navegación: Anterior, Hoy, Siguiente */}
+      <div className="rbc-btn-group">
+        <button
+          type="button"
+          className="btn btn-outline-secondary btn-sm me-1"
+          onClick={() => onNavigate('PREV')}
+        >
+          ‹
+        </button>
+        <button
+          type="button"
+          className="btn btn-outline-secondary btn-sm me-1"
+          onClick={() => onNavigate('TODAY')}
+        >
+          Hoy
+        </button>
+        <button
+          type="button"
+          className="btn btn-outline-secondary btn-sm"
+          onClick={() => onNavigate('NEXT')}
+        >
+          ›
+        </button>
+      </div>
+
+      {/* Etiqueta del mes/año (capitalizada) */}
+      <div className="rbc-toolbar-label fw-bold">
+        {capitalizedLabel}
+      </div>
+
+      {/* Botones de vista + Agregar Actividad */}
+      <div className="rbc-btn-group d-flex align-items-center">
+        <button
+          type="button"
+          className="btn btn-outline-secondary btn-sm me-1"
+          onClick={() => onView('month')}
+        >
+          Mes
+        </button>
+        <button
+          type="button"
+          className="btn btn-outline-secondary btn-sm me-1"
+          onClick={() => onView('week')}
+        >
+          Semana
+        </button>
+        <button
+          type="button"
+          className="btn btn-outline-secondary btn-sm me-1"
+          onClick={() => onView('day')}
+        >
+          Día
+        </button>
+        <button
+          type="button"
+          className="btn btn-outline-secondary btn-sm me-3"
+          onClick={() => onView('agenda')}
+        >
+          Agenda
+        </button>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          onClick={openModal}
+        >
+          ➕ Agregar Actividad
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const MyCalendar = () => {
   const [events, setEvents]       = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -30,7 +115,7 @@ const MyCalendar = () => {
   const [editIndex, setEditIndex] = useState(null);
   const [newEvent, setNewEvent]   = useState(emptyEvent);
 
-  // Al montar, cargamos del localStorage
+  // Cargar eventos desde localStorage al montar
   useEffect(() => {
     const saved = localStorage.getItem('events');
     if (saved) {
@@ -43,7 +128,7 @@ const MyCalendar = () => {
     }
   }, []);
 
-  // Al cambiar events, guardamos en localStorage
+  // Guardar eventos en localStorage cuando cambien
   useEffect(() => {
     localStorage.setItem('events',
       JSON.stringify(events.map(evt => ({
@@ -54,7 +139,7 @@ const MyCalendar = () => {
     );
   }, [events]);
 
-  // Maneja cambios de inputs
+  // Maneja cambios en inputs del modal
   const handleChange = field => e => {
     const val = e.target.type === 'checkbox'
       ? e.target.checked
@@ -62,14 +147,14 @@ const MyCalendar = () => {
     setNewEvent(evt => ({ ...evt, [field]: val }));
   };
 
-  // Abrir modal en modo "Agregar"
+  // Abrir modal para agregar
   const openAddModal = () => {
     setIsEditing(false);
     setNewEvent(emptyEvent);
     setModalOpen(true);
   };
 
-  // Abrir modal en modo "Editar", precargando datos
+  // Abrir modal para editar (precarga datos)
   const openEditModal = (event, index) => {
     const date      = moment(event.start).format('YYYY-MM-DD');
     const startTime = moment(event.start).format('HH:mm');
@@ -86,7 +171,7 @@ const MyCalendar = () => {
     setModalOpen(true);
   };
 
-  // Guardar evento nuevo o editado
+  // Guardar evento (nuevo o editado)
   const handleSave = () => {
     const { title, date, startTime, endTime } = newEvent;
     if (!title || !date || !startTime || !endTime) {
@@ -118,45 +203,47 @@ const MyCalendar = () => {
 
   return (
     <div className="p-3">
-      {/* ➕ Agregar */}
-      <button
-        className="btn btn-primary mb-3"
-        onClick={openAddModal}
-      >
-        ➕ Agregar Actividad
-      </button>
+      {/* Contenedor para calendario + toolbar personalizado */}
+      <div className="calendar-container">
+        <Calendar
+          localizer={localizer}
+          events={events}
+          startAccessor="start"
+          endAccessor="end"
+          defaultView="month"
+          views={['month','week','day','agenda']}
+          style={{ height: 500 }}
+          components={{
+            toolbar: toolbarProps => (
+              <MyToolbar
+                {...toolbarProps}
+                openModal={openAddModal}
+              />
+            )
+          }}
+          onSelectEvent={event => {
+            const idx = events.findIndex(e =>
+              e.start.getTime() === event.start.getTime() &&
+              e.end.getTime()   === event.end.getTime()   &&
+              e.title          === event.title
+            );
+            if (idx > -1) openEditModal(event, idx);
+          }}
+          dayPropGetter={date => {
+            const today = new Date();
+            if (
+              date.getDate()     === today.getDate() &&
+              date.getMonth()    === today.getMonth() &&
+              date.getFullYear() === today.getFullYear()
+            ) {
+              return { className: 'today-cell' };
+            }
+            return {};
+          }}
+        />
+      </div>
 
-      {/* Calendario con dayPropGetter para resaltar "hoy" */}
-      <Calendar
-        localizer={localizer}
-        events={events}
-        startAccessor="start"
-        endAccessor="end"
-        defaultView="month"
-        views={['month','week','day','agenda']}
-        style={{ height: 400 }}
-        onSelectEvent={event => {
-          const idx = events.findIndex(e =>
-            e.start.getTime() === event.start.getTime() &&
-            e.end.getTime()   === event.end.getTime()   &&
-            e.title          === event.title
-          );
-          if (idx > -1) openEditModal(event, idx);
-        }}
-        dayPropGetter={date => {
-          const today = new Date();
-          if (
-            date.getDate()    === today.getDate() &&
-            date.getMonth()   === today.getMonth() &&
-            date.getFullYear()=== today.getFullYear()
-          ) {
-            return { className: 'today-cell' };
-          }
-          return {};
-        }}
-      />
-
-      {/* Modal de Bootstrap puro */}
+      {/* Modal de Bootstrap */}
       {modalOpen && (
         <>
           <div className="modal-backdrop show"></div>
@@ -328,7 +415,7 @@ const MyCalendar = () => {
                   </div>
                 </div>
 
-                {/* Footer */}
+                {/* Footer del modal */}
                 <div className="modal-footer">
                   <button
                     type="button"

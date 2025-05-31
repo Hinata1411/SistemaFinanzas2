@@ -2,13 +2,13 @@
 import React, { useState } from 'react';
 import { Outlet, useNavigate, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
-import './Home.css';
+import './DashboardLayout.css';
 
 function DashboardLayout({ userEmail }) {
   const navigate = useNavigate();
   const [openCuadres, setOpenCuadres] = useState(false);
   const [openEfectivo, setOpenEfectivo] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
