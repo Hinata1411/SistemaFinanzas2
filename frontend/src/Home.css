@@ -11,32 +11,27 @@
    la scrollbar vertical propia del contenedor
    --------------------------------------- */
 .admin-content {
-  margin-left: 16rem; /* Mantiene el mismo margen original */
-  width: calc(100% - 16rem);
+  /* Ocupa todo el ancho de la ventana, sin depender de la sidebar */
+  margin-left: 0;
+  width: 100%;
   padding: 10px;
   height: 100vh;
-  overflow-y: auto;         /* Necesario para scroll interno, pero lo ocultamos */
+  overflow-y: auto;         /* Necesario para scroll interno (oculto) */
   display: flex;
   flex-direction: column;
   align-items: center;      /* Centra horizontalmente */
   justify-content: flex-start; /* El calendario se posiciona con top */
   box-sizing: border-box;
-  transition: margin-left 0.5s ease, width 0.5s ease;
+  transition: none;         /* Sin transición al abrir/cerrar sidebar */
   z-index: 1;
-  position: relative;       /* Permite que .calendar use absolute sin recortarse */
-
+  position: relative;       /* Permite que los hijos absolute funcionen */
+  
   /* Oculta la scrollbar en navegadores WebKit */
   -ms-overflow-style: none;  /* IE y Edge */
   scrollbar-width: none;     /* Firefox */
 }
 .admin-content::-webkit-scrollbar {
   display: none;
-}
-
-/* Cuando la sidebar está cerrada, recupera el ancho original */
-.sidebar.closed ~ .admin-content {
-  margin-left: 4.94rem;
-  width: calc(100% - 4.94rem);
 }
 
 /* ---------------------------------------
@@ -58,19 +53,20 @@
    y la imagen decorativa
    --------------------------------------- */
 .home-welcome {
-  margin-left: 16rem; /* Deja espacio para la sidebar abierta */
+  /* Ocupa todo el ancho de la ventana */
+  margin-left: 16rem;
+   width: calc(100% - 16rem);   
   padding: 2rem;
-  width: calc(100% - 16rem);
   height: 100vh;
   background-color: var(--color-Surface);
   color: var(--color-text-primary);
-  overflow-y: auto;        /* Necesario para scroll interno, pero lo ocultamos */
-  transition: margin-left 0.3s ease, width 0.3s ease;
+  overflow-y: auto;        /* Scroll interno (oculto) */
+  transition: none;        /* Sin transición al abrir/cerrar sidebar */
   display: flex;
   flex-direction: column;
   align-items: center;     /* Centra horizontalmente el contenido */
   justify-content: flex-start;
-  position: relative;       /* Permite a .welcome-image y .calendar posicionarse */
+  position: relative; 
 
   /* Oculta la scrollbar en navegadores WebKit */
   -ms-overflow-style: none;  /* IE y Edge */
@@ -81,21 +77,18 @@
 }
 
 .home-welcome h1 {
-  margin: 10px auto;
-  font-size: 5rem;
+  width: 100%;              /* Hace que el h1 abarque todo el ancho disponible */
+  margin: 0;                /* Elimina márgenes adicionales */
+  font-size: 3rem;
+  text-align: center;       /* Centra el texto dentro del h1 */
+  /* Permanece fijo, no se desplaza al abrir/cerrar sidebar */
+  animation: fadeInUp 0.8s ease-out;
+  margin-bottom: 1.5rem;
 }
 
-/* Imagen decorativa en .home-welcome */
-.home-welcome .welcome-image {
-  position: absolute;
-  top: 0;
-  right: 0;
-  max-width: 200px;
-  max-height: 200px;
-  object-fit: contain;
-}
-
-/* Ajuste para móvil/tableta */
+/* ---------------------------------------
+   Ajuste para móvil/tableta
+   --------------------------------------- */
 @media (max-width: 768px) {
   .welcome-image {
     position: fixed;
@@ -105,6 +98,9 @@
     max-height: 150px;
     z-index: 999;
   }
+  .home-welcome h1 {
+    font-size: 1.5rem;
+  }
 }
 
 /* ---------------------------------------
@@ -112,18 +108,19 @@
    --------------------------------------- */
 
 /* 
-  - Eliminamos cualquier scrollbar propia.
-  - Se centra con position:absolute, left:50%, translateX(-50%).
+  - Sin scrollbar propio.
+  - Se centra con position: fixed, left:50%, translateX(-50%).
   - Ajustamos 'top' para que esté más arriba.
+  - No se mueve al abrir/cerrar sidebar.
 */
 .admin-content .calendar {
   width: 100%;
   max-width: 1000px;
   padding: 1rem;
-  margin: 0;                /* Sin margin:auto, pues centraremos con left/transform */
+  margin: 0;                /* Sin margin:auto, centrado con left/transform */
   z-index: 1;
-  overflow: visible;        /* Asegura que no aparezca scrollbar en el propio contenedor */
-  position: absolute;       /* Para que ignore margin-left y siempre quede centrado */
+  overflow: visible;        /* Sin scrollbar interno */
+  position: fixed;          /* Fijo al viewport, siempre centrado */
   top: 80px;                /* Ajustado para que el calendario esté más arriba */
   left: 50%;                /* Centrado horizontal en la ventana */
   transform: translateX(-50%);
@@ -174,53 +171,6 @@
   opacity: 0.9;
 }
 
-/* Si aún quieres fondo rojo, úsalo; de lo contrario, coméntalo */
-/* .e-schedule {
-  background-color: #e10c0c;
-} */
-
-/* Cuando la sidebar está cerrada, adaptamos .home-welcome */
-.sidebar.closed ~ .home-welcome {
-  margin-left: 5rem;
-  width: calc(100% - 5rem);
-}
-
-/* ===============================================
-   Media Queries para Responsividad
-   =============================================== */
-@media (max-width: 768px) {
-  /* En móvil, el content fluye normalmente sin absolute */
-  .admin-content {
-    margin-left: 0;
-    width: 100%;
-    padding: 1rem;
-    position: static;  /* Deshabilita absolute */
-  }
-  .home-welcome {
-    margin-left: 0;
-    width: 100%;
-    position: static;  /* Deshabilita relative/absolute */
-  }
-  .home-welcome h1 {
-    font-size: 1.5rem;
-  }
-  .home-welcome .welcome-image {
-    max-width: 100px;
-    max-height: 100px;
-  }
-  .admin-content .calendar {
-    position: static;    /* Vuelve al flujo normal */
-    top: auto;
-    left: auto;
-    transform: none;
-    max-width: 100%;
-    padding: 0.5rem;
-    height: auto;
-    overflow: auto;      /* Permite scroll en móvil si fuera necesario */
-    max-height: calc(100vh - 180px);
-  }
-}
-
 /* ---------------------------------------
    Animación para el título
    --------------------------------------- */
@@ -235,8 +185,38 @@
   }
 }
 
-.home-welcome h1 {
-  animation: fadeInUp 0.8s ease-out;
-  font-size: 2rem;
-  margin-bottom: 1.5rem;
+/* ===============================================
+   Media Queries para Responsividad
+   =============================================== */
+@media (max-width: 768px) {
+  /* En móvil, el flujo vuelve a normal y todo ocupa el 100% */
+  .admin-content {
+    margin-left: 0;
+    width: 100%;
+    padding: 1rem;
+    position: static;  /* Deshabilita fixed de .calendar */
+  }
+  .home-welcome {
+    margin-left: 0;
+    width: 100%;
+    position: static;  /* Deshabilita relative/absolute */
+  }
+  .home-welcome h1 {
+    font-size: 1.5rem;
+  }
+  .home-welcome .welcome-image {
+    max-width: 100px;
+    max-height: 100px;
+  }
+  .admin-content .calendar {
+    position: static;    /* Flujo normal */
+    top: auto;
+    left: auto;
+    transform: none;
+    max-width: 100%;
+    padding: 0.5rem;
+    height: auto;
+    overflow: auto;      /* Permite scroll si es necesario en móvil */
+    max-height: calc(100vh - 180px);
+  }
 }
