@@ -22,7 +22,7 @@ import CierreBlock from './CierreBlock';
 import GastosBlock from './GastosBlock';
 import DiferenciasTable from './DiferenciasTable';
 import TotalesBlock from './TotalesBlock';
-import './HistorialCuadres.css';
+import './Ventas.css';
 
 export default function HistorialCuadres() {
   const [fechaFiltro, setFechaFiltro] = useState(new Date().toISOString().split('T')[0]);

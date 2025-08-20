@@ -5,7 +5,7 @@ import PrivateRoute from './PrivateRoute';
 import DashboardLayout from './DashboardLayout';
 import Home from './Home';
 import RegistrarCierre from './RegistrarCierre';
-import HistorialCuadres from './HistorialCuadres';
+import Ventas from './Ventas';
 import Sucursales from './Sucursales';
 import Usuarios from './Usuarios';
 import Login from './auth/Login'; 
@@ -29,7 +29,7 @@ function App() {
         >
           <Route index element={<Home />} />
           <Route path="RegistrarCierre" element={<RegistrarCierre />} />
-          <Route path="HistorialCuadres" element={<HistorialCuadres />} />
+          <Route path="Ventas" element={<Ventas />} />
           <Route path="Sucursales" element={<Sucursales />} />
           <Route path="Usuarios" element={<Usuarios />} />
         </Route>

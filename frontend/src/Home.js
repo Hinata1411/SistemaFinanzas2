@@ -1,19 +1,17 @@
-// src/Home.js
 import React from 'react';
 import MyCalendar from './MyCalendar';
 import './Home.css';
-import MyNotifications from './MyNotifications';
 
-
-function Home() {
+export default function Home() {
   return (
-    <div className="home-welcome">
-      <h1>Bienvenido a Sistema de Finanzas</h1>
-      <div className="calendar">
+    <div className="home-shell">
+      <header className="home-header">
+        <h1>Sistema de Finanzas</h1>
+      </header>
+
+      <section className="home-calendar-card">
         <MyCalendar />
-      </div>
+      </section>
     </div>
   );
 }
-
-export default Home;

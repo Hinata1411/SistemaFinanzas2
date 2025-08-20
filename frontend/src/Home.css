@@ -1,213 +1,94 @@
-/* =======================================
-   Home.css
-   (Estilos específicos para la página Home:
-    "Bienvenido", calendario, responsividad, etc.)
-   ======================================= */
+/* Paleta (misma del login/dashboard) */
+:root{
+  --primary:#14B866;
+  --dark:#0F3D2E;
+  --accent:#FF7A00;
+  --cream:#FFF7ED;
+  --slate:#1F2937;
 
-/* ---------------------------------------
-   Ajustes en .admin-content 
-   para que el calendario pueda posicionarse
-   y no se vea recortado, además ocultamos
-   la scrollbar vertical propia del contenedor
-   --------------------------------------- */
-.admin-content {
-  /* Ocupa todo el ancho de la ventana, sin depender de la sidebar */
-  margin-left: 0;
-  width: 100%;
-  padding: 10px;
-  height: 100vh;
-  overflow-y: auto;         /* Necesario para scroll interno (oculto) */
-  display: flex;
-  flex-direction: column;
-  align-items: center;      /* Centra horizontalmente */
-  justify-content: flex-start; /* El calendario se posiciona con top */
-  box-sizing: border-box;
-  transition: none;         /* Sin transición al abrir/cerrar sidebar */
-  z-index: 1;
-  position: relative;       /* Permite que los hijos absolute funcionen */
-  
-  /* Oculta la scrollbar en navegadores WebKit */
-  -ms-overflow-style: none;  /* IE y Edge */
-  scrollbar-width: none;     /* Firefox */
-}
-.admin-content::-webkit-scrollbar {
-  display: none;
+  --radius: 16px;
+  --shadow: 0 20px 60px rgba(0,0,0,.08);
 }
 
-/* ---------------------------------------
-   Estructura general del Home
-   --------------------------------------- */
-.home-content {
-  position: relative;
+/* Contenedor del Home (no tocamos .admin-content) */
+.home-shell{
   width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 1rem;
-  box-sizing: border-box;
+  gap: 16px;
 }
 
-/* ---------------------------------------
-   Contenedor de bienvenida ("Bienvenido")
-   y la imagen decorativa
-   --------------------------------------- */
-.home-welcome {
-  /* Ocupa todo el ancho de la ventana */
-  margin-left: 16rem;
-  width: calc(100% - 16rem);   
-  padding: 2rem;
-  height: 100vh;
-  background-color: var(--color-Surface);
-  color: var(--color-text-primary);
-  overflow-y: auto;        /* Scroll interno (oculto) */
-  transition: none;        /* Sin transición al abrir/cerrar sidebar */
-  display: flex;
-  flex-direction: column;
-  align-items: center;     /* Centra horizontalmente el contenido */
-  justify-content: flex-start;
-  position: relative; 
-
-  /* Oculta la scrollbar en navegadores WebKit */
-  -ms-overflow-style: none;  /* IE y Edge */
-  scrollbar-width: none;     /* Firefox */
-}
-.home-welcome::-webkit-scrollbar {
-  display: none;
+/* Título centrado */
+.home-header h1{
+  margin: 4px 0 8px;
+  text-align: center;
+  color: var(--dark);
+  font-weight: 800;
+  letter-spacing: .3px;
+  font-size: clamp(22px, 3.6vw, 44px);
+  animation: fadeInUp .6s ease both;
 }
 
-.home-welcome h1 {
-  width: 100%;              /* Hace que el h1 abarque todo el ancho disponible */
-  margin: 0;                /* Elimina márgenes adicionales */
-  font-size: 3rem;
-  text-align: center;       /* Centra el texto dentro del h1 */
-  /* Permanece fijo, no se desplaza al abrir/cerrar sidebar */
-  animation: fadeInUp 0.8s ease-out;
-  margin-bottom: 1.5rem;
+/* Tarjeta que envuelve el calendario */
+.home-calendar-card{
+  width: min(1100px, 100%);
+  margin: 0 auto;                   /* centrado */
+  background: #fff;
+  border: 1px solid #ede9e2;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: clamp(10px, 2vw, 16px);
+  overflow: visible;                 /* evita scrollbars internas */
 }
 
-/* ---------------------------------------
-   Ajuste para móvil/tableta
-   --------------------------------------- */
-@media (max-width: 768px) {
-  .welcome-image {
-    position: fixed;
-    top: 10px;
-    right: 10px;
-    max-width: 150px;
-    max-height: 150px;
-    z-index: 999;
-  }
-  .home-welcome h1 {
-    font-size: 1.5rem;
-  }
+/* =========================
+   Syncfusion Schedule tweaks
+   ========================= */
+.e-schedule{
+  font-family: 'Poppins', system-ui, sans-serif;
+}
+.e-schedule .e-header-cells{
+  background-color: #fef8f4;        /* crema suave */
+  color: var(--dark);
+  font-weight: 600;
+  border-bottom: 1px solid #e7e2d9;
+}
+.e-schedule .e-toolbar .e-tbar-btn .e-icons{
+  color: var(--dark);
+}
+.e-schedule .e-week-number{
+  background-color: rgba(20,184,102,.12);
+  color: var(--dark);
+  font-weight: 700;
+}
+.e-schedule .e-appointment{
+  background-color: var(--primary);
+  border: 1px solid rgba(20,184,102,.3);
+  color: #fff;
+  font-weight: 600;
+}
+.e-schedule .e-appointment:hover{ opacity: .92; }
+
+/* =========================
+   Animación del título
+   ========================= */
+@keyframes fadeInUp{
+  from{ opacity:0; transform: translateY(14px); }
+  to  { opacity:1; transform: translateY(0); }
 }
 
-.admin-content .calendar {
-  width: 100%;
-  max-width: 1000px;
-  padding: 1rem;
-  margin: 0;     
-  margin-left: 2rem;           /* Sin margin:auto, centrado con left/transform */
-  z-index: 1;
-  overflow: visible;        /* Sin scrollbar interno */
-  position: fixed;          /* Fijo al viewport, siempre centrado */
-  top: 80px;                /* Ajustado para que el calendario esté más arriba */
-  left: 50%;                /* Centrado horizontal en la ventana */
-  transform: translateX(-50%);
-
-  /* Oculta cualquier scrollbar que provenga de Syncfusion */
-  -ms-overflow-style: none;  /* IE y Edge */
-  scrollbar-width: none;     /* Firefox */
-}
-.admin-content .calendar::-webkit-scrollbar {
-  display: none;
-}
-
-/* ===============================================
-   Estilos específicos para Syncfusion Calendar
-   =============================================== */
-.e-schedule {
-  font-family: 'Poppins', sans-serif;
-
-  /* Oculta scrollbar interna si la genera Syncfusion */
-  -ms-overflow-style: none;  /* IE y Edge */
-  scrollbar-width: none;     /* Firefox */
-}
-.e-schedule::-webkit-scrollbar {
-  display: none;
-}
-
-.e-schedule .e-header-cells {
-  background-color: #fef8f4;
-  color: #032905;
-  font-weight: 500;
-  border-bottom: 1px solid #a1c99c;
-}
-
-.e-schedule .e-week-number {
-  background-color: #3ac959d0;
-  color: #e57411;
-  font-weight: bold;
-}
-
-.e-schedule .e-appointment {
-  background-color: #0e6729;
-  border: 1px solid #a1c99c;
-  color: #470d0d;
-  font-weight: bold;
-}
-
-.e-schedule .e-appointment:hover {
-  opacity: 0.9;
-}
-
-/* ---------------------------------------
-   Animación para el título
-   --------------------------------------- */
-@keyframes fadeInUp {
-  0% {
-    opacity: 0;
-    transform: translateY(40px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
+/* =========================
+   Responsive
+   ========================= */
+@media (max-width: 900px){
+  .home-calendar-card{
+    width: min(1000px, 96vw);
   }
 }
-
-/* ===============================================
-   Media Queries para Responsividad
-   =============================================== */
-@media (max-width: 768px) {
-  /* En móvil, el flujo vuelve a normal y todo ocupa el 100% */
-  .admin-content {
-    margin-left: 0;
+@media (max-width: 600px){
+  .home-calendar-card{
     width: 100%;
-    padding: 1rem;
-    position: static;  /* Deshabilita fixed de .calendar */
-  }
-  .home-welcome {
-    margin-left: 0;
-    width: 100%;
-    position: static;  /* Deshabilita relative/absolute */
-  }
-  .home-welcome h1 {
-    font-size: 1.5rem;
-  }
-  .home-welcome .welcome-image {
-    max-width: 100px;
-    max-height: 100px;
-  }
-  .admin-content .calendar {
-    position: static;    /* Flujo normal */
-    top: auto;
-    left: auto;
-    transform: none;
-    max-width: 100%;
-    padding: 0.5rem;
-    height: auto;
-    overflow: auto;      /* Permite scroll si es necesario en móvil */
-    max-height: calc(100vh - 180px);
+    border-radius: 12px;
+    padding: 10px;
   }
 }
