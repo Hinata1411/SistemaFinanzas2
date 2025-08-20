@@ -6,7 +6,7 @@ export default function Home() {
   return (
     <div className="home-shell">
       <header className="home-header">
-        <h1>Sistema de Finanzas</h1>
+        <h1>Sistema Finanzas</h1>
       </header>
 
       <section className="home-calendar-card">
