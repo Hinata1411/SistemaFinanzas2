@@ -10,9 +10,11 @@ function DashboardLayout({ userEmail }) {
   const [openEfectivo, setOpenEfectivo] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
+  const email = userEmail || localStorage.getItem('email') || 'user@example.com';
+
   const handleLogout = () => {
     localStorage.removeItem('token');
-    navigate('/');
+    navigate('/login'); // usa minúsculas para consistencia con App.js
   };
 
   return (
@@ -29,122 +31,111 @@ function DashboardLayout({ userEmail }) {
             type="button"
             className={`menu-btn ${!isSidebarOpen ? 'closed' : ''}`}
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            aria-expanded={isSidebarOpen}
+            aria-controls="sidebar-menu"
           >
-            <img src="/flechaizq.png" alt="Toggle" width="40px" />
+            <img src="/flechaizq.png" alt="Toggle" width="40" />
           </button>
           <div className="brand">
             <img src="/vipizzaamericanp.png" alt="Logo" />
           </div>
         </div>
 
-        <div className="menu-container">
+        <div id="sidebar-menu" className="menu-container">
           <div className="search">
-            <img src="/lupa.png" alt="Buscar" width="35px" />
+            <img src="/lupa.png" alt="Buscar" width="35" />
             <input type="search" placeholder="Search" />
           </div>
 
           <ul className="menu">
             <li className="menu-item menu-item-static">
               <Link to="/home" className="menu-link">
-                <img src="/casa.png" alt="Inicio" width="40px" />
+                <img src="/casa.png" alt="Inicio" width="40" />
                 <span>Home</span>
               </Link>
             </li>
 
             <li className="menu-item menu-item-dropdown">
-              <Link className="menu-link" onClick={() => setOpenCuadres(!openCuadres)}>
-                <img src="/factura.png" alt="Cuadres" width="43px" />
+              <button
+                type="button"
+                className="menu-link as-button"  // dale estilos .as-button { all: unset; display:flex; ...}
+                onClick={() => setOpenCuadres(!openCuadres)}
+                aria-expanded={openCuadres}
+                aria-controls="submenu-cuadres"
+              >
+                <img src="/factura.png" alt="Cuadres" width="43" />
                 <span>Cuadres</span>
-                <img src="/down.png" alt="Desplegar" width="30px" />
-              </Link>
-              <ul className={`sub-menu ${openCuadres ? 'visible' : ''}`}>
+                <img src="/down.png" alt="Desplegar" width="30" />
+              </button>
+              <ul id="submenu-cuadres" className={`sub-menu ${openCuadres ? 'visible' : ''}`}>
                 <li>
-                  <Link to="/home/RegistrarCierre" className="sub-menu-link">
-                    <img src="/mas.png" alt="Registrar Cuadre" width="22px" />
+                  <Link to="RegistrarCierre" className="sub-menu-link">
+                    <img src="/mas.png" alt="Registrar Cuadre" width="22" />
                     <span>Registrar Cuadre</span>
                   </Link>
                 </li>
                 <li>
-                  <Link to="/home/HistorialCuadres" className="sub-menu-link">
-                    <img src="/expediente.png" alt="Historial" width="22px" />
+                  <Link to="HistorialCuadres" className="sub-menu-link">
+                    <img src="/expediente.png" alt="Historial" width="22" />
                     <span>Historial de Cuadres</span>
                   </Link>
                 </li>
               </ul>
             </li>
 
-            {/* <li className="menu-item menu-item-dropdown">
-              <Link className="menu-link" onClick={() => setOpenEfectivo(!openEfectivo)}>
-                <img src="/transferencia.png" alt="Efectivo" width="43px" />
-                <span>Efectivo</span>
-                <img src="/down.png" alt="Desplegar" width="30px" />
-              </Link>
-              <ul className={`sub-menu ${openEfectivo ? 'visible' : ''}`}>
-                <li>
-                  <Link to="/Movimientos" className="sub-menu-link">
-                    <img src="/mas.png" alt="Registrar Movimientos" width="22px" />
-                    <span>Registrar Movimientos</span>
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/HistorialMov" className="sub-menu-link">
-                    <img src="/expediente.png" alt="Historial de Movimientos" width="22px" />
-                    <span>Historial de Movimientos</span>
-                  </Link>
-                </li>
-              </ul>
-            </li> */}
-
             <li className="menu-item menu-item-static">
               <Link to="Sucursales" className="menu-link">
-                <img src="/pizza3.png" alt="Sucursales" width="43px" />
+                <img src="/pizza3.png" alt="Sucursales" width="43" />
                 <span>Sucursales</span>
               </Link>
             </li>
 
             <li className="menu-item menu-item-static">
               <Link to="Usuarios" className="menu-link">
-                <img src="/agregaru.png" alt="Usuarios" width="43px" />
+                <img src="/agregaru.png" alt="Usuarios" width="43" />
                 <span>Usuarios</span>
               </Link>
             </li>
 
+            {/* Descomenta cuando tengas la ruta */}
             {/* <li className="menu-item menu-item-static">
-              <Link to="/reportes" className="menu-link">
-                <img src="/reporte.png" alt="Reportes" width="43px" />
+              <Link to="reportes" className="menu-link">
+                <img src="/reporte.png" alt="Reportes" width="43" />
                 <span>Reportes</span>
               </Link>
             </li> */}
 
-            <li className="menu-item menu-item-static">
-              <Link to="/graficas" className="menu-link">
-                <img src="/grafica.png" alt="Gráficas" width="43px" />
+            {/* Igual: crea ruta /home/graficas o comenta temporalmente */}
+            {/* <li className="menu-item menu-item-static">
+              <Link to="graficas" className="menu-link">
+                <img src="/grafica.png" alt="Gráficas" width="43" />
                 <span>Gráficas</span>
               </Link>
-            </li>
+            </li> */}
           </ul>
         </div>
 
         <div className="footer">
           <ul className="menu">
-            <li className="footer-item menu-item-static">
-              <Link to="/notificaciones" className="menu-link">
-                <img src="/notificacion.png" alt="Notificaciones" width="43px" />
+            {/* Descomenta cuando exista /home/notificaciones */}
+            {/* <li className="footer-item menu-item-static">
+              <Link to="notificaciones" className="menu-link">
+                <img src="/notificacion.png" alt="Notificaciones" width="43" />
                 <span>Notificaciones</span>
               </Link>
-            </li>
+            </li> */}
           </ul>
           <div className="user">
             <div className="user-img">
-              <img src="/perfilusuario.png" alt="Usuario" width="43px" />
+              <img src="/perfilusuario.png" alt="Usuario" width="43" />
             </div>
             <div className="user-data">
-              <span className="name">{userEmail || "Usuario"}</span>
-              <span className="email">{userEmail || "user@example.com"}</span>
+              <span className="name">{email.split('@')[0] || 'Usuario'}</span>
+              <span className="email">{email}</span>
             </div>
             <div className="user-icon">
               <button onClick={handleLogout} className="logout-button" type="button">
-                <img src="/cerrarsesion.png" alt="Cerrar sesión" width="30px" />
+                <img src="/cerrarsesion.png" alt="Cerrar sesión" width="30" />
               </button>
             </div>
           </div>
