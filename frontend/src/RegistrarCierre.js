@@ -7,7 +7,10 @@ import {
   serverTimestamp,
   query,
   where,
-  getDocs,   // 👈 importamos para validar duplicados
+  getDocs,
+  doc,
+  updateDoc,
+  increment,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import Swal from 'sweetalert2';
@@ -26,6 +29,12 @@ import ResumenPanel from './components/registrar-cierre/ResumenPanel';
 import CajaChicaModal from './components/registrar-cierre/CajaChicaModal';
 import CategoriasModal from './components/registrar-cierre/CategoriasModal';
 
+const isAjusteCajaChica = (name) =>
+  (name || '').toString().trim().toLowerCase() === 'ajuste de caja chica';
+
+const getTotalAjusteCajaChica = (gastos) =>
+  (gastos || []).reduce((s, g) => s + (isAjusteCajaChica(g.categoria) ? n(g.cantidad) : 0), 0);
+
 const INIT_GASTO_CATEGORIAS = [
   'Varios',
   'Coca-cola',
@@ -34,6 +43,7 @@ const INIT_GASTO_CATEGORIAS = [
   'Gas y gasolina',
   'Transporte',
   'Mantenimiento',
+  'Ajuste de caja chica',
 ];
 
 const emptyArqueoCaja = () => ({
@@ -45,7 +55,10 @@ const emptyArqueoCaja = () => ({
   q1: '',
   tarjeta: '',
   motorista: '',
+  // 👇 Monto de apertura por caja (por defecto Q 1,000)
+  apertura: 1000,
 });
+
 const emptyCierreCaja = () => ({
   efectivo: '',
   tarjeta: '',
@@ -66,7 +79,9 @@ export default function RegistrarCierre() {
   const [arqueo, setArqueo] = useState([emptyArqueoCaja(), emptyArqueoCaja(), emptyArqueoCaja()]);
   const [cierre, setCierre] = useState([emptyCierreCaja(), emptyCierreCaja(), emptyCierreCaja()]);
   const [categorias, setCategorias] = useState(INIT_GASTO_CATEGORIAS);
-  const [gastos, setGastos] = useState([{ categoria: INIT_GASTO_CATEGORIAS[0], descripcion: '', cantidad: '' }]);
+  const [gastos, setGastos] = useState([
+    { categoria: INIT_GASTO_CATEGORIAS[0], descripcion: '', cantidad: '' },
+  ]);
   const [comentario, setComentario] = useState('');
   const [cajaChicaUsada, setCajaChicaUsada] = useState(0);
   const [faltantePagado, setFaltantePagado] = useState(0);
@@ -84,7 +99,7 @@ export default function RegistrarCierre() {
   );
   const cajaChicaDisponible = activeSucursal?.cajaChica || 0;
 
-  // Totales centralizados
+  // Totales centralizados (cálculo existente)
   const { totals, flags } = useRegistrarCierreTotals({
     arqueo,
     cierre,
@@ -93,12 +108,26 @@ export default function RegistrarCierre() {
     faltantePagado,
   });
 
-  const {
-    totalArqueoEfectivo,
-    totalGastos,
-    faltanteEfectivo,
-    faltantePorGastos,
-  } = totals;
+  const { totalArqueoEfectivo, totalGastos, faltanteEfectivo, faltantePorGastos } = totals;
+
+  // === NUEVO: cálculo de efectivo neto del ARQUEO restando apertura por caja ===
+  const totalEfectivoCaja = (c = {}) =>
+    n(c.q100) + n(c.q50) + n(c.q20) + n(c.q10) + n(c.q5) + n(c.q1);
+
+  const totalArqueoEfectivoNeto = useMemo(
+    () =>
+      (arqueo || []).reduce(
+        (acc, caja) => acc + (totalEfectivoCaja(caja) - n(caja.apertura ?? 1000)),
+        0
+      ),
+    [arqueo]
+  );
+
+  // Enviamos el neto al ResumenPanel y también lo guardamos en "totales"
+  const totalsWithNet = useMemo(
+    () => ({ ...totals, totalArqueoEfectivoNeto }),
+    [totals, totalArqueoEfectivoNeto]
+  );
 
   // Handlers de edición
   const setArq = (idx, field, value) => {
@@ -108,6 +137,7 @@ export default function RegistrarCierre() {
       return copy;
     });
   };
+
   const setCier = (idx, field, value) => {
     setCierre((prev) => {
       const copy = prev.map((c) => ({ ...c }));
@@ -115,14 +145,17 @@ export default function RegistrarCierre() {
       return copy;
     });
   };
+
   const addGasto = () =>
     setGastos((g) => [...g, { categoria: categorias[0] || '', descripcion: '', cantidad: '' }]);
+
   const setGasto = (i, field, val) =>
     setGastos((prev) => {
       const c = [...prev];
       c[i] = { ...c[i], [field]: val };
       return c;
     });
+
   const removeGasto = (i) => setGastos((prev) => prev.filter((_, idx) => idx !== i));
 
   // Categorías modal callback: también re-mapea gastos si editas/eliminás
@@ -130,7 +163,9 @@ export default function RegistrarCierre() {
     setCategorias(nextCategorias);
     if (oldName && newName) {
       // Renombrar
-      setGastos((prev) => prev.map((g) => (g.categoria === oldName ? { ...g, categoria: newName } : g)));
+      setGastos((prev) =>
+        prev.map((g) => (g.categoria === oldName ? { ...g, categoria: newName } : g))
+      );
     } else if (oldName && !newName) {
       // Eliminación
       const fallback = nextCategorias[0] || '';
@@ -178,6 +213,14 @@ export default function RegistrarCierre() {
       Swal.fire('Fecha', 'Selecciona una fecha válida.', 'warning');
       return false;
     }
+    if (n(cajaChicaUsada) > n(cajaChicaDisponible)) {
+      Swal.fire(
+        'Caja chica',
+        `No puedes usar más de lo disponible (Q ${Number(cajaChicaDisponible).toFixed(2)}).`,
+        'warning'
+      );
+      return false;
+    }
     return true;
   };
 
@@ -188,7 +231,6 @@ export default function RegistrarCierre() {
     setBusy(true);
     try {
       // 🔎 Validación: un cuadre por sucursal por fecha
-      // Buscamos por fecha y luego filtramos por sucursalId (evita índice compuesto)
       const cierresRef = collection(db, 'cierres');
       const fechaQ = query(cierresRef, where('fecha', '==', fecha));
       const snap = await getDocs(fechaQ);
@@ -200,7 +242,7 @@ export default function RegistrarCierre() {
           title: 'Ya existe un cuadre',
           text: `Ya hay un cuadre registrado para "${activeSucursal.nombre}" en la fecha ${fecha}.`,
         });
-        return; // 👈 no guardamos
+        return;
       }
 
       const payload = {
@@ -213,10 +255,19 @@ export default function RegistrarCierre() {
         categorias,
         cajaChicaUsada,
         faltantePagado,
-        totales: totals,
+        // Guardamos también el neto dentro de "totales"
+        totales: { ...totals, totalArqueoEfectivoNeto },
         createdAt: serverTimestamp(),
       };
       await addDoc(cierresRef, payload);
+
+      // Actualizamos caja chica de la sucursal: lo usado (negativo) + ajustes (positivo)
+      const ajustePositivo = getTotalAjusteCajaChica(gastos);
+      const delta = -n(cajaChicaUsada) + n(ajustePositivo);
+      if (delta !== 0) {
+        const sucRef = doc(db, 'sucursales', activeSucursal.id);
+        await updateDoc(sucRef, { cajaChica: increment(delta) });
+      }
 
       await Swal.fire({
         icon: 'success',
@@ -257,8 +308,8 @@ export default function RegistrarCierre() {
                 className={`rc-tab ${activeSucursal?.id === s.id ? 'active' : ''}`}
                 onClick={() => {
                   setActiveSucursalId(s.id);
-                  setCajaChicaUsada(0);   // resetea uso de caja chica al cambiar sucursal
-                  setFaltantePagado(0);   // resetea pago de faltante (si aplica por sucursal)
+                  setCajaChicaUsada(0); // reset por sucursal
+                  setFaltantePagado(0); // reset por sucursal
                 }}
                 type="button"
                 role="tab"
@@ -312,7 +363,7 @@ export default function RegistrarCierre() {
         />
 
         <ResumenPanel
-          totals={totals}
+          totals={totalsWithNet} // 👈 manda el neto al panel
           flags={flags}
           cajaChicaUsada={cajaChicaUsada}
           onUseCajaChica={() => setShowCajaChica(true)}
@@ -334,7 +385,6 @@ export default function RegistrarCierre() {
             />
           </div>
         </section>
-
       </div>
 
       {/* MODAL Categorías */}

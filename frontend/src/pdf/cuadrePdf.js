@@ -102,6 +102,11 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate) => {
     ];
   });
 
+  // métricas para totales de arqueo
+  const mArqTar = arqueo.reduce((s, x) => s + n(x.tarjeta), 0);
+  const mArqMot = arqueo.reduce((s, x) => s + n(x.motorista), 0);
+  const mArqEf  = arqueo.reduce((s, x) => s + totalEfectivoCaja(x), 0);
+
   autoTable(pdf, {
     startY: y,
     head: [[
@@ -118,6 +123,14 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate) => {
       7: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' },
     },
     theme: 'grid',
+    foot: [[
+      '', '', '', '', '', '',
+      { content: 'Totales', styles: { halign: 'right' } }, 
+      { content: mArqTar.toFixed(2), styles: { halign: 'right' } },
+      { content: mArqMot.toFixed(2), styles: { halign: 'right' } },
+      { content: mArqEf.toFixed(2),  styles: { halign: 'right' } },
+    ]],
+    footStyles: { fillColor: [236, 239, 241], textColor: [33, 37, 41], halign: 'right' },
   });
 
   y = pdf.lastAutoTable.finalY + 10;
@@ -136,6 +149,12 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate) => {
     ];
   });
 
+  // Totales de cierre
+  const mCieEf  = cierre.reduce((s, x) => s + n(x.efectivo), 0);
+  const mCieTar = cierre.reduce((s, x) => s + n(x.tarjeta), 0);
+  const mCieMot = cierre.reduce((s, x) => s + n(x.motorista), 0);
+  const mCieTot = mCieEf + mCieTar; // (respetando tu código actual)
+
   autoTable(pdf, {
     startY: y,
     head: [['Cierre de Sistema', 'Efectivo', 'Tarjeta', 'Motorista', 'Total']],
@@ -146,6 +165,14 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate) => {
       1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' },
     },
     theme: 'grid',
+    foot: [[
+      { content: 'Totales', styles: { halign: 'right' } }, // etiqueta a la DERECHA
+      { content: mCieEf.toFixed(2),  styles: { halign: 'right' } },
+      { content: mCieTar.toFixed(2), styles: { halign: 'right' } },
+      { content: mCieMot.toFixed(2), styles: { halign: 'right' } },
+      { content: mCieTot.toFixed(2), styles: { halign: 'right' } },
+    ]],
+    footStyles: { fillColor: [236, 239, 241], textColor: [33, 37, 41], halign: 'right' },
   });
 
   y = pdf.lastAutoTable.finalY + 10;
@@ -166,64 +193,109 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate) => {
     headStyles: { fillColor: [21, 101, 192], textColor: 255 },
     columnStyles: { 2: { halign: 'right' } },
     theme: 'grid',
-    foot: [['', 'Total', totalGastos.toFixed(2)]],
+    foot: [[
+      '', // primera celda vacía
+      { content: 'Total', styles: { halign: 'right' } },              // etiqueta a la DERECHA
+      { content: totalGastos.toFixed(2), styles: { halign: 'right' } } // importe a la DERECHA
+    ]],
     footStyles: { fillColor: [236, 239, 241], textColor: [33, 37, 41] },
   });
 
   y = pdf.lastAutoTable.finalY + 12;
 
   // ===== Resumen (tarjeta) =====
-  const m = calcCuadreMetrics(c);
+  {
+    const m = calcCuadreMetrics(c);
 
-  pdf.setDrawColor(230, 236, 240);
-  // roundedRect(x, y, w, h, rx, ry)
-  pdf.roundedRect(40, y, width - 80, 70, 4, 4);
+    const boxTop = y;
+    const width = pdf.internal.pageSize.getWidth();
+    const leftColX = 52;
+    const rightColX = width / 2 + 10;
+    const GAP = 16; // separación entre filas
 
-  pdf.setFontSize(12);
-  pdf.setFont('helvetica', 'bold');
-  pdf.setTextColor(33, 37, 41);
-  pdf.text('Resumen', 52, y + 18);
-
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(10);
-  const left = 52;
-  const right = width - 52;
-
-  const line = (label, value, yLine, alignRight = false) => {
-    pdf.setTextColor(90, 90, 90);
-    pdf.text(label, alignRight ? right - 160 : left, yLine);
+    // Título
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(33, 37, 41);
+    pdf.text('Resumen', leftColX, boxTop + 18);
+
+    // Helper para dibujar cada línea
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(10);
+    const drawLine = (x, yLine, label, value) => {
+      pdf.setTextColor(90, 90, 90);
+      pdf.text(label, x, yLine);
+      pdf.setTextColor(33, 37, 41);
+      pdf.text(value, x + 140, yLine);
+    };
+
+    // -------- Columna izquierda: Ventas Total Sistema (Cierre)
+    let leftY = boxTop + 36;
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Ventas Total Sistema', leftColX, leftY);
+    pdf.setFont('helvetica', 'normal');
+    leftY += GAP;
+    drawLine(leftColX, leftY, 'Efectivo', `Q ${m.cierreEf.toFixed(2)}`);     leftY += GAP;
+    drawLine(leftColX, leftY, 'Tarjeta', `Q ${m.cierreTar.toFixed(2)}`);     leftY += GAP;
+    drawLine(leftColX, leftY, 'A domicilio', `Q ${m.cierreMot.toFixed(2)}`); leftY += GAP;
+
+    const totalSistema = m.cierreEf + m.cierreTar; // (respetando tu código actual)
+    drawLine(leftColX, leftY, 'Total Sistema', `Q ${totalSistema.toFixed(2)}`);
+
+    // -------- Columna derecha: Control Administración (Arqueo) + ajustes
+    let rightY = boxTop + 36;
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Control Administración', rightColX, rightY);
+    pdf.setFont('helvetica', 'normal');
+    rightY += GAP;
+    drawLine(rightColX, rightY, 'Efectivo', `Q ${m.arqueoEf.toFixed(2)}`);    rightY += GAP;
+    drawLine(rightColX, rightY, 'A domicilio', `Q ${m.arqueoMot.toFixed(2)}`);rightY += GAP;
+    drawLine(rightColX, rightY, 'Gastos', `Q ${m.gastos.toFixed(2)}`);        rightY += GAP;
+
+    // derecha
+    drawLine(rightColX, rightY, 'Caja chica (usada)', `Q ${m.cajaChicaUsada.toFixed(2)}`); rightY += GAP;
+    const diffLabel = m.diffEf >= 0 ? 'Sobrante' : 'Faltante';
+    drawLine(rightColX, rightY, diffLabel, `Q ${Math.abs(m.diffEf).toFixed(2)}`);          rightY += GAP;
+
+    // Mostrar "Faltante pagado" solo si se pagó (monto > 0)
+    if (m.faltantePagado > 0) {
+      drawLine(rightColX, rightY, 'Faltante pagado', `Q ${m.faltantePagado.toFixed(2)}`);
+      rightY += GAP;
+    }
+
+    // Punto inferior del contenido (el más bajo entre ambas columnas)
+    const contentBottom = Math.max(leftY, rightY);
+
+    // ---- Total a depositar: pegado al contenido (centrado horizontal)
+    const totalDepY = contentBottom + 20;
+    const depColor = m.totalDepositar < 0 ? [183, 28, 28] : [27, 94, 32];
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(...depColor);
+
+    const centerX = width / 2;
+
     pdf.text(
-      value,
-      alignRight ? right : left + 110,
-      yLine,
-      alignRight ? { align: 'right' } : {}
+      `Total a depositar: Q ${m.totalDepositar.toFixed(2)}`,
+      centerX,
+      totalDepY,
+      { align: 'center'}
     );
-  };
 
-  line('Efectivo (Cierre):', `Q ${m.cierreEf.toFixed(2)}`, y + 36);
-  line('Efectivo (Arqueo):', `Q ${m.arqueoEf.toFixed(2)}`, y + 52);
-  line(
-    'Diferencia:',
-    `Q ${Math.abs(m.diffEf).toFixed(2)} ${m.diffEf >= 0 ? '(Sobrante)' : '(Faltante)'}`,
-    y + 68
-  );
+    pdf.setTextColor(33, 37, 41);
 
-  line('Caja chica usada:', `Q ${m.cajaChicaUsada.toFixed(2)}`, y + 36, true);
-  line('Faltante pagado:', `Q ${m.faltantePagado.toFixed(2)}`, y + 52, true);
+    // Dibujamos el borde del cuadro con altura justa al contenido
+    const boxHeight = (totalDepY - boxTop) + 14;
+    pdf.setDrawColor(230, 236, 240);
+    pdf.roundedRect(40, boxTop, width - 80, boxHeight, 4, 4);
 
-  // Total a depositar destacado
-  const depColor = m.totalDepositar < 0 ? [183, 28, 28] : [27, 94, 32];
-  pdf.setFont('helvetica', 'bold');
-  pdf.setTextColor(depColor[0], depColor[1], depColor[2]);
-  pdf.text(`Total a depositar: Q ${m.totalDepositar.toFixed(2)}`, right, y + 68, { align: 'right' });
-  pdf.setTextColor(33, 37, 41); // reset
+    y = boxTop + boxHeight + 8;
+  }
 
   // Comentario (si existe)
   const comentarioPlano = (c.comentario || '').toString().trim();
   if (comentarioPlano) {
     autoTable(pdf, {
-      startY: y + 90,
+      startY: y + 12,
       head: [['Comentario']],
       body: [[comentarioPlano]],
       styles: { fontSize: 10, cellPadding: 6, lineWidth: 0.2, lineColor: [230, 236, 240] },

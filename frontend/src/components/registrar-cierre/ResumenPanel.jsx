@@ -83,7 +83,7 @@ export default function ResumenPanel({
 
           <div className="rc-res-item">
             <span>Efectivo</span>
-            <b>{toMoney(totalArqueoEfectivo)}</b>
+            <b>{toMoney(totals.totalArqueoEfectivoNeto ?? totalArqueoEfectivo)}</b>
           </div>
           <div className="rc-res-item">
             <span>Tarjeta</span>
