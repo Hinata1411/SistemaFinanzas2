@@ -2,6 +2,7 @@
 import React from 'react';
 import { toMoney } from '../../utils/numbers';
 
+
 export default function ResumenPanel({
   totals,
   flags,
