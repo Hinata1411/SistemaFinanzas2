@@ -140,6 +140,14 @@ export default function Ventas() {
     , 0);
     return sum;
   };
+  
+  // Formato Quetzal (GT)
+  const fmtQ = (n) =>
+    (typeof n === 'number'
+      ? n
+      : parseFloat(n || 0)
+    ).toLocaleString('es-GT', { style: 'currency', currency: 'GTQ' });
+
 
   const totalVentas = cuadres.reduce((acc, c) => acc + totalVentaDeCuadre(c), 0);
   const promedioVentas = cuadres.length ? (totalVentas / cuadres.length) : 0;
@@ -152,13 +160,6 @@ export default function Ventas() {
     }
     return `${formatDate(best.fecha)} (${fmtQ(max)})`;
   })();
-
-  // Formato Quetzal (GT)
-const fmtQ = (n) =>
-  (typeof n === 'number'
-    ? n
-    : parseFloat(n || 0)
-  ).toLocaleString('es-GT', { style: 'currency', currency: 'GTQ' });
 
 
   // ======================

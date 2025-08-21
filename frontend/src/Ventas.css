@@ -38,11 +38,15 @@
   font-weight:700;
   cursor:pointer;
 }
-.btn:hover{ background:#f9fafb; }
+.btn:hover{ 
+  background:#f9fafb;
+  color: black;
+ }
+
 .btn-primary{
   background:var(--primary); color:#fff; border-color:var(--primary);
 }
-.btn-primary:hover{ filter:brightness(.95); }
+.btn-primary:hover{ filter:brightness(.98); }
 .btn-accent{
   background:var(--accent); color:#fff; border-color:var(--accent);
 }

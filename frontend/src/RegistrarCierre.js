@@ -1,606 +1,442 @@
-// src/RegistrarCierre.jsx
-
-import React, { useState, useRef, useEffect } from 'react';
+// src/RegistrarCierre.js
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  addDoc,
   collection,
+  addDoc,
   getDocs,
-  serverTimestamp,
   query,
-  where,
-  doc,
-  getDoc,
-  updateDoc
+  orderBy,
+  serverTimestamp,
 } from 'firebase/firestore';
-import { db, auth } from './firebase';
+import { db } from './firebase';
 import Swal from 'sweetalert2';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import 'sweetalert2/dist/sweetalert2.min.css';
-
-import ArqueoBlock from './ArqueoBlock';
-import CierreBlock from './CierreBlock';
-import GastosBlock from './GastosBlock';
-import DiferenciasTable from './DiferenciasTable';
-import TotalesBlock from './TotalesBlock';
-
 import './RegistrarCierre.css';
 
-const todayISO = new Date().toISOString().split('T')[0];
+/* ============================
+   Helpers
+============================ */
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const n = (v) => (isNaN(parseFloat(v)) ? 0 : parseFloat(v));
+
+const emptyArqueoCaja = () => ({
+  q100: '', q50: '', q20: '', q10: '', q5: '', q1: '',
+  tarjeta: '', motorista: '',
+});
+const emptyCierreCaja = () => ({
+  efectivo: '', tarjeta: '', motorista: '',
+});
 
 export default function RegistrarCierre() {
-  const [selectedDate, setSelectedDate] = useState(todayISO);
-  const [sucursales, setSucursales] = useState([]);
-  const [selectedSucursal, setSelectedSucursal] = useState('');
-  const [balanceCajaChica, setBalanceCajaChica] = useState(0);
-  const [saving, setSaving] = useState(false);
-  const [hasSavedClosure, setHasSavedClosure] = useState(false);
+  const navigate = useNavigate();
 
-  // Estados para los bloques (se actualizan vía onDataChange)
-  const [arqueoData, setArqueoData] = useState([{}, {}, {}]);
-  const [cierreData, setCierreData] = useState([{}, {}, {}]);
-  const [gastosData, setGastosData] = useState([]);
+  // Tabs de sucursales
+  const [sucursales, setSucursales] = useState([]); // [{id, nombre}]
+  const [activeSucursalId, setActiveSucursalId] = useState(null);
 
-  // Referencias para getData() si el usuario no ha “propagado” el último cambio
-  const arqueoRefs = [useRef(), useRef(), useRef()];
-  const cierreRefs = [useRef(), useRef(), useRef()];
-  const gastosRef = useRef();
-  const totalesRef = useRef();
+  // Fecha
+  const [fecha, setFecha] = useState(todayISO());
 
-  // -----------------------------------
-  //  Función para formatear fechas
-  // -----------------------------------
-  const formatDate = iso => {
-    const [y, m, d] = iso.split('-');
-    return `${d}/${m}/${y}`;
-  };
+  // Arqueo (3 cajas)
+  const [arqueo, setArqueo] = useState([
+    emptyArqueoCaja(),
+    emptyArqueoCaja(),
+    emptyArqueoCaja(),
+  ]);
 
-  // -----------------------------------
-  //  1) Carga inicial de sucursales
-  // -----------------------------------
+  // Cierre de sistema (3 cajas)
+  const [cierre, setCierre] = useState([
+    emptyCierreCaja(),
+    emptyCierreCaja(),
+    emptyCierreCaja(),
+  ]);
+
+  // Gastos dinámicos
+  const [gastos, setGastos] = useState([{ categoria: 'Caja chica', cantidad: '' }]);
+
+  // Busy para evitar doble guardado
+  const [busy, setBusy] = useState(false);
+
+  // Carga sucursales para tabs
   useEffect(() => {
-    (async () => {
-      try {
-        const snap = await getDocs(collection(db, 'sucursales'));
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setSucursales(list);
-        if (list.length && !selectedSucursal) {
-          setSelectedSucursal(list[0].id);
-        }
-      } catch (err) {
-        console.error(err);
-        Swal.fire('Error', 'No se pudieron cargar sucursales', 'error');
-      }
-    })();
+    const load = async () => {
+      const snap = await getDocs(query(collection(db, 'sucursales'), orderBy('ubicacion', 'asc')));
+      const list = snap.docs.map((d) => ({
+        id: d.id,
+        nombre: d.data().ubicacion || d.data().nombre || d.id,
+      }));
+      setSucursales(list);
+      if (list.length && !activeSucursalId) setActiveSucursalId(list[0].id);
+    };
+    load().catch(console.error);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // -----------------------------------
-  //  2) Cuando cambie la sucursal, obtener SALDO de CAJA CHICA
-  // -----------------------------------
-  useEffect(() => {
-    const fetchCajaChica = async () => {
-      if (!selectedSucursal) {
-        setBalanceCajaChica(0);
-        return;
-      }
-      try {
-        const sucRef = doc(db, 'sucursales', selectedSucursal);
-        const snap = await getDoc(sucRef);
-        if (snap.exists()) {
-          const datos = snap.data();
-          setBalanceCajaChica(parseFloat(datos.cajaChica) || 0);
-        } else {
-          setBalanceCajaChica(0);
-        }
-      } catch (err) {
-        console.error(err);
-        setBalanceCajaChica(0);
-      }
-    };
-    fetchCajaChica();
-  }, [selectedSucursal]);
-
-  // -----------------------------------
-  //  3) Verificar si ya hay un cierre para esta fecha y sucursal
-  // -----------------------------------
-  useEffect(() => {
-    const checkClosure = async () => {
-      if (!selectedSucursal) {
-        setHasSavedClosure(false);
-        return;
-      }
-      try {
-        const q = query(
-          collection(db, 'cierres'),
-          where('fecha', '==', selectedDate),
-          where('sucursalId', '==', selectedSucursal)
-        );
-        const snap = await getDocs(q);
-        setHasSavedClosure(!snap.empty);
-      } catch {
-        setHasSavedClosure(false);
-      }
-    };
-    checkClosure();
-  }, [selectedDate, selectedSucursal]);
-
-  // -----------------------------------
-  //  4) Sumar campos numéricos (helper)
-  // -----------------------------------
-  const sumField = (arr, field) =>
-    arr.reduce((sum, item) => sum + (parseFloat(item[field]) || 0), 0);
-
-  // -----------------------------------
-  //  5) Calcular diferencia de efectivo
-  //     (uso directo en TotalesBlock)
-  // -----------------------------------
-  const diferenciaEfectivo = () => sumField(cierreData, 'efectivo') - sumField(arqueoData, 'efectivo');
-
-  // -----------------------------------
-  //  6) Callbacks para “onDataChange” de cada bloque
-  // -----------------------------------
-
-  // Cuando ArqueoBlock notifica un cambio, actualizamos ese índice en arqueoData
-  const handleArqueoChange = index => data => {
-    setArqueoData(prev => {
-      const copy = [...prev];
-      copy[index] = data;
-      return copy;
-    });
-  };
-
-  // Cuando CierreBlock notifica un cambio, actualizamos ese índice en cierreData
-  const handleCierreChange = index => data => {
-    setCierreData(prev => {
-      const copy = [...prev];
-      copy[index] = data;
-      return copy;
-    });
-  };
-
-  // Cuando GastosBlock notifica un cambio, actualizamos gastosData completo
-  const handleGastosChange = data => {
-    // data debería tener la forma { title, gastos: [...] }
-    setGastosData(data.gastos || []);
-  };
-
-  // -----------------------------------
-  //  7) Función para “Cubrir con Caja Chica”
-  // -----------------------------------
-  const handleCoverWithCajaChica = async montoFaltante => {
-    if (!selectedSucursal) {
-      Swal.fire('Error', 'Primero selecciona una sucursal.', 'warning');
-      return;
-    }
-    try {
-      const sucRef = doc(db, 'sucursales', selectedSucursal);
-      const snap = await getDoc(sucRef);
-      if (!snap.exists()) {
-        Swal.fire('Error', 'Sucursal no encontrada.', 'error');
-        return;
-      }
-      const datos = snap.data();
-      const saldoActual = parseFloat(datos.cajaChica) || 0;
-      if (saldoActual < montoFaltante) {
-        Swal.fire(
-          'Saldo insuficiente',
-          `Tu saldo de caja chica es Q${saldoActual.toFixed(
-            2
-          )}, no puedes cubrir Q${montoFaltante.toFixed(2)}.`,
-          'warning'
-        );
-        return;
-      }
-      // Actualizar Firestore restando el faltante
-      await updateDoc(sucRef, {
-        cajaChica: saldoActual - montoFaltante
-      });
-      // Actualizar estado local
-      setBalanceCajaChica(saldoActual - montoFaltante);
-
-      Swal.fire(
-        'Hecho',
-        `Q${montoFaltante.toFixed(2)} cubiertos con Caja Chica.`,
-        'success'
-      );
-    } catch (err) {
-      console.error(err);
-      Swal.fire('Error', 'No se pudo usar caja chica.', 'error');
-    }
-  };
-
-  // -----------------------------------
-  //  8) Guardar el cuadre en Firestore
-  // -----------------------------------
-  const handleGuardar = async () => {
-    if (!auth.currentUser) {
-      return Swal.fire('No autenticado', 'Inicia sesión para guardar.', 'warning');
-    }
-    if (!selectedSucursal) {
-      return Swal.fire('Selección requerida', 'Elige una sucursal.', 'warning');
-    }
-
-    // Validar que no exista ya un cierre para esta fecha y sucursal
-    try {
-      const qCheck = query(
-        collection(db, 'cierres'),
-        where('fecha', '==', selectedDate),
-        where('sucursalId', '==', selectedSucursal)
-      );
-      const snapCheck = await getDocs(qCheck);
-      if (!snapCheck.empty) {
-        return Swal.fire(
-          'Ya existe un cuadre',
-          'Solo puedes realizar un cuadre por sucursal por día.',
-          'warning'
-        );
-      }
-    } catch {
-      return Swal.fire('Error', 'No se pudo verificar cuadres existentes.', 'error');
-    }
-
-    // Obtener datos “al momento” de cada ref, por si no se propagó el último cambio
-    const arqueo = arqueoRefs.map(r => r.current?.getData() || {});
-    const cierre = cierreRefs.map(r => r.current?.getData() || {});
-    const gastos = gastosRef.current?.getData()?.gastos || [];
-
-    // Obtener comentario desde TotalesBlock
-    const comentario = totalesRef.current?.getData()?.comentario?.trim() || '';
-
-    // Validar datos numéricos
-    const validBoxes = [...arqueo, ...cierre].every(b =>
-      ['efectivo', 'tarjeta', 'motorista'].every(
-        f => b[f] !== undefined && !isNaN(parseFloat(b[f]))
-      )
+  /* ============================
+     Cálculos (memoizados)
+  ============================ */
+  const totalArqueoEfectivo = useMemo(() => {
+    const perCaja = arqueo.map((c) =>
+      100 * n(c.q100) +
+      50 * n(c.q50) +
+      20 * n(c.q20) +
+      10 * n(c.q10) +
+      5 * n(c.q5) +
+      1 * n(c.q1)
     );
-    const validGastos = gastos.every(g => !isNaN(parseFloat(g.cantidad)));
+    return perCaja.reduce((a, b) => a + b, 0);
+  }, [arqueo]);
 
-    if (!validBoxes || !validGastos) {
-      return Swal.fire('Datos inválidos', 'Revisa montos y gastos.', 'warning');
+  const totalArqueoTarjeta = useMemo(
+    () => arqueo.reduce((s, c) => s + n(c.tarjeta), 0),
+    [arqueo]
+  );
+  const totalArqueoMotorista = useMemo(
+    () => arqueo.reduce((s, c) => s + n(c.motorista), 0),
+    [arqueo]
+  );
+
+  const totalCierreEfectivo = useMemo(
+    () => cierre.reduce((s, c) => s + n(c.efectivo), 0),
+    [cierre]
+  );
+  const totalCierreTarjeta = useMemo(
+    () => cierre.reduce((s, c) => s + n(c.tarjeta), 0),
+    [cierre]
+  );
+  const totalCierreMotorista = useMemo(
+    () => cierre.reduce((s, c) => s + n(c.motorista), 0),
+    [cierre]
+  );
+
+  const totalGastos = useMemo(
+    () => gastos.reduce((s, g) => s + n(g.cantidad), 0),
+    [gastos]
+  );
+
+  // Diferencia simple: efectivo físico - efectivo sistema - gastos
+  const diferenciaEfectivo = useMemo(
+    () => totalArqueoEfectivo - totalCierreEfectivo - totalGastos,
+    [totalArqueoEfectivo, totalCierreEfectivo, totalGastos]
+  );
+
+  const totalGeneral = useMemo(() => {
+    // Ajusta esta fórmula si manejas más lógicas
+    return (
+      totalCierreEfectivo +
+      totalCierreTarjeta +
+      totalCierreMotorista -
+      totalGastos
+    );
+  }, [totalCierreEfectivo, totalCierreTarjeta, totalCierreMotorista, totalGastos]);
+
+  /* ============================
+     Handlers UI
+  ============================ */
+  const setArq = (idx, field, value) => {
+    setArqueo((prev) => {
+      const copy = prev.map((c) => ({ ...c }));
+      copy[idx][field] = value;
+      return copy;
+    });
+  };
+  const setCier = (idx, field, value) => {
+    setCierre((prev) => {
+      const copy = prev.map((c) => ({ ...c }));
+      copy[idx][field] = value;
+      return copy;
+    });
+  };
+
+  const addGasto = () => setGastos((g) => [...g, { categoria: '', cantidad: '' }]);
+  const setGasto = (i, field, val) =>
+    setGastos((prev) => {
+      const c = [...prev];
+      c[i] = { ...c[i], [field]: val };
+      return c;
+    });
+  const removeGasto = (i) => setGastos((prev) => prev.filter((_, idx) => idx !== i));
+
+  const onBack = () => navigate('/home/Ventas'); // Ajusta si tu ruta difiere
+
+  /* ============================
+     Guardar
+  ============================ */
+  const validate = () => {
+    if (!activeSucursalId) {
+      Swal.fire('Sucursal', 'Selecciona una sucursal en las pestañas.', 'warning');
+      return false;
     }
+    if (!fecha) {
+      Swal.fire('Fecha', 'Selecciona una fecha válida.', 'warning');
+      return false;
+    }
+    return true;
+  };
 
-    setSaving(true);
+  const onSave = async () => {
+    if (busy) return;
+    if (!validate()) return;
+
     try {
-      await addDoc(collection(db, 'cierres'), {
-        fecha: selectedDate,
-        sucursalId: selectedSucursal,
+      setBusy(true);
+      const payload = {
+        fecha,
+        sucursalId: activeSucursalId,
         arqueo,
         cierre,
         gastos,
-        diferenciaEfectivo: diferenciaEfectivo(),
-        comentario,
-        creado: serverTimestamp(),
-        uid: auth.currentUser.uid
-      });
-      setHasSavedClosure(true);
-
-      // Si hay gastos de “Caja chica”, sumarlos al campo cajaChica de la sucursal
-      const totalCajaChica = gastos
-        .filter(g => g.categoria === 'Caja chica')
-        .reduce((s, g) => s + parseFloat(g.cantidad || 0), 0);
-      if (totalCajaChica > 0) {
-        const sucRef = doc(db, 'sucursales', selectedSucursal);
-        const snapRef = await getDoc(sucRef);
-        if (snapRef.exists()) {
-          await updateDoc(sucRef, {
-            cajaChica: (parseFloat(snapRef.data().cajaChica) || 0) + totalCajaChica
-          });
-          // Actualizar estado local para ver inmediatamente el nuevo saldo
-          setBalanceCajaChica(
-            (prev) => prev + totalCajaChica
-          );
-        }
-      }
-
-      Swal.fire({
+        totales: {
+          totalArqueoEfectivo,
+          totalArqueoTarjeta,
+          totalArqueoMotorista,
+          totalCierreEfectivo,
+          totalCierreTarjeta,
+          totalCierreMotorista,
+          totalGastos,
+          diferenciaEfectivo,
+          totalGeneral,
+        },
+        createdAt: serverTimestamp(),
+      };
+      await addDoc(collection(db, 'cierres'), payload);
+      await Swal.fire({
         icon: 'success',
         title: 'Guardado',
-        text: `Cuadre del ${formatDate(selectedDate)} registrado.`,
-        timer: 2000,
-        showConfirmButton: false
+        text: 'El cuadre se guardó correctamente.',
+        timer: 1600,
+        showConfirmButton: false,
       });
+      navigate('/home/Ventas');
     } catch (err) {
-      Swal.fire('Error', err.message, 'error');
+      console.error(err);
+      Swal.fire('Error', err.message || 'No se pudo guardar.', 'error');
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   };
 
-  // -----------------------------------
-  //  9) Descargar PDF (igual que antes)
-  // -----------------------------------
-  const handleDescargarPDF = async () => {
-    if (!hasSavedClosure) {
-      return Swal.fire(
-        'No hay cierres guardados para descargar',
-        'Guarda un cuadre primero.',
-        'info'
-      );
-    }
-    try {
-      const snap = await getDocs(
-        query(
-          collection(db, 'cierres'),
-          where('fecha', '==', selectedDate),
-          where('sucursalId', '==', selectedSucursal)
-        )
-      );
-      const data = snap.docs[0].data();
-      const arqueo = data.arqueo || [];
-      const cierre = data.cierre || [];
-      const gastos = data.gastos || [];
-      const suc = sucursales.find(s => s.id === selectedSucursal) || {};
-      const cajaChica = parseFloat(suc.cajaChica) || 0;
-      const comentario = data.comentario || '';
-
-      const sumFieldLocal = (arr, field) =>
-        arr.reduce((sum, item) => sum + (parseFloat(item[field]) || 0), 0);
-
-      const sumCol = idx =>
-        ['efectivo', 'tarjeta', 'motorista'].reduce(
-          (s, f) => s + (parseFloat(arqueo[idx]?.[f]) || 0),
-          0
-        );
-      const sumColCi = idx =>
-        ['efectivo', 'tarjeta', 'motorista'].reduce(
-          (s, f) => s + (parseFloat(cierre[idx]?.[f]) || 0),
-          0
-        );
-      const totalGastos = gastos.reduce((s, g) => s + parseFloat(g.cantidad || 0), 0);
-      const totalEfectivoSist = sumFieldLocal(arqueo, 'efectivo');
-      const totalTarjetaSist = sumFieldLocal(arqueo, 'tarjeta');
-      const totalMotoristaSist = sumFieldLocal(arqueo, 'motorista');
-      const totalSist = totalEfectivoSist + totalTarjetaSist;
-      const totalEfectivoCi = sumFieldLocal(cierre, 'efectivo');
-      const totalMotoristaCi = sumFieldLocal(cierre, 'motorista');
-      const diferencia = totalEfectivoCi - totalEfectivoSist;
-      const aDepositar = totalEfectivoCi - totalGastos;
-
-      const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
-      const w = pdf.internal.pageSize.getWidth();
-      pdf.setFontSize(14);
-      pdf.text(`Cuadre - ${formatDate(selectedDate)}`, w / 2, 30, { align: 'center' });
-      pdf.setFontSize(10);
-      pdf.text(`Sucursal: ${suc.ubicacion}`, w / 2, 45, { align: 'center' });
-      let y = 60;
-
-      // Arqueo Físico
-      pdf.setFontSize(12);
-      pdf.text('Arqueo físico', 40, y);
-      y += 14;
-      autoTable(pdf, {
-        startY: y,
-        head: [['Concepto', 'Caja 1', 'Caja 2', 'Caja 3', 'Total']],
-        body: [
-          ['Efectivo', sumCol(0), sumCol(1), sumCol(2), totalEfectivoSist],
-          ['Tarjeta', sumCol(0), sumCol(1), sumCol(2), totalTarjetaSist],
-          ['Motorista', sumCol(0), sumCol(1), sumCol(2), totalMotoristaSist],
-          ['Totales', sumCol(0), sumCol(1), sumCol(2), totalSist]
-        ],
-        margin: { left: 30, right: 30 },
-        styles: { fontSize: 9, cellPadding: 3 }
-      });
-      y = pdf.lastAutoTable.finalY + 10;
-
-      // Cierre de Sistema
-      pdf.setFontSize(12);
-      pdf.text('Cierre de Sistema', 40, y);
-      y += 14;
-      autoTable(pdf, {
-        startY: y,
-        head: [['Concepto', 'Caja 1', 'Caja 2', 'Caja 3', 'Total']],
-        body: [
-          ['Efectivo', sumColCi(0), sumColCi(1), sumColCi(2), totalEfectivoCi],
-          ['Tarjeta', sumColCi(0), sumColCi(1), sumColCi(2), sumFieldLocal(cierre, 'tarjeta')],
-          ['Motorista', sumColCi(0), sumColCi(1), sumColCi(2), totalMotoristaCi],
-          [
-            'Totales',
-            sumColCi(0),
-            sumColCi(1),
-            sumColCi(2),
-            totalEfectivoCi + sumFieldLocal(cierre, 'tarjeta') + totalMotoristaCi
-          ]
-        ],
-        margin: { left: 30, right: 30 },
-        styles: { fontSize: 9, cellPadding: 3 }
-      });
-      y = pdf.lastAutoTable.finalY + 10;
-
-      // Gastos
-      pdf.setFontSize(12);
-      pdf.text('Gastos', 40, y);
-      y += 14;
-      autoTable(pdf, {
-        startY: y,
-        head: [['Descripción', 'Categoría', 'Total']],
-        body: [
-          ...gastos.map(g => [g.descripcion || '', g.categoria, parseFloat(g.cantidad) || 0]),
-          [
-            { content: 'Totales', colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } },
-            totalGastos
-          ]
-        ],
-        margin: { left: 30, right: 30 },
-        styles: { fontSize: 9, cellPadding: 3 }
-      });
-      y = pdf.lastAutoTable.finalY + 20;
-
-      // Ventas Total Sistema
-      pdf.setFontSize(12);
-      pdf.setFont(undefined, 'bold');
-      pdf.text('Ventas Total Sistema', 40, y);
-      pdf.setFont(undefined, 'normal');
-      y += 14;
-      autoTable(pdf, {
-        startY: y,
-        head: [['Concepto', 'Total']],
-        body: [
-          ['Venta Efectivo', totalEfectivoSist],
-          ['Venta Tarjeta', totalTarjetaSist],
-          ['Venta Motorista', totalMotoristaSist],
-          [{ content: 'Total Sistema', styles: { fontStyle: 'bold' } }, totalSist]
-        ],
-        margin: { left: 30, right: 30 },
-        styles: { fontSize: 9, cellPadding: 3 }
-      });
-      y = pdf.lastAutoTable.finalY + 20;
-
-      // Control Administración
-      pdf.setFontSize(12);
-      pdf.setFont(undefined, 'bold');
-      pdf.text('Control Administración', 40, y);
-      pdf.setFont(undefined, 'normal');
-      y += 14;
-      autoTable(pdf, {
-        startY: y,
-        head: [['Concepto', 'Total']],
-        body: [
-          ['Caja chica', cajaChica],
-          ['Venta Efectivo', totalEfectivoCi],
-          ['Venta Motorista', totalMotoristaCi],
-          ['Gastos', totalGastos],
-          [
-            {
-              content: 'Sobrante/Faltante',
-              styles: { textColor: diferencia < 0 ? [255, 0, 0] : [0, 128, 0] }
-            },
-            Math.abs(diferencia)
-          ],
-          [{ content: 'Total a Depositar', styles: { fontStyle: 'bold' } }, aDepositar]
-        ],
-        margin: { left: 30, right: 30 },
-        styles: { fontSize: 9, cellPadding: 3 }
-      });
-      y = pdf.lastAutoTable.finalY + 20;
-
-      // Comentario
-      if (comentario) {
-        pdf.setFontSize(10);
-        pdf.text(`Comentario: ${comentario}`, 40, y);
-      }
-
-      pdf.save(`Cuadre_${selectedDate}.pdf`);
-    } catch {
-      Swal.fire('Error', 'No se pudo generar el PDF.', 'error');
-    }
-  };
-
+  /* ============================
+     Render
+  ============================ */
   return (
-    <div className="container-principal">
-      <div className="encabezado-cuadre">
-        <h2>Cuadre</h2>
-        <div className="selector-group">
-          <div className="date-selector">
-            <label htmlFor="fecha">Fecha:</label>
+    <div className="rc-shell">
+      {/* HEADER */}
+      <div className="rc-header">
+        <h1>Registrar cuadre</h1>
+        <div className="rc-header-right">
+          <div className="rc-date">
+            <label htmlFor="rc-fecha">Fecha</label>
             <input
-              id="fecha"
+              id="rc-fecha"
               type="date"
-              value={selectedDate}
-              onChange={e => setSelectedDate(e.target.value)}
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
             />
           </div>
-          <div className="sucursal-selector">
-            <label htmlFor="sucursal">Sucursal:</label>
-            <select
-              id="sucursal"
-              value={selectedSucursal}
-              onChange={e => setSelectedSucursal(e.target.value)}
-            >
-              <option value="" disabled>Selecciona...</option>
-              {sucursales.map(s => (
-                <option key={s.id} value={s.id}>{s.ubicacion}</option>
-              ))}
-            </select>
-          </div>
+
+          <button
+            type="button"
+            className="rc-btn rc-btn-outline"
+            onClick={onBack}
+            disabled={busy}
+            title="Regresar a Ventas"
+          >
+            Regresar a Ventas
+          </button>
+
+          <button
+            type="button"
+            className="rc-btn rc-btn-primary"
+            onClick={onSave}
+            disabled={busy}
+            title="Guardar cuadre"
+          >
+            {busy ? 'Guardando…' : 'Guardar'}
+          </button>
         </div>
       </div>
 
-      {/* ============================= */}
-      {/*  Sección: Arqueo Físico       */}
-      {/* ============================= */}
-      <Section title="Arqueo Físico">
-        {arqueoRefs.map((r, i) => (
-          <ArqueoBlock
-            key={i}
-            ref={r}
-            title={`Caja ${i + 1}`}
-            onDataChange={handleArqueoChange(i)}
-          />
+      {/* TABS: SUCURSALES */}
+      <div className="rc-tabs" role="tablist" aria-label="Sucursales">
+        {sucursales.map((s) => (
+          <button
+            key={s.id}
+            className={`rc-tab ${activeSucursalId === s.id ? 'active' : ''}`}
+            onClick={() => setActiveSucursalId(s.id)}
+            type="button"
+            role="tab"
+            aria-selected={activeSucursalId === s.id}
+            aria-controls={`panel-${s.id}`}
+            id={`tab-${s.id}`}
+          >
+            {s.nombre}
+          </button>
         ))}
-      </Section>
+        {!sucursales.length && (
+          <div className="rc-tab-empty">No hay sucursales</div>
+        )}
+      </div>
 
-      {/* ============================= */}
-      {/*  Sección: Cierre de Sistema    */}
-      {/* ============================= */}
-      <Section title="Cierre de Sistema">
-        {cierreRefs.map((r, i) => (
-          <CierreBlock
-            key={i}
-            ref={r}
-            title={`Caja ${i + 1}`}
-            onDataChange={handleCierreChange(i)}
-          />
-        ))}
-      </Section>
+      {/* GRID PRINCIPAL */}
+      <div className="rc-grid">
+        {/* Arqueo Físico */}
+        <section
+          className="rc-card"
+          id={activeSucursalId ? `panel-${activeSucursalId}` : undefined}
+          role="tabpanel"
+          aria-labelledby={activeSucursalId ? `tab-${activeSucursalId}` : undefined}
+        >
+          <h3>Arqueo Físico</h3>
+          <div className="rc-sheet rc-sheet-3cols">
+            {[0, 1, 2].map((i) => (
+              <div className="rc-col" key={`arq-${i}`}>
+                <div className="rc-col-hd">Caja {i + 1}</div>
 
-      {/* ============================= */}
-      {/*  Sección: Gastos              */}
-      {/* ============================= */}
-      <Section title="Gastos">
-        <GastosBlock
-          ref={gastosRef}
-          title="Gastos"
-          onDataChange={handleGastosChange}
-        />
-      </Section>
+                {[
+                  ['q100', 'Q 100'],
+                  ['q50', 'Q 50'],
+                  ['q20', 'Q 20'],
+                  ['q10', 'Q 10'],
+                  ['q5', 'Q 5'],
+                  ['q1', 'Q 1'],
+                ].map(([field, label]) => (
+                  <div className="rc-row" key={field}>
+                    <span className="rc-cell-label">{label}</span>
+                    <input
+                      className="rc-input"
+                      inputMode="numeric"
+                      value={arqueo[i][field]}
+                      onChange={(e) => setArq(i, field, e.target.value)}
+                      placeholder="0"
+                    />
+                  </div>
+                ))}
 
-      {/* ============================= */}
-      {/*  Sección: Diferencias y Totales */}
-      {/* ============================= */}
-      <div className="cuadre">
-        <div className="footer-section">
-          <div className="section diferencias">
-            <DiferenciasTable arqueoData={arqueoData} cierreData={cierreData} />
+                <div className="rc-row rc-row-sep" />
+
+                <div className="rc-row">
+                  <span className="rc-cell-label">Tarjeta</span>
+                  <input
+                    className="rc-input"
+                    inputMode="numeric"
+                    value={arqueo[i].tarjeta}
+                    onChange={(e) => setArq(i, 'tarjeta', e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="rc-row">
+                  <span className="rc-cell-label">Motorista</span>
+                  <input
+                    className="rc-input"
+                    inputMode="numeric"
+                    value={arqueo[i].motorista}
+                    onChange={(e) => setArq(i, 'motorista', e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="section totales">
-            <TotalesBlock
-              ref={totalesRef}
-              arqueoData={arqueoData}
-              cierreData={cierreData}
-              gastosData={gastosData}
-              sumDifEfectivo={diferenciaEfectivo()}
-              sucursalId={selectedSucursal}
-              balanceCajaChica={balanceCajaChica}
-              onCoverWithCajaChica={handleCoverWithCajaChica}
-            />
+        </section>
+
+        {/* Cierre de Sistema */}
+        <section className="rc-card">
+          <h3>Cierre de Sistema</h3>
+          <div className="rc-sheet rc-sheet-3cols">
+            {[0, 1, 2].map((i) => (
+              <div className="rc-col" key={`cier-${i}`}>
+                <div className="rc-col-hd">Caja {i + 1}</div>
+
+                {[
+                  ['efectivo', 'Efectivo'],
+                  ['tarjeta', 'Tarjeta'],
+                  ['motorista', 'Motorista'],
+                ].map(([field, label]) => (
+                  <div className="rc-row" key={field}>
+                    <span className="rc-cell-label">{label}</span>
+                    <input
+                      className="rc-input"
+                      inputMode="numeric"
+                      value={cierre[i][field]}
+                      onChange={(e) => setCier(i, field, e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </div>
+                ))}
+              </div>
+            ))}
           </div>
-        </div>
+        </section>
       </div>
 
-      {/* ============================= */}
-      {/*  Botones: Guardar / Descargar PDF */}
-      {/* ============================= */}
-      <div className="guardar-cuadre">
-        <button onClick={handleGuardar} disabled={saving}>
-          {saving ? 'Guardando…' : 'Guardar Cuadre'}
-        </button>
-        <button onClick={handleDescargarPDF}>Descargar PDF</button>
-      </div>
-    </div>
-  );
-}
+      {/* GASTOS + RESUMEN */}
+      <div className="rc-grid rc-grid-bottom">
+        {/* Gastos */}
+        <section className="rc-card">
+          <h3>Gastos</h3>
+          <div className="rc-gastos">
+            {gastos.map((g, i) => (
+              <div className="rc-gasto-row" key={i}>
+                <input
+                  className="rc-input"
+                  placeholder="Categoría"
+                  value={g.categoria}
+                  onChange={(e) => setGasto(i, 'categoria', e.target.value)}
+                />
+                <input
+                  className="rc-input"
+                  placeholder="Cantidad"
+                  inputMode="numeric"
+                  value={g.cantidad}
+                  onChange={(e) => setGasto(i, 'cantidad', e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="rc-btn rc-btn-ghost"
+                  onClick={() => removeGasto(i)}
+                  title="Eliminar gasto"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="rc-gastos-actions">
+            <button type="button" className="rc-btn rc-btn-outline" onClick={addGasto}>
+              + Agregar gasto
+            </button>
+          </div>
+        </section>
 
-function Section({ title, children }) {
-  return (
-    <div className="panel">
-      <div className="toggle-header">
-        <div className="line" />
-        <div className="header-center">
-          <span className="panel-title">{title}</span>
-        </div>
-        <div className="line" />
+        {/* Resumen / Totales */}
+        <section className="rc-card">
+          <h3>Resumen</h3>
+          <div className="rc-resumen">
+            <div className="rc-res-item">
+              <span>Efectivo (Arqueo)</span>
+              <b>Q {totalArqueoEfectivo.toFixed(2)}</b>
+            </div>
+            <div className="rc-res-item">
+              <span>Efectivo (Sistema)</span>
+              <b>Q {totalCierreEfectivo.toFixed(2)}</b>
+            </div>
+            <div className="rc-res-item">
+              <span>Gastos</span>
+              <b>Q {totalGastos.toFixed(2)}</b>
+            </div>
+            <div className="rc-res-item diff">
+              <span>Diferencia de efectivo</span>
+              <b>Q {diferenciaEfectivo.toFixed(2)}</b>
+            </div>
+            <div className="rc-res-item total">
+              <span>Total general</span>
+              <b>Q {totalGeneral.toFixed(2)}</b>
+            </div>
+          </div>
+        </section>
       </div>
-      <div className="grid">{children}</div>
     </div>
   );
 }
