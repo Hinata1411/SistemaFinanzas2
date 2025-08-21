@@ -2,10 +2,6 @@
 import autoTable from 'jspdf-autotable';
 import { n, totalEfectivoCaja } from '../utils/numbers';
 
-// Helper: detectar categoría "Ajuste de caja chica"
-const isAjusteCajaChica = (name) =>
-  (name || '').toString().trim().toLowerCase() === 'ajuste de caja chica';
-
 /**
  * Calcula métricas para el resumen del PDF (con APERTURA).
  */
@@ -29,19 +25,16 @@ export const calcCuadreMetrics = (c) => {
   const cierreTar = cierre.reduce((s, x) => s + n(x.tarjeta), 0);
   const cierreMot = cierre.reduce((s, x) => s + n(x.motorista), 0);
 
-  // Gastos + ajuste de caja chica
+  // Gastos
   const gastos = (c.gastos || []).reduce((s, g) => s + n(g.cantidad), 0);
-  const ajusteCajaChica = (c.gastos || []).reduce(
-    (s, g) => s + (isAjusteCajaChica(g.categoria) ? n(g.cantidad) : 0),
-    0
-  );
 
   const cajaChicaUsada = n(c.cajaChicaUsada);
   const faltantePagado = n(c.faltantePagado);
 
   // 🔹 Diferencia y depósito basados en EFECTIVO NETO
   const diffEf = arqueoEfNeto - cierreEf;
-  const totalDepositar = arqueoEfNeto - gastos + ajusteCajaChica + faltantePagado;
+  // **MISMA LÓGICA QUE EN LA APP**: usar cajaChicaUsada (no “ajuste”)
+  const totalDepositar = arqueoEfNeto - gastos + cajaChicaUsada + faltantePagado;
 
   return {
     // Para mostrar
@@ -49,7 +42,7 @@ export const calcCuadreMetrics = (c) => {
     cierreEf, cierreTar, cierreMot,
 
     // Extras
-    gastos, ajusteCajaChica, cajaChicaUsada, faltantePagado,
+    gastos, cajaChicaUsada, faltantePagado,
     diffEf, totalDepositar,
   };
 };
@@ -157,11 +150,11 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate) => {
     foot: [[
       '', '', '', '', '', '',
       { content: 'Totales', styles: { halign: 'right' } }, // en col Q1
-      { content: mArqEfBruto.toFixed(2), styles: { halign: 'right' } }, // Total efectivo
-      { content: aperturaTotal.toFixed(2), styles: { halign: 'right' } }, // Apertura
-      { content: mArqEfNeto.toFixed(2), styles: { halign: 'right' } },    // Efectivo neto
-      { content: mArqTar.toFixed(2), styles: { halign: 'right' } },       // Tarjeta
-      { content: mArqMot.toFixed(2), styles: { halign: 'right' } },       // Motorista
+      { content: mArqEfBruto.toFixed(2),  styles: { halign: 'right' } }, // Total efectivo
+      { content: aperturaTotal.toFixed(2),styles: { halign: 'right' } }, // Apertura
+      { content: mArqEfNeto.toFixed(2),   styles: { halign: 'right' } }, // Efectivo neto
+      { content: mArqTar.toFixed(2),      styles: { halign: 'right' } }, // Tarjeta
+      { content: mArqMot.toFixed(2),      styles: { halign: 'right' } }, // Motorista
     ]],
     footStyles: { fillColor: [236, 239, 241], textColor: [33, 37, 41], halign: 'right' },
   });
@@ -284,11 +277,14 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate) => {
     drawLine(rightColX, rightY, 'A domicilio',     `Q ${m.arqueoMot.toFixed(2)}`);    rightY += GAP;
     drawLine(rightColX, rightY, 'Gastos',          `Q ${m.gastos.toFixed(2)}`);       rightY += GAP;
 
+    // Caja chica usada
     drawLine(rightColX, rightY, 'Caja chica (usada)', `Q ${m.cajaChicaUsada.toFixed(2)}`); rightY += GAP;
 
+    // Sobrante/Faltante con neto
     const diffLabel = m.diffEf >= 0 ? 'Sobrante' : 'Faltante';
     drawLine(rightColX, rightY, diffLabel, `Q ${Math.abs(m.diffEf).toFixed(2)}`);       rightY += GAP;
 
+    // Faltante pagado (solo si > 0)
     if (m.faltantePagado > 0) {
       drawLine(rightColX, rightY, 'Faltante pagado', `Q ${m.faltantePagado.toFixed(2)}`);
       rightY += GAP;
