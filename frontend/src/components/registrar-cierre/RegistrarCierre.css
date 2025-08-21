@@ -1,0 +1,277 @@
+:root{
+  --primary:#14B866;
+  --dark:#0F3D2E;
+  --accent:#FF7A00;
+  --cream:#FFF7ED;
+  --slate:#1F2937;
+
+  --radius:14px;
+  --shadow:0 20px 60px rgba(0,0,0,.08);
+}
+
+/* Layout general */
+.rc-shell{
+  width:100%;
+  padding: 8px clamp(12px, 2.8vw, 28px);
+}
+
+/* Header */
+.rc-header{
+  display:flex; align-items:center; gap:16px;
+  justify-content:space-between;
+  margin-bottom: 12px;
+}
+.rc-header h1{
+  margin:0; color:var(--dark);
+  font-size: clamp(24px, 4.2vw, 44px);
+  font-weight:800; letter-spacing:.2px;
+}
+.rc-header-right{
+  display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap;
+}
+.rc-date{ display:flex; flex-direction:column; gap:6px; }
+.rc-date label{ font-weight:700; color:var(--dark); }
+.rc-date input[type="date"]{
+  border:1px solid #e7e2d9; border-radius:12px;
+  padding:10px 12px; background:#f9fafb; color:#1F2937;
+  min-width: 210px;
+}
+
+/* Botones */
+.rc-btn{
+  background:#fff;
+  border:1px solid #e7e2d9;
+  color:#1F2937;
+  padding:10px 14px;
+  border-radius:12px;
+  font-weight:700;
+  cursor:pointer;
+}
+.rc-btn:hover{ background:#f9fafb; color:black; }
+.rc-btn-primary{
+  background:var(--primary); color:#fff; border-color:var(--primary);
+}
+.rc-btn-primary:hover{ filter:brightness(.98); }
+.rc-btn-outline{
+  background:#fff; color:var(--slate);
+}
+.rc-btn-ghost{
+  background:transparent; border:1px solid #e7e2d9; color:#b42323;
+}
+
+/* Tabs sucursales */
+.rc-tabs{ display:flex; gap:8px; flex-wrap:wrap; margin: 8px 0 12px; }
+.rc-tab{
+  border:1px solid #e7e2d9; border-radius:12px; padding:8px 12px;
+  background:#fff; font-weight:700; cursor:pointer; color:var(--slate);
+}
+.rc-tab:hover{ background:#f9fafb; }
+.rc-tab.active{
+  background:linear-gradient(135deg, var(--primary), #0ebb59);
+  color:#fff; border-color:var(--primary);
+}
+.rc-tab-empty{ color:#6b7280; padding:8px 0; }
+
+/* Cards y grid */
+.rc-grid{ display:grid; grid-template-columns: 1fr; gap:16px; }
+.rc-grid-bottom{ display:grid; grid-template-columns: 1fr; }
+.rc-card{
+  background:#fff; border:1px solid #e7e2d9; border-radius:var(--radius);
+  padding:16px; box-shadow: var(--shadow);
+}
+.rc-card h3{ margin:0; color:var(--dark); }
+.rc-card-hd{
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:10px;
+}
+
+/* Sheets de 3 columnas */
+.rc-sheet{ display:grid; gap:16px; }
+.rc-sheet-3cols{ grid-template-columns: repeat(3, 1fr); }
+.rc-col{ border:1px solid #f0ece6; border-radius:12px; padding:12px; background:#f9fafb; }
+.rc-col-hd{ font-weight:800; color:var(--dark); margin-bottom:8px; }
+
+.rc-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 0; }
+.rc-row-sep{ border-top:1px dashed #e2dfd8; margin:8px 0; }
+
+.rc-cell-label{ color:#6b7280; font-weight:700; }
+.rc-cell-label.strong{ color:var(--dark); }
+
+.rc-input{
+  width:140px; max-width: 45%;
+  padding:8px 10px; border:1px solid #e0ded7; border-radius:10px;
+  background:#fff; color:var(--slate);
+}
+.rc-select{ width:200px; }
+
+/* Total de caja (efectivo) */
+.rc-total-caja{
+  background:#fff;
+  border:1px solid #e0ded7;
+  border-radius:10px;
+  padding:8px 10px;
+}
+
+/* Gastos */
+.rc-gastos{ display:flex; flex-direction:column; gap:8px; }
+.rc-gasto-row{ display:flex; gap:8px; align-items:center; }
+.rc-desc{ flex: 1 1 320px; min-width: 180px; }
+.rc-qty{ width: 140px; }
+
+/* ===== Resumen ===== */
+.rc-resumen-grid{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:16px;
+}
+
+.rc-res-col{
+  border:1px solid #e7e2d9;
+  border-radius: var(--radius);
+  background:#fff;
+  padding:14px;
+  box-shadow: var(--shadow);
+}
+
+.rc-res-title{
+  font-weight:800;
+  color:var(--dark);
+  margin-bottom:10px;
+  text-align:center;
+}
+
+.rc-res-item{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px 12px;
+  border:1px solid #f0ece6;
+  border-radius:12px;
+  background:#f9fafb;
+  color:var(--slate);
+  font-weight:700;
+}
+.rc-res-item + .rc-res-item{ margin-top:8px; }
+.rc-res-item b{ font-weight:800; color:var(--dark); }
+
+.rc-res-item.ok{
+  background: #e9f8f1;         /* verde suave */
+  border-color: #c9efd9;
+  color: #0f5132;
+}
+.rc-res-item.bad{
+  background: #fdeaea;         /* rojo suave */
+  border-color: #f4c7c7;
+  color: #b42323;
+}
+
+/* Contenedor APARTE: Total a depositar */
+.rc-total-deposit{
+  margin-top:14px;
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:14px 16px;
+  border:2px solid var(--primary);
+  border-radius:14px;
+  background:#fff;
+  box-shadow: var(--shadow);
+}
+.rc-total-deposit .money{
+  display:flex; align-items:center; gap:10px;
+  color:var(--primary); font-weight:800;
+}
+.rc-total-deposit .money svg{ width:24px; height:24px; fill: currentColor; }
+.rc-total-deposit b{ color:var(--primary); font-size:1.1rem; }
+
+/* Total a depositar en negativo */
+.rc-total-deposit.bad{
+  border-color: #b42323;
+}
+
+.rc-total-deposit.bad .money,
+.rc-total-deposit.bad b{
+  color: #b42323;
+}
+
+/* (Opcional) si usas la clase directa en el <b> */
+.rc-total-deposit b.neg{
+  color: #b42323;
+}
+
+/* Comentario */
+.rc-comentario{ margin-top:14px; }
+.rc-comentario label{
+  display:block;
+  font-weight:800;
+  color:var(--dark);
+  margin-bottom:6px;
+}
+.rc-comentario textarea{
+  width:100%;
+  padding:12px;
+  border:1px solid #cfe8db;
+  border-radius:12px;
+  background: #cfeee0;          /* verde pastel */
+  color:#12352b;
+  outline:none;
+  resize: vertical;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.03);
+}
+.rc-comentario textarea::placeholder{
+  color:#2f6a57;
+  opacity:.8;
+}
+
+/* ===== Modal Categorías ===== */
+.rc-modal-mask{
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.45);
+  display: grid; place-items: center;
+  z-index: 1000;
+}
+.rc-modal-card{
+  width:min(680px, 94vw);
+  background:#fff; border:1px solid #e7e2d9; border-radius:14px;
+  padding:16px; box-shadow: var(--shadow);
+}
+.rc-modal-hd{
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:10px;
+}
+.rc-modal-hd h4{ margin:0; color:var(--dark); }
+
+.rc-modal-actions{
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+}
+.rc-input-sm{
+  width:220px;
+  padding:8px 10px; border:1px solid #e0ded7; border-radius:10px;
+  background:#fff; color:var(--slate);
+}
+
+.rc-modal-body{ overflow:auto; max-height:70vh; }
+
+/* Tabla simple */
+.rc-table{
+  width:100%; border-collapse: collapse; background:#fff;
+}
+.rc-table th, .rc-table td{
+  border:1px solid #eee; padding:10px; text-align:left;
+}
+.rc-table thead th{
+  background:#f9fafb; color:#374151; font-weight:800;
+}
+.rc-td-actions{
+  display:flex; gap:8px; flex-wrap:wrap;
+}
+.rc-empty{ text-align:center; color:#6b7280; padding:14px; }
+
+/* Responsive */
+@media (max-width: 1100px){
+  .rc-grid-bottom{ grid-template-columns: 1fr; }
+}
+@media (max-width: 900px){
+  .rc-sheet-3cols{ grid-template-columns: 1fr; }
+  .rc-select{ width:100%; }
+  .rc-qty{ width:120px; }
+}

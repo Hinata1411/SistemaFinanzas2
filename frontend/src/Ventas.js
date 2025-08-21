@@ -9,18 +9,21 @@ import jsPDF from 'jspdf';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 
-import ArqueoBlock from './ArqueoBlock';
-import CierreBlock from './CierreBlock';
-import GastosBlock from './GastosBlock';
-import DiferenciasTable from './DiferenciasTable';
-import TotalesBlock from './TotalesBlock';
-
-import './Ventas.css';
+import './components/ventas/Ventas.css';
 
 export default function Ventas() {
   const navigate = useNavigate();
 
-  const [fechaFiltro, setFechaFiltro] = useState(new Date().toISOString().split('T')[0]);
+
+  function getTodayLocalISO() {
+  const now = new Date();
+  // Ajusta por el offset de tu zona para que sea fecha local
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().split('T')[0]; // YYYY-MM-DD
+}
+
+  const [fechaFiltro, setFechaFiltro] = useState(getTodayLocalISO);
+
   const [sucursalFiltro, setSucursalFiltro] = useState('all');
   const [sucursalesList, setSucursalesList] = useState([]); // [{id, nombre}]
   const [cuadres, setCuadres] = useState([]);

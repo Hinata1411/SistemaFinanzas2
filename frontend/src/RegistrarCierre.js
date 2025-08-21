@@ -1,139 +1,100 @@
 // src/RegistrarCierre.js
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  collection,
-  addDoc,
-  getDocs,
-  query,
-  orderBy,
-  serverTimestamp,
-} from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
-import './RegistrarCierre.css';
+import './components/registrar-cierre/RegistrarCierre.css';
 
-/* ============================
-   Helpers
-============================ */
-const todayISO = () => new Date().toISOString().slice(0, 10);
-const n = (v) => (isNaN(parseFloat(v)) ? 0 : parseFloat(v));
+
+import { todayISO } from './utils/dates';
+import { n } from './utils/numbers';
+import { useSucursales } from './hooks/useSucursales';
+import { useRegistrarCierreTotals } from './hooks/useRegistrarCierreTotals';
+
+import ArqueoGrid from './components/registrar-cierre/ArqueoGrid';
+import CierreGrid from './components/registrar-cierre/CierreGrid';
+import GastosList from './components/registrar-cierre/GastosList';
+import ResumenPanel from './components/registrar-cierre/ResumenPanel';
+import CajaChicaModal from './components/registrar-cierre/CajaChicaModal';
+import CategoriasModal from './components/registrar-cierre/CategoriasModal';
+
+const INIT_GASTO_CATEGORIAS = [
+  'Varios',
+  'Coca-cola',
+  'Servicios',
+  'Publicidad',
+  'Gas y gasolina',
+  'Transporte',
+  'Mantenimiento',
+];
 
 const emptyArqueoCaja = () => ({
-  q100: '', q50: '', q20: '', q10: '', q5: '', q1: '',
-  tarjeta: '', motorista: '',
+  q100: '',
+  q50: '',
+  q20: '',
+  q10: '',
+  q5: '',
+  q1: '',
+  tarjeta: '',
+  motorista: '',
 });
 const emptyCierreCaja = () => ({
-  efectivo: '', tarjeta: '', motorista: '',
+  efectivo: '',
+  tarjeta: '',
+  motorista: '',
 });
 
 export default function RegistrarCierre() {
   const navigate = useNavigate();
 
-  // Tabs de sucursales
-  const [sucursales, setSucursales] = useState([]); // [{id, nombre}]
+  // Sucursales
+  const sucursales = useSucursales();
   const [activeSucursalId, setActiveSucursalId] = useState(null);
 
   // Fecha
-  const [fecha, setFecha] = useState(todayISO());
+  const [fecha, setFecha] = useState(todayISO);
 
-  // Arqueo (3 cajas)
-  const [arqueo, setArqueo] = useState([
-    emptyArqueoCaja(),
-    emptyArqueoCaja(),
-    emptyArqueoCaja(),
-  ]);
+  // Estados principales
+  const [arqueo, setArqueo] = useState([emptyArqueoCaja(), emptyArqueoCaja(), emptyArqueoCaja()]);
+  const [cierre, setCierre] = useState([emptyCierreCaja(), emptyCierreCaja(), emptyCierreCaja()]);
+  const [categorias, setCategorias] = useState(INIT_GASTO_CATEGORIAS);
+  const [gastos, setGastos] = useState([{ categoria: INIT_GASTO_CATEGORIAS[0], descripcion: '', cantidad: '' }]);
+  const [comentario, setComentario] = useState('');
+  const [cajaChicaUsada, setCajaChicaUsada] = useState(0);
+  const [faltantePagado, setFaltantePagado] = useState(0);
 
-  // Cierre de sistema (3 cajas)
-  const [cierre, setCierre] = useState([
-    emptyCierreCaja(),
-    emptyCierreCaja(),
-    emptyCierreCaja(),
-  ]);
-
-  // Gastos dinámicos
-  const [gastos, setGastos] = useState([{ categoria: 'Caja chica', cantidad: '' }]);
-
-  // Busy para evitar doble guardado
   const [busy, setBusy] = useState(false);
 
-  // Carga sucursales para tabs
-  useEffect(() => {
-    const load = async () => {
-      const snap = await getDocs(query(collection(db, 'sucursales'), orderBy('ubicacion', 'asc')));
-      const list = snap.docs.map((d) => ({
-        id: d.id,
-        nombre: d.data().ubicacion || d.data().nombre || d.id,
-      }));
-      setSucursales(list);
-      if (list.length && !activeSucursalId) setActiveSucursalId(list[0].id);
-    };
-    load().catch(console.error);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Modales
+  const [showCatModal, setShowCatModal] = useState(false);
+  const [showCajaChica, setShowCajaChica] = useState(false);
 
-  /* ============================
-     Cálculos (memoizados)
-  ============================ */
-  const totalArqueoEfectivo = useMemo(() => {
-    const perCaja = arqueo.map((c) =>
-      100 * n(c.q100) +
-      50 * n(c.q50) +
-      20 * n(c.q20) +
-      10 * n(c.q10) +
-      5 * n(c.q5) +
-      1 * n(c.q1)
-    );
-    return perCaja.reduce((a, b) => a + b, 0);
-  }, [arqueo]);
+  // Sucursal activa + caja chica
+  const activeSucursal = useMemo(
+    () => sucursales.find((s) => s.id === (activeSucursalId || (sucursales[0]?.id || null))) || null,
+    [sucursales, activeSucursalId]
+  );
+  const cajaChicaDisponible = activeSucursal?.cajaChica || 0;
 
-  const totalArqueoTarjeta = useMemo(
-    () => arqueo.reduce((s, c) => s + n(c.tarjeta), 0),
-    [arqueo]
-  );
-  const totalArqueoMotorista = useMemo(
-    () => arqueo.reduce((s, c) => s + n(c.motorista), 0),
-    [arqueo]
-  );
+  // Totales centralizados
+  const { totals, flags } = useRegistrarCierreTotals({
+    arqueo,
+    cierre,
+    gastos,
+    cajaChicaUsada,
+    faltantePagado,
+  });
 
-  const totalCierreEfectivo = useMemo(
-    () => cierre.reduce((s, c) => s + n(c.efectivo), 0),
-    [cierre]
-  );
-  const totalCierreTarjeta = useMemo(
-    () => cierre.reduce((s, c) => s + n(c.tarjeta), 0),
-    [cierre]
-  );
-  const totalCierreMotorista = useMemo(
-    () => cierre.reduce((s, c) => s + n(c.motorista), 0),
-    [cierre]
-  );
+  const {
+    totalArqueoEfectivo,
+    totalGastos,
+    faltanteEfectivo,
+    faltantePorGastos,
+  } = totals;
 
-  const totalGastos = useMemo(
-    () => gastos.reduce((s, g) => s + n(g.cantidad), 0),
-    [gastos]
-  );
-
-  // Diferencia simple: efectivo físico - efectivo sistema - gastos
-  const diferenciaEfectivo = useMemo(
-    () => totalArqueoEfectivo - totalCierreEfectivo - totalGastos,
-    [totalArqueoEfectivo, totalCierreEfectivo, totalGastos]
-  );
-
-  const totalGeneral = useMemo(() => {
-    // Ajusta esta fórmula si manejas más lógicas
-    return (
-      totalCierreEfectivo +
-      totalCierreTarjeta +
-      totalCierreMotorista -
-      totalGastos
-    );
-  }, [totalCierreEfectivo, totalCierreTarjeta, totalCierreMotorista, totalGastos]);
-
-  /* ============================
-     Handlers UI
-  ============================ */
+  // Handlers de edición
   const setArq = (idx, field, value) => {
     setArqueo((prev) => {
       const copy = prev.map((c) => ({ ...c }));
@@ -148,8 +109,8 @@ export default function RegistrarCierre() {
       return copy;
     });
   };
-
-  const addGasto = () => setGastos((g) => [...g, { categoria: '', cantidad: '' }]);
+  const addGasto = () =>
+    setGastos((g) => [...g, { categoria: categorias[0] || '', descripcion: '', cantidad: '' }]);
   const setGasto = (i, field, val) =>
     setGastos((prev) => {
       const c = [...prev];
@@ -158,13 +119,52 @@ export default function RegistrarCierre() {
     });
   const removeGasto = (i) => setGastos((prev) => prev.filter((_, idx) => idx !== i));
 
-  const onBack = () => navigate('/home/Ventas'); // Ajusta si tu ruta difiere
+  // Categorías modal callback: también re-mapea gastos si editas/eliminás
+  const handleChangeCategorias = (nextCategorias, oldName, newName) => {
+    setCategorias(nextCategorias);
+    if (oldName && newName) {
+      // Renombrar
+      setGastos((prev) => prev.map((g) => (g.categoria === oldName ? { ...g, categoria: newName } : g)));
+    } else if (oldName && !newName) {
+      // Eliminación
+      const fallback = nextCategorias[0] || '';
+      setGastos((prev) => prev.map((g) => (g.categoria === oldName ? { ...g, categoria: fallback } : g)));
+    }
+  };
 
-  /* ============================
-     Guardar
-  ============================ */
+  // Abrir / aplicar caja chica (modal React)
+  const openCajaChica = () => setShowCajaChica(true);
+  const applyCajaChica = (monto) => setCajaChicaUsada((prev) => prev + monto);
+
+  // Pagar faltante
+  const handlePagarFaltante = async () => {
+    if (faltanteEfectivo <= 0) return;
+    const confirmar = await Swal.fire({
+      title: 'Pagar faltante',
+      text: `Se sumará ${Number(faltanteEfectivo).toFixed(2)} al depósito.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, pagar',
+      cancelButtonText: 'Cancelar',
+    });
+    if (confirmar.isConfirmed) {
+      setFaltantePagado(faltanteEfectivo);
+      await Swal.fire({
+        icon: 'success',
+        title: 'Faltante pagado',
+        text: `Se agregó Q ${faltanteEfectivo.toFixed(2)} al total a depositar.`,
+        timer: 1400,
+        showConfirmButton: false,
+      });
+    }
+  };
+
+  // Navegación
+  const onBack = () => navigate('/home/Ventas');
+
+  // Guardar
   const validate = () => {
-    if (!activeSucursalId) {
+    if (!activeSucursal?.id) {
       Swal.fire('Sucursal', 'Selecciona una sucursal en las pestañas.', 'warning');
       return false;
     }
@@ -183,21 +183,15 @@ export default function RegistrarCierre() {
       setBusy(true);
       const payload = {
         fecha,
-        sucursalId: activeSucursalId,
+        sucursalId: activeSucursal.id,
         arqueo,
         cierre,
         gastos,
-        totales: {
-          totalArqueoEfectivo,
-          totalArqueoTarjeta,
-          totalArqueoMotorista,
-          totalCierreEfectivo,
-          totalCierreTarjeta,
-          totalCierreMotorista,
-          totalGastos,
-          diferenciaEfectivo,
-          totalGeneral,
-        },
+        comentario,
+        categorias,
+        cajaChicaUsada,
+        faltantePagado,
+        totales: totals,
         createdAt: serverTimestamp(),
       };
       await addDoc(collection(db, 'cierres'), payload);
@@ -217,9 +211,6 @@ export default function RegistrarCierre() {
     }
   };
 
-  /* ============================
-     Render
-  ============================ */
   return (
     <div className="rc-shell">
       {/* HEADER */}
@@ -234,6 +225,28 @@ export default function RegistrarCierre() {
               value={fecha}
               onChange={(e) => setFecha(e.target.value)}
             />
+          </div>
+
+          <div className="rc-tabs" role="tablist" aria-label="Sucursales">
+            {sucursales.map((s) => (
+              <button
+                key={s.id}
+                className={`rc-tab ${activeSucursal?.id === s.id ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveSucursalId(s.id);
+                  setCajaChicaUsada(0);   // resetea uso de caja chica al cambiar sucursal
+                  setFaltantePagado(0);   // resetea pago de faltante (si aplica por sucursal)
+                }}
+                type="button"
+                role="tab"
+                aria-selected={activeSucursal?.id === s.id}
+                aria-controls={`panel-${s.id}`}
+                id={`tab-${s.id}`}
+              >
+                {s.nombre}
+              </button>
+            ))}
+            {!sucursales.length && <div className="rc-tab-empty">No hay sucursales</div>}
           </div>
 
           <button
@@ -258,185 +271,66 @@ export default function RegistrarCierre() {
         </div>
       </div>
 
-      {/* TABS: SUCURSALES */}
-      <div className="rc-tabs" role="tablist" aria-label="Sucursales">
-        {sucursales.map((s) => (
-          <button
-            key={s.id}
-            className={`rc-tab ${activeSucursalId === s.id ? 'active' : ''}`}
-            onClick={() => setActiveSucursalId(s.id)}
-            type="button"
-            role="tab"
-            aria-selected={activeSucursalId === s.id}
-            aria-controls={`panel-${s.id}`}
-            id={`tab-${s.id}`}
-          >
-            {s.nombre}
-          </button>
-        ))}
-        {!sucursales.length && (
-          <div className="rc-tab-empty">No hay sucursales</div>
-        )}
-      </div>
-
       {/* GRID PRINCIPAL */}
       <div className="rc-grid">
-        {/* Arqueo Físico */}
-        <section
-          className="rc-card"
-          id={activeSucursalId ? `panel-${activeSucursalId}` : undefined}
-          role="tabpanel"
-          aria-labelledby={activeSucursalId ? `tab-${activeSucursalId}` : undefined}
-        >
-          <h3>Arqueo Físico</h3>
-          <div className="rc-sheet rc-sheet-3cols">
-            {[0, 1, 2].map((i) => (
-              <div className="rc-col" key={`arq-${i}`}>
-                <div className="rc-col-hd">Caja {i + 1}</div>
-
-                {[
-                  ['q100', 'Q 100'],
-                  ['q50', 'Q 50'],
-                  ['q20', 'Q 20'],
-                  ['q10', 'Q 10'],
-                  ['q5', 'Q 5'],
-                  ['q1', 'Q 1'],
-                ].map(([field, label]) => (
-                  <div className="rc-row" key={field}>
-                    <span className="rc-cell-label">{label}</span>
-                    <input
-                      className="rc-input"
-                      inputMode="numeric"
-                      value={arqueo[i][field]}
-                      onChange={(e) => setArq(i, field, e.target.value)}
-                      placeholder="0"
-                    />
-                  </div>
-                ))}
-
-                <div className="rc-row rc-row-sep" />
-
-                <div className="rc-row">
-                  <span className="rc-cell-label">Tarjeta</span>
-                  <input
-                    className="rc-input"
-                    inputMode="numeric"
-                    value={arqueo[i].tarjeta}
-                    onChange={(e) => setArq(i, 'tarjeta', e.target.value)}
-                    placeholder="0.00"
-                  />
-                </div>
-                <div className="rc-row">
-                  <span className="rc-cell-label">Motorista</span>
-                  <input
-                    className="rc-input"
-                    inputMode="numeric"
-                    value={arqueo[i].motorista}
-                    onChange={(e) => setArq(i, 'motorista', e.target.value)}
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Cierre de Sistema */}
-        <section className="rc-card">
-          <h3>Cierre de Sistema</h3>
-          <div className="rc-sheet rc-sheet-3cols">
-            {[0, 1, 2].map((i) => (
-              <div className="rc-col" key={`cier-${i}`}>
-                <div className="rc-col-hd">Caja {i + 1}</div>
-
-                {[
-                  ['efectivo', 'Efectivo'],
-                  ['tarjeta', 'Tarjeta'],
-                  ['motorista', 'Motorista'],
-                ].map(([field, label]) => (
-                  <div className="rc-row" key={field}>
-                    <span className="rc-cell-label">{label}</span>
-                    <input
-                      className="rc-input"
-                      inputMode="numeric"
-                      value={cierre[i][field]}
-                      onChange={(e) => setCier(i, field, e.target.value)}
-                      placeholder="0.00"
-                    />
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </section>
+        <ArqueoGrid arqueo={arqueo} setArq={setArq} />
+        <CierreGrid cierre={cierre} setCier={setCier} />
       </div>
 
       {/* GASTOS + RESUMEN */}
       <div className="rc-grid rc-grid-bottom">
-        {/* Gastos */}
+        <GastosList
+          gastos={gastos}
+          categorias={categorias}
+          setGasto={setGasto}
+          addGasto={addGasto}
+          removeGasto={removeGasto}
+          onOpenCategorias={() => setShowCatModal(true)}
+        />
+
+        <ResumenPanel
+          totals={totals}
+          flags={flags}
+          cajaChicaUsada={cajaChicaUsada}
+          onUseCajaChica={() => setShowCajaChica(true)}
+          onPagarFaltante={handlePagarFaltante}
+          faltantePagado={faltantePagado}
+          activeSucursalNombre={activeSucursal?.nombre}
+          cajaChicaDisponible={cajaChicaDisponible}
+        />
+
         <section className="rc-card">
-          <h3>Gastos</h3>
-          <div className="rc-gastos">
-            {gastos.map((g, i) => (
-              <div className="rc-gasto-row" key={i}>
-                <input
-                  className="rc-input"
-                  placeholder="Categoría"
-                  value={g.categoria}
-                  onChange={(e) => setGasto(i, 'categoria', e.target.value)}
-                />
-                <input
-                  className="rc-input"
-                  placeholder="Cantidad"
-                  inputMode="numeric"
-                  value={g.cantidad}
-                  onChange={(e) => setGasto(i, 'cantidad', e.target.value)}
-                />
-                <button
-                  type="button"
-                  className="rc-btn rc-btn-ghost"
-                  onClick={() => removeGasto(i)}
-                  title="Eliminar gasto"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
-          <div className="rc-gastos-actions">
-            <button type="button" className="rc-btn rc-btn-outline" onClick={addGasto}>
-              + Agregar gasto
-            </button>
+          <h3>Comentario</h3>
+          <div className="rc-comentario">
+            <textarea
+              id="rc-comentario"
+              value={comentario}
+              onChange={(e) => setComentario(e.target.value)}
+              placeholder="Agrega un comentario"
+              rows={3}
+            />
           </div>
         </section>
 
-        {/* Resumen / Totales */}
-        <section className="rc-card">
-          <h3>Resumen</h3>
-          <div className="rc-resumen">
-            <div className="rc-res-item">
-              <span>Efectivo (Arqueo)</span>
-              <b>Q {totalArqueoEfectivo.toFixed(2)}</b>
-            </div>
-            <div className="rc-res-item">
-              <span>Efectivo (Sistema)</span>
-              <b>Q {totalCierreEfectivo.toFixed(2)}</b>
-            </div>
-            <div className="rc-res-item">
-              <span>Gastos</span>
-              <b>Q {totalGastos.toFixed(2)}</b>
-            </div>
-            <div className="rc-res-item diff">
-              <span>Diferencia de efectivo</span>
-              <b>Q {diferenciaEfectivo.toFixed(2)}</b>
-            </div>
-            <div className="rc-res-item total">
-              <span>Total general</span>
-              <b>Q {totalGeneral.toFixed(2)}</b>
-            </div>
-          </div>
-        </section>
       </div>
+
+      {/* MODAL Categorías */}
+      <CategoriasModal
+        open={showCatModal}
+        onClose={() => setShowCatModal(false)}
+        categorias={categorias}
+        onChangeCategorias={handleChangeCategorias}
+      />
+
+      {/* MODAL Caja chica */}
+      <CajaChicaModal
+        open={showCajaChica}
+        onClose={() => setShowCajaChica(false)}
+        cajaChicaDisponible={cajaChicaDisponible}
+        // OJO: ya incluye faltantePagado en el cálculo:
+        faltantePorGastos={faltantePorGastos}
+        onApply={applyCajaChica}
+      />
     </div>
   );
 }

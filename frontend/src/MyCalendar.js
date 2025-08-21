@@ -5,7 +5,7 @@ import moment from 'moment';
 import 'moment/locale/es';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
-import './calendar.css';
+import './MyCalendar.css';
 
 moment.locale('es');
 const localizer = momentLocalizer(moment);
