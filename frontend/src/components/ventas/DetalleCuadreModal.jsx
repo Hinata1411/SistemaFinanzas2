@@ -1,6 +1,6 @@
 // src/pages/ventas/components/DetalleCuadreModal.jsx
 import React, { useEffect } from 'react';
-import { totalEfectivoCaja } from '../../utils/numbers';
+import { totalEfectivoCaja, n } from '../../utils/numbers';
 
 // CSS embebido para el modal (puedes moverlo a tu .css si prefieres)
 const MODAL_CSS = `
@@ -71,7 +71,7 @@ export default function DetalleCuadreModal({
 
   if (!visible || !fuente) return null;
 
-  // Datos
+  // Datos base
   const arqueoData = fuente?.arqueo || [{}, {}, {}];
   const cierreData = fuente?.cierre || [{}, {}, {}];
   const gastosData = fuente?.gastos || [];
@@ -85,11 +85,32 @@ export default function DetalleCuadreModal({
   const setGasto = (i, field, value) => { if (!isEditing) return; dispatch({ type:'FIELD_GASTO', i, field, value }); };
   const setCampo = (key, value) => { if (!isEditing) return; dispatch({ type:'SET', key, value }); };
 
-  // Derivados visuales
-  const diffEsPositivo = metrics.diffEf >= 0;
+  // ====== CÁLCULOS LOCALES (usando EFECTIVO NETO) ======
+  const totalArqEfBruto = (arqueoData || []).reduce((acc, c) => acc + totalEfectivoCaja(c || {}), 0);
+  const totalAperturas  = (arqueoData || []).reduce((acc, c) => acc + n(c?.apertura ?? 1000), 0);
+  const totalArqEfNeto  = totalArqEfBruto - totalAperturas;
+
+  const totalArqTar = (arqueoData || []).reduce((s, c) => s + n(c?.tarjeta), 0);
+  const totalArqMot = (arqueoData || []).reduce((s, c) => s + n(c?.motorista), 0);
+
+  const totalCieEf  = (cierreData || []).reduce((s, c) => s + n(c?.efectivo), 0);
+  const totalCieTar = (cierreData || []).reduce((s, c) => s + n(c?.tarjeta), 0);
+  const totalCieMot = (cierreData || []).reduce((s, c) => s + n(c?.motorista), 0);
+
+  const totalGastos = (gastosData || []).reduce((s, g) => s + n(g?.cantidad), 0);
+
+  const cajaChicaUsada = n(fuente?.cajaChicaUsada);
+  const faltantePagado = n(fuente?.faltantePagado);
+
+  // Diferencia (Sobrante/Faltante) con EFECTIVO NETO
+  const diferenciaNeta = totalArqEfNeto - totalCieEf;
+  const diffEsPositivo = diferenciaNeta >= 0;
   const diffLabel = diffEsPositivo ? 'Sobrante' : 'Faltante';
-  const diffAbs = Math.abs(metrics.diffEf);
-  const isDepositNegative = metrics.totalGeneral < 0;
+  const diffAbs = Math.abs(diferenciaNeta);
+
+  // Total a depositar con EFECTIVO NETO
+  const totalGeneral = totalArqEfNeto - totalGastos + cajaChicaUsada + faltantePagado;
+  const isDepositNegative = totalGeneral < 0;
 
   return (
     <div className="modal-mask" role="dialog" aria-modal="true" onClick={onClose}>
@@ -110,7 +131,7 @@ export default function DetalleCuadreModal({
         {/* Cuerpo con scroll interno */}
         <div className="modal-body">
           <div className="rc-shell">
-            {/* Encabezado interno con Fecha y Sucursal (editables solo en edición) */}
+            {/* Encabezado interno con Fecha y Sucursal */}
             <div className="rc-card" style={{ marginBottom: 12 }}>
               <div className="rc-header-grid">
                 <div className="rc-field">
@@ -159,17 +180,20 @@ export default function DetalleCuadreModal({
                   {[0, 1, 2].map((i) => {
                     const c = arqueoData[i] || {};
                     const totalCaja = totalEfectivoCaja(c);
+                    const apertura = n(c.apertura ?? 1000);
+                    const totalMenosApertura = totalCaja - apertura;
+
                     return (
                       <div className="rc-col" key={`arq-${i}`}>
                         <div className="rc-col-hd">Caja {i + 1}</div>
 
                         {[
                           ['q100', 'Q 100'],
-                          ['q50', 'Q 50'],
-                          ['q20', 'Q 20'],
-                          ['q10', 'Q 10'],
-                          ['q5', 'Q 5'],
-                          ['q1', 'Q 1'],
+                          ['q50',  'Q 50'],
+                          ['q20',  'Q 20'],
+                          ['q10',  'Q 10'],
+                          ['q5',   'Q 5' ],
+                          ['q1',   'Q 1' ],
                         ].map(([field, label]) => (
                           <div className="rc-row" key={field}>
                             <span className="rc-cell-label">{label}</span>
@@ -188,6 +212,26 @@ export default function DetalleCuadreModal({
                         <div className="rc-row rc-total-caja">
                           <span className="rc-cell-label strong">Total de caja</span>
                           <b>Q {Number.isFinite(totalCaja) ? totalCaja.toFixed(2) : '0.00'}</b>
+                        </div>
+
+                        {/* 🔹 Apertura de caja (editable, default Q 1,000) */}
+                        <div className="rc-row">
+                          <span className="rc-cell-label">Apertura de caja</span>
+                          <input
+                            className="rc-input"
+                            inputMode="numeric"
+                            value={c.apertura ?? 1000}
+                            onChange={(e) => setArq(i, 'apertura', e.target.value)}
+                            placeholder="1000.00"
+                            disabled={!isEditing}
+                            readOnly={!isEditing}
+                          />
+                        </div>
+
+                        {/* 🔹 Total menos apertura (solo lectura) */}
+                        <div className="rc-row rc-total-caja">
+                          <span className="rc-cell-label strong">Total menos apertura</span>
+                          <b>Q {Number.isFinite(totalMenosApertura) ? totalMenosApertura.toFixed(2) : '0.00'}</b>
                         </div>
 
                         <div className="rc-row rc-row-sep" />
@@ -234,8 +278,8 @@ export default function DetalleCuadreModal({
 
                         {[
                           ['efectivo', 'Efectivo'],
-                          ['tarjeta', 'Tarjeta'],
-                          ['motorista', 'A domicilio (Motorista)'],
+                          ['tarjeta',  'Tarjeta'],
+                          ['motorista','A domicilio (Motorista)'],
                         ].map(([field, label]) => (
                           <div className="rc-row" key={field}>
                             <span className="rc-cell-label">{label}</span>
@@ -307,15 +351,15 @@ export default function DetalleCuadreModal({
 
                     <div className="rc-res-item">
                       <span>Efectivo</span>
-                      <b>Q {metrics.totalCieEf.toFixed(2)}</b>
+                      <b>Q {totalCieEf.toFixed(2)}</b>
                     </div>
                     <div className="rc-res-item">
                       <span>Tarjeta</span>
-                      <b>Q {metrics.totalCieTar.toFixed(2)}</b>
+                      <b>Q {totalCieTar.toFixed(2)}</b>
                     </div>
                     <div className="rc-res-item">
                       <span>A domicilio</span>
-                      <b>Q {metrics.totalCieMot.toFixed(2)}</b>
+                      <b>Q {totalCieMot.toFixed(2)}</b>
                     </div>
 
                     <div className="rc-res-item">
@@ -329,7 +373,7 @@ export default function DetalleCuadreModal({
                           placeholder="0.00"
                         />
                       ) : (
-                        <b>Q {metrics.cajaChicaUsada.toFixed(2)}</b>
+                        <b>Q {cajaChicaUsada.toFixed(2)}</b>
                       )}
                     </div>
 
@@ -354,7 +398,7 @@ export default function DetalleCuadreModal({
                           </button>
                         </>
                       ) : (
-                        <b>Q {metrics.faltantePagado.toFixed(2)}</b>
+                        <b>Q {faltantePagado.toFixed(2)}</b>
                       )}
                     </div>
                   </div>
@@ -365,19 +409,19 @@ export default function DetalleCuadreModal({
 
                     <div className="rc-res-item">
                       <span>Efectivo</span>
-                      <b>Q {metrics.totalArqEf.toFixed(2)}</b>
+                      <b>Q {totalArqEfBruto.toFixed(2)}</b>
                     </div>
                     <div className="rc-res-item">
                       <span>Tarjeta</span>
-                      <b>Q {metrics.totalArqTar.toFixed(2)}</b>
+                      <b>Q {totalArqTar.toFixed(2)}</b>
                     </div>
                     <div className="rc-res-item">
                       <span>A domicilio</span>
-                      <b>Q {metrics.totalArqMot.toFixed(2)}</b>
+                      <b>Q {totalArqMot.toFixed(2)}</b>
                     </div>
                     <div className="rc-res-item">
                       <span>Gastos</span>
-                      <b>Q {metrics.totalGastos.toFixed(2)}</b>
+                      <b>Q {totalGastos.toFixed(2)}</b>
                     </div>
                   </div>
                 </div>
@@ -390,7 +434,7 @@ export default function DetalleCuadreModal({
                     </svg>
                     Total a depositar
                   </span>
-                  <b>Q {metrics.totalGeneral.toFixed(2)}</b>
+                  <b>Q {totalGeneral.toFixed(2)}</b>
                 </div>
 
                 {/* Comentario */}

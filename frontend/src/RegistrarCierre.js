@@ -29,6 +29,7 @@ import ResumenPanel from './components/registrar-cierre/ResumenPanel';
 import CajaChicaModal from './components/registrar-cierre/CajaChicaModal';
 import CategoriasModal from './components/registrar-cierre/CategoriasModal';
 
+// Helpers para "Ajuste de caja chica"
 const isAjusteCajaChica = (name) =>
   (name || '').toString().trim().toLowerCase() === 'ajuste de caja chica';
 
@@ -55,7 +56,7 @@ const emptyArqueoCaja = () => ({
   q1: '',
   tarjeta: '',
   motorista: '',
-  // 👇 Monto de apertura por caja (por defecto Q 1,000)
+  // Apertura por caja (default Q 1,000)
   apertura: 1000,
 });
 
@@ -99,7 +100,7 @@ export default function RegistrarCierre() {
   );
   const cajaChicaDisponible = activeSucursal?.cajaChica || 0;
 
-  // Totales centralizados (cálculo existente)
+  // Totales centralizados (AHORA usa el efectivo NETO restando apertura)
   const { totals, flags } = useRegistrarCierreTotals({
     arqueo,
     cierre,
@@ -108,26 +109,7 @@ export default function RegistrarCierre() {
     faltantePagado,
   });
 
-  const { totalArqueoEfectivo, totalGastos, faltanteEfectivo, faltantePorGastos } = totals;
-
-  // === NUEVO: cálculo de efectivo neto del ARQUEO restando apertura por caja ===
-  const totalEfectivoCaja = (c = {}) =>
-    n(c.q100) + n(c.q50) + n(c.q20) + n(c.q10) + n(c.q5) + n(c.q1);
-
-  const totalArqueoEfectivoNeto = useMemo(
-    () =>
-      (arqueo || []).reduce(
-        (acc, caja) => acc + (totalEfectivoCaja(caja) - n(caja.apertura ?? 1000)),
-        0
-      ),
-    [arqueo]
-  );
-
-  // Enviamos el neto al ResumenPanel y también lo guardamos en "totales"
-  const totalsWithNet = useMemo(
-    () => ({ ...totals, totalArqueoEfectivoNeto }),
-    [totals, totalArqueoEfectivoNeto]
-  );
+  const { totalGastos, faltanteEfectivo, faltantePorGastos } = totals;
 
   // Handlers de edición
   const setArq = (idx, field, value) => {
@@ -158,7 +140,7 @@ export default function RegistrarCierre() {
 
   const removeGasto = (i) => setGastos((prev) => prev.filter((_, idx) => idx !== i));
 
-  // Categorías modal callback: también re-mapea gastos si editas/eliminás
+  // Categorías modal callback
   const handleChangeCategorias = (nextCategorias, oldName, newName) => {
     setCategorias(nextCategorias);
     if (oldName && newName) {
@@ -167,9 +149,11 @@ export default function RegistrarCierre() {
         prev.map((g) => (g.categoria === oldName ? { ...g, categoria: newName } : g))
       );
     } else if (oldName && !newName) {
-      // Eliminación
+      // Eliminar
       const fallback = nextCategorias[0] || '';
-      setGastos((prev) => prev.map((g) => (g.categoria === oldName ? { ...g, categoria: fallback } : g)));
+      setGastos((prev) =>
+        prev.map((g) => (g.categoria === oldName ? { ...g, categoria: fallback } : g))
+      );
     }
   };
 
@@ -230,7 +214,7 @@ export default function RegistrarCierre() {
 
     setBusy(true);
     try {
-      // 🔎 Validación: un cuadre por sucursal por fecha
+      // Validación: un cuadre por sucursal por fecha
       const cierresRef = collection(db, 'cierres');
       const fechaQ = query(cierresRef, where('fecha', '==', fecha));
       const snap = await getDocs(fechaQ);
@@ -255,13 +239,13 @@ export default function RegistrarCierre() {
         categorias,
         cajaChicaUsada,
         faltantePagado,
-        // Guardamos también el neto dentro de "totales"
-        totales: { ...totals, totalArqueoEfectivoNeto },
+        // Guardamos los totales (incluye totalArqueoEfectivoNeto)
+        totales: { ...totals },
         createdAt: serverTimestamp(),
       };
       await addDoc(cierresRef, payload);
 
-      // Actualizamos caja chica de la sucursal: lo usado (negativo) + ajustes (positivo)
+      // Actualizamos caja chica de la sucursal: usado (negativo) + ajustes (positivo)
       const ajustePositivo = getTotalAjusteCajaChica(gastos);
       const delta = -n(cajaChicaUsada) + n(ajustePositivo);
       if (delta !== 0) {
@@ -363,7 +347,7 @@ export default function RegistrarCierre() {
         />
 
         <ResumenPanel
-          totals={totalsWithNet} // 👈 manda el neto al panel
+          totals={totals}      // ya incluye totalArqueoEfectivoNeto y totalGeneral con la nueva fórmula
           flags={flags}
           cajaChicaUsada={cajaChicaUsada}
           onUseCajaChica={() => setShowCajaChica(true)}
@@ -400,7 +384,7 @@ export default function RegistrarCierre() {
         open={showCajaChica}
         onClose={() => setShowCajaChica(false)}
         cajaChicaDisponible={cajaChicaDisponible}
-        // OJO: ya incluye faltantePagado en el cálculo:
+        // ya incluye faltantePagado en el cálculo:
         faltantePorGastos={faltantePorGastos}
         onApply={applyCajaChica}
       />

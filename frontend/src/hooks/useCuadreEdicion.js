@@ -1,6 +1,10 @@
 import { useReducer, useMemo } from 'react';
 import { n, totalEfectivoCaja } from '../utils/numbers';
 
+// Helper para detectar categoría "Ajuste de caja chica"
+const isAjusteCajaChica = (name) =>
+  (name || '').toString().trim().toLowerCase() === 'ajuste de caja chica';
+
 function reducer(state, action) {
   switch (action.type) {
     case 'LOAD': return { ...action.payload, isEditing: true };
@@ -42,25 +46,53 @@ export function useCuadreEdicion(fuente) {
     const cierre = state?.cierre || fuente?.cierre || [{},{},{}];
     const gastos = state?.gastos || fuente?.gastos || [];
 
+    // Arqueo bruto
     const totalArqEf = arqueo.reduce((a,c)=> a + totalEfectivoCaja(c), 0);
     const totalArqTar = arqueo.reduce((a,c)=> a + n(c.tarjeta), 0);
     const totalArqMot = arqueo.reduce((a,c)=> a + n(c.motorista), 0);
 
+    // 🔹 Apertura total y EFECTIVO NETO
+    const aperturaTotal = arqueo.reduce((a,c)=> a + n(c.apertura ?? 1000), 0);
+    const totalArqEfNeto = totalArqEf - aperturaTotal;
+
+    // Cierre
     const totalCieEf = cierre.reduce((a,c)=> a + n(c.efectivo), 0);
     const totalCieTar = cierre.reduce((a,c)=> a + n(c.tarjeta), 0);
     const totalCieMot = cierre.reduce((a,c)=> a + n(c.motorista), 0);
 
+    // Gastos + Ajuste de caja chica
     const totalGastos = gastos.reduce((s,g)=> s + n(g.cantidad), 0);
+    const totalAjusteCajaChica = gastos.reduce(
+      (s,g)=> s + (isAjusteCajaChica(g.categoria) ? n(g.cantidad) : 0),
+      0
+    );
+
     const cajaChicaUsada = n(state?.cajaChicaUsada ?? fuente?.cajaChicaUsada);
     const faltantePagado = n(state?.faltantePagado ?? fuente?.faltantePagado);
 
-    const diffEf = totalArqEf - totalCieEf;
-    const totalGeneral = totalArqEf - totalGastos + cajaChicaUsada + faltantePagado;
+    // 🔹 Diferencia y depósito con EFECTIVO NETO
+    const diffEf = totalArqEfNeto - totalCieEf;
+
+    // Depósito: neto - gastos + ajuste + faltantePagado
+    const totalGeneral = totalArqEfNeto - totalGastos + totalAjusteCajaChica + faltantePagado;
 
     return {
-      totalArqEf, totalArqTar, totalArqMot,
+      // Arqueo
+      totalArqEf,        // bruto (puedes mostrarlo si quieres)
+      totalArqEfNeto,    // 👈 usar para diferencias y depósito en UI
+      totalArqTar, totalArqMot,
+
+      // Cierre
       totalCieEf, totalCieTar, totalCieMot,
-      totalGastos, diffEf, totalGeneral, cajaChicaUsada, faltantePagado
+
+      // Gastos / ajustes
+      totalGastos, totalAjusteCajaChica,
+
+      // Caja chica / faltante
+      cajaChicaUsada, faltantePagado,
+
+      // Métricas clave
+      diffEf, totalGeneral
     };
   }, [state, fuente]);
 

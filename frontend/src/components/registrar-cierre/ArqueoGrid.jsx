@@ -45,23 +45,23 @@ export default function ArqueoGrid({ arqueo, setArq }) {
                 <b>Q {totalCaja.toFixed(2)}</b>
               </div>
 
-             {/* 🔹 Apertura de caja (editable, default Q 1,000) */}
-             <div className="rc-row">
-               <span className="rc-cell-label">Apertura de caja</span>
-               <input
-                 className="rc-input"
-                 inputMode="numeric"
-                 value={c.apertura ?? 1000}
-                 onChange={(e) => setArq(i, 'apertura', e.target.value)}
-                 placeholder="1000.00"
-               />
-             </div>
+              {/* Apertura de caja (editable, default Q 1,000) */}
+              <div className="rc-row">
+                <span className="rc-cell-label">Apertura de caja</span>
+                <input
+                  className="rc-input"
+                  inputMode="numeric"
+                  value={c.apertura ?? 1000}
+                  onChange={(e) => setArq(i, 'apertura', e.target.value)}
+                  placeholder="1000.00"
+                />
+              </div>
 
-             {/* 🔹 Total menos apertura (sólo lectura) */}
-             <div className="rc-row rc-total-caja">
-               <span className="rc-cell-label strong">Total menos apertura</span>
-               <b>Q {totalMenosApertura.toFixed(2)}</b>
-             </div>
+              {/* Total menos apertura (sólo lectura) */}
+              <div className="rc-row rc-total-caja">
+                <span className="rc-cell-label strong">Total menos apertura</span>
+                <b>Q {totalMenosApertura.toFixed(2)}</b>
+              </div>
 
               <div className="rc-row rc-row-sep" />
 
