@@ -1,12 +1,18 @@
 // src/RegistrarCierre.js
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  query,
+  where,
+  getDocs,   // 👈 importamos para validar duplicados
+} from 'firebase/firestore';
 import { db } from './firebase';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import './components/registrar-cierre/RegistrarCierre.css';
-
 
 import { todayISO } from './utils/dates';
 import { n } from './utils/numbers';
@@ -179,8 +185,24 @@ export default function RegistrarCierre() {
     if (busy) return;
     if (!validate()) return;
 
+    setBusy(true);
     try {
-      setBusy(true);
+      // 🔎 Validación: un cuadre por sucursal por fecha
+      // Buscamos por fecha y luego filtramos por sucursalId (evita índice compuesto)
+      const cierresRef = collection(db, 'cierres');
+      const fechaQ = query(cierresRef, where('fecha', '==', fecha));
+      const snap = await getDocs(fechaQ);
+      const existe = snap.docs.some((d) => (d.data()?.sucursalId || '') === activeSucursal.id);
+
+      if (existe) {
+        await Swal.fire({
+          icon: 'warning',
+          title: 'Ya existe un cuadre',
+          text: `Ya hay un cuadre registrado para "${activeSucursal.nombre}" en la fecha ${fecha}.`,
+        });
+        return; // 👈 no guardamos
+      }
+
       const payload = {
         fecha,
         sucursalId: activeSucursal.id,
@@ -194,7 +216,8 @@ export default function RegistrarCierre() {
         totales: totals,
         createdAt: serverTimestamp(),
       };
-      await addDoc(collection(db, 'cierres'), payload);
+      await addDoc(cierresRef, payload);
+
       await Swal.fire({
         icon: 'success',
         title: 'Guardado',
