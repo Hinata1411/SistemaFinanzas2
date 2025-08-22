@@ -1,20 +1,29 @@
 // src/components/registrar-cierre/ArqueoGrid.jsx
 import React from 'react';
-import { n } from '../../utils/numbers';
+import { n, toMoney } from '../../utils/numbers';
 
-export default function ArqueoGrid({ arqueo, setArq }) {
+export default function ArqueoGrid({ arqueo, setArq, cajaChicaDisponible = 0 }) {
   const totalEfectivoCaja = (c = {}) =>
     n(c.q100) + n(c.q50) + n(c.q20) + n(c.q10) + n(c.q5) + n(c.q1);
 
   return (
     <section className="rc-card">
-      <h3>Arqueo Físico</h3>
+      {/* Encabezado con Caja Chica a la derecha */}
+      <div
+        className="rc-card-hd"
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}
+      >
+        <h3 style={{ margin: 0 }}>Arqueo Físico</h3>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+          <span className="rc-cell-label strong">Caja Chica:</span>
+          <b>{toMoney(cajaChicaDisponible)}</b>
+        </div>
+      </div>
+
       <div className="rc-sheet rc-sheet-3cols">
         {[0, 1, 2].map((i) => {
           const c = arqueo[i] || {};
           const totalCaja = totalEfectivoCaja(c);
-          const apertura = n(c.apertura ?? 1000);
-          const totalMenosApertura = totalCaja - apertura;
 
           return (
             <div className="rc-col" key={`arq-${i}`}>
@@ -40,27 +49,10 @@ export default function ArqueoGrid({ arqueo, setArq }) {
                 </div>
               ))}
 
+              {/* Total de caja (único mostrado) */}
               <div className="rc-row rc-total-caja">
                 <span className="rc-cell-label strong">Total de caja</span>
                 <b>Q {totalCaja.toFixed(2)}</b>
-              </div>
-
-              {/* Apertura de caja (editable, default Q 1,000) */}
-              <div className="rc-row">
-                <span className="rc-cell-label">Apertura de caja</span>
-                <input
-                  className="rc-input"
-                  inputMode="numeric"
-                  value={c.apertura ?? 1000}
-                  onChange={(e) => setArq(i, 'apertura', e.target.value)}
-                  placeholder="1000.00"
-                />
-              </div>
-
-              {/* Total menos apertura (sólo lectura) */}
-              <div className="rc-row rc-total-caja">
-                <span className="rc-cell-label strong">Total menos apertura</span>
-                <b>Q {totalMenosApertura.toFixed(2)}</b>
               </div>
 
               <div className="rc-row rc-row-sep" />

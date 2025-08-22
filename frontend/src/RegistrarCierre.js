@@ -56,8 +56,6 @@ const emptyArqueoCaja = () => ({
   q1: '',
   tarjeta: '',
   motorista: '',
-  // Apertura por caja (default Q 1,000)
-  apertura: 1000,
 });
 
 const emptyCierreCaja = () => ({
@@ -100,7 +98,7 @@ export default function RegistrarCierre() {
   );
   const cajaChicaDisponible = activeSucursal?.cajaChica || 0;
 
-  // Totales centralizados (AHORA usa el efectivo NETO restando apertura)
+  // Totales centralizados (sin apertura)
   const { totals, flags } = useRegistrarCierreTotals({
     arqueo,
     cierre,
@@ -239,7 +237,7 @@ export default function RegistrarCierre() {
         categorias,
         cajaChicaUsada,
         faltantePagado,
-        // Guardamos los totales (incluye totalArqueoEfectivoNeto)
+        // Guardamos los totales calculados
         totales: { ...totals },
         createdAt: serverTimestamp(),
       };
@@ -331,7 +329,11 @@ export default function RegistrarCierre() {
 
       {/* GRID PRINCIPAL */}
       <div className="rc-grid">
-        <ArqueoGrid arqueo={arqueo} setArq={setArq} />
+        <ArqueoGrid
+          arqueo={arqueo}
+          setArq={setArq}
+          cajaChicaDisponible={cajaChicaDisponible}
+        />
         <CierreGrid cierre={cierre} setCier={setCier} />
       </div>
 
@@ -344,10 +346,14 @@ export default function RegistrarCierre() {
           addGasto={addGasto}
           removeGasto={removeGasto}
           onOpenCategorias={() => setShowCatModal(true)}
+          onUseCajaChica={() => setShowCajaChica(true)}
+          activeSucursalNombre={activeSucursal?.nombre}
+          cajaChicaDisponible={cajaChicaDisponible}
+          faltantePorGastos={faltantePorGastos}
         />
 
         <ResumenPanel
-          totals={totals}      // ya incluye totalArqueoEfectivoNeto y totalGeneral con la nueva fórmula
+          totals={totals}
           flags={flags}
           cajaChicaUsada={cajaChicaUsada}
           onUseCajaChica={() => setShowCajaChica(true)}

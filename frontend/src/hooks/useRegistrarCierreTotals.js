@@ -20,17 +20,6 @@ export function useRegistrarCierreTotals({
     () => (arqueo || []).reduce((acc, c) => acc + totalEfectivoCaja(c), 0),
     [arqueo]
   );
-
-  // 🔹 EFECTIVO NETO (restando apertura por caja, default 1000)
-  const totalArqueoEfectivoNeto = useMemo(
-    () =>
-      (arqueo || []).reduce(
-        (acc, c) => acc + (totalEfectivoCaja(c) - n(c.apertura ?? 1000)),
-        0
-      ),
-    [arqueo]
-  );
-
   const totalArqueoTarjeta = useMemo(
     () => (arqueo || []).reduce((s, c) => s + n(c.tarjeta), 0),
     [arqueo]
@@ -41,11 +30,11 @@ export function useRegistrarCierreTotals({
   );
 
   // ---- CIERRE (SISTEMA)
-  const totalCierreEfectivo  = useMemo(
+  const totalCierreEfectivo = useMemo(
     () => (cierre || []).reduce((s, c) => s + n(c.efectivo), 0),
     [cierre]
   );
-  const totalCierreTarjeta   = useMemo(
+  const totalCierreTarjeta = useMemo(
     () => (cierre || []).reduce((s, c) => s + n(c.tarjeta), 0),
     [cierre]
   );
@@ -60,17 +49,21 @@ export function useRegistrarCierreTotals({
     [gastos]
   );
 
-  // 🔹 Ajuste de caja chica (monto que se "recupera" vía categoría)
+  // Ajuste de caja chica (si lo sigues usando como referencia)
   const totalAjusteCajaChica = useMemo(
-    () => (gastos || []).reduce((s, g) => s + (isAjusteCajaChica(g.categoria) ? n(g.cantidad) : 0), 0),
+    () =>
+      (gastos || []).reduce(
+        (s, g) => s + (isAjusteCajaChica(g.categoria) ? n(g.cantidad) : 0),
+        0
+      ),
     [gastos]
   );
 
-  // ---- DIFERENCIAS (con EFECTIVO NETO)
-  // Regla: neto de arqueo - efectivo del sistema
+  // ---- DIFERENCIAS (usando DIRECTAMENTE el efectivo de arqueo)
+  // Regla: efectivo de arqueo - efectivo del sistema
   const diferenciaEfectivo = useMemo(
-    () => totalArqueoEfectivoNeto - totalCierreEfectivo,
-    [totalArqueoEfectivoNeto, totalCierreEfectivo]
+    () => totalArqueoEfectivo - totalCierreEfectivo,
+    [totalArqueoEfectivo, totalCierreEfectivo]
   );
   const faltanteEfectivo = useMemo(
     () => Math.max(0, -diferenciaEfectivo),
@@ -79,15 +72,15 @@ export function useRegistrarCierreTotals({
 
   // Para cubrir gastos considerando caja chica y faltante pagado
   const faltantePorGastos = useMemo(() => {
-    const diff = totalGastos - totalArqueoEfectivoNeto - n(cajaChicaUsada) - n(faltantePagado);
+    const diff = totalGastos - totalArqueoEfectivo - n(cajaChicaUsada) - n(faltantePagado);
     return diff > 0 ? diff : 0;
-  }, [totalGastos, totalArqueoEfectivoNeto, cajaChicaUsada, faltantePagado]);
+  }, [totalGastos, totalArqueoEfectivo, cajaChicaUsada, faltantePagado]);
 
-  // 🔹 TOTAL A DEPOSITAR (según tu regla):
-  //   neto arqueo − gastos + cajaChicaUsada + faltantePagado
+  // ---- TOTAL A DEPOSITAR
+  //   efectivo de arqueo − gastos + cajaChicaUsada + faltantePagado
   const totalGeneral = useMemo(
-    () => totalArqueoEfectivoNeto - totalGastos + n(cajaChicaUsada) + n(faltantePagado),
-    [totalArqueoEfectivoNeto, totalGastos, cajaChicaUsada, faltantePagado]
+    () => totalArqueoEfectivo - totalGastos + n(cajaChicaUsada) + n(faltantePagado),
+    [totalArqueoEfectivo, totalGastos, cajaChicaUsada, faltantePagado]
   );
 
   const flags = useMemo(
@@ -103,8 +96,7 @@ export function useRegistrarCierreTotals({
   return {
     totals: {
       // Arqueo
-      totalArqueoEfectivo,        // bruto (referencia)
-      totalArqueoEfectivoNeto,    // 👈 usar este para diferencias y depósito
+      totalArqueoEfectivo, // 👈 valor único de referencia
       totalArqueoTarjeta,
       totalArqueoMotorista,
 
@@ -115,7 +107,7 @@ export function useRegistrarCierreTotals({
 
       // Gastos / ajustes
       totalGastos,
-      totalAjusteCajaChica,       // disponible si quieres mostrarlo
+      totalAjusteCajaChica,
 
       // Diferencias
       diferenciaEfectivo,

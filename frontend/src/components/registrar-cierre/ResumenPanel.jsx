@@ -2,16 +2,12 @@
 import React from 'react';
 import { toMoney } from '../../utils/numbers';
 
-
 export default function ResumenPanel({
   totals,
   flags,
   cajaChicaUsada,
-  onUseCajaChica,
   onPagarFaltante,
   faltantePagado,
-  activeSucursalNombre,
-  cajaChicaDisponible,
 }) {
   const {
     totalArqueoEfectivo,
@@ -23,12 +19,10 @@ export default function ResumenPanel({
     totalGastos,
     diferenciaEfectivo,
     faltanteEfectivo,
-    faltantePorGastos,
     totalGeneral,
   } = totals;
 
   const { diffEsPositivo, diffLabel, diffAbs, isDepositNegative } = flags;
-  const showCajaChicaBtn = faltantePorGastos > 0;
 
   return (
     <section className="rc-card">
@@ -56,6 +50,7 @@ export default function ResumenPanel({
             <b>{toMoney(cajaChicaUsada)}</b>
           </div>
 
+          {/* Diferencia faltante/sobrante */}
           <div className={`rc-res-item ${diffEsPositivo ? 'ok' : 'bad'}`}>
             <span>{diffLabel}</span>
             <b>{toMoney(diffAbs)}</b>
@@ -83,7 +78,7 @@ export default function ResumenPanel({
 
           <div className="rc-res-item">
             <span>Efectivo</span>
-            <b>{toMoney(totals.totalArqueoEfectivoNeto ?? totalArqueoEfectivo)}</b>
+            <b>{toMoney(totalArqueoEfectivo)}</b>
           </div>
           <div className="rc-res-item">
             <span>Tarjeta</span>
@@ -97,21 +92,6 @@ export default function ResumenPanel({
             <span>Gastos</span>
             <b>{toMoney(totalGastos)}</b>
           </div>
-
-          {showCajaChicaBtn && (
-            <div className="rc-res-item">
-              <button
-                type="button"
-                className="rc-btn rc-btn-outline"
-                onClick={onUseCajaChica}
-                title={`Disponible en ${activeSucursalNombre || 'sucursal'}: ${toMoney(
-                  cajaChicaDisponible
-                )}`}
-              >
-                Utilizar caja chica
-              </button>
-            </div>
-          )}
         </div>
       </div>
 

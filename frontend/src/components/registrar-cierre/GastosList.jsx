@@ -1,5 +1,6 @@
 // src/components/registrar-cierre/GastosList.jsx
 import React from 'react';
+import { toMoney } from '../../utils/numbers';
 
 export default function GastosList({
   gastos,
@@ -8,11 +9,33 @@ export default function GastosList({
   addGasto,
   removeGasto,
   onOpenCategorias,
+  // NUEVAS PROPS para caja chica:
+  onUseCajaChica,
+  activeSucursalNombre,
+  cajaChicaDisponible,
+  faltantePorGastos,
 }) {
+  const showCajaChicaBtn = Number(faltantePorGastos) > 0;
+
   return (
     <section className="rc-card">
-      <div className="rc-card-hd">
-        <h3>Gastos</h3>
+      <div className="rc-card-hd" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <h3 style={{ margin: 0, flex: '1 1 auto' }}>Gastos</h3>
+
+        {/* Botón mover a este componente */}
+        {showCajaChicaBtn && (
+          <button
+            type="button"
+            className="rc-btn rc-btn-outline"
+            onClick={onUseCajaChica}
+            title={`Disponible en ${activeSucursalNombre || 'sucursal'}: ${toMoney(
+              cajaChicaDisponible
+            )}`}
+          >
+            Utilizar caja chica
+          </button>
+        )}
+
         <button type="button" className="rc-btn rc-btn-outline" onClick={onOpenCategorias}>
           Categorías
         </button>
