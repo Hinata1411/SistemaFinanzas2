@@ -1,29 +1,60 @@
-import React, { useState } from 'react';
+// src/DashboardLayout.jsx
+import React, { useEffect, useState } from 'react';
 import { Outlet, useNavigate, NavLink } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import './DashboardLayout.css';
 
 function DashboardLayout({ userEmail, userRole }) {
   const navigate = useNavigate();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // drawer solo en móvil
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
+  // Email mostrado en el footer del sidebar
   const email = userEmail || localStorage.getItem('email') || 'user@example.com';
 
-  // === Rol: 'admin' o 'viewer' ===
-  const role = (userRole || localStorage.getItem('role') || 'viewer').toLowerCase();
+  // Helper para leer/normalizar rol
+  const getRole = () =>
+    String(userRole || localStorage.getItem('role') || 'viewer').toLowerCase();
+
+  // Rol sincronizado con localStorage y prop
+  const [role, setRole] = useState(getRole());
   const isAdmin = role === 'admin';
 
- const handleLogout = () => {
-  localStorage.removeItem('token');
-  localStorage.removeItem('role');
-  localStorage.removeItem('email');
-  navigate('/login');
-};
+  useEffect(() => {
+    // Al montar o si cambia userRole: refresca rol
+    setRole(getRole());
+
+    // Si cambia en otra pestaña
+    const onStorage = (e) => {
+      if (e.key === 'role') setRole(String(e.newValue || 'viewer').toLowerCase());
+    };
+
+    // Al volver a la pestaña (por si el rol se guardó justo antes de navegar)
+    const onFocus = () => setRole(getRole());
+
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', onFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userRole]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('role');
+    localStorage.removeItem('email');
+    navigate('/login', { replace: true });
+  };
+
   return (
     <div className="admin-container">
       <Helmet>
         <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" />
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap"
+        />
       </Helmet>
 
       {/* Sidebar fija en desktop / drawer en móvil */}
@@ -48,31 +79,45 @@ function DashboardLayout({ userEmail, userRole }) {
           <ul className="menu">
             <li className="menu-item">
               {/* end => activo SOLO en /home exacto */}
-              <NavLink to="/home" end className={({isActive}) => `menu-link ${isActive ? 'active' : ''}`}>
+              <NavLink
+                to="/home"
+                end
+                className={({ isActive }) => `menu-link ${isActive ? 'active' : ''}`}
+              >
                 <img src="/casa.png" alt="" />
                 <span>Home</span>
               </NavLink>
             </li>
 
-            {/* ✅ Ventas SIN submenú */}
+            {/* Ventas */}
             <li className="menu-item">
-              <NavLink to="Ventas" className={({isActive}) => `menu-link ${isActive ? 'active' : ''}`}>
+              <NavLink
+                to="Ventas"
+                className={({ isActive }) => `menu-link ${isActive ? 'active' : ''}`}
+              >
                 <img src="/factura.png" alt="" />
                 <span>Ventas</span>
               </NavLink>
             </li>
 
+            {/* Sucursales */}
             <li className="menu-item">
-              <NavLink to="Sucursales" className={({isActive}) => `menu-link ${isActive ? 'active' : ''}`}>
+              <NavLink
+                to="Sucursales"
+                className={({ isActive }) => `menu-link ${isActive ? 'active' : ''}`}
+              >
                 <img src="/pizza3.png" alt="" />
                 <span>Sucursales</span>
               </NavLink>
             </li>
 
-            {/* 👇 Solo administradores ven "Usuarios" */}
+            {/* Solo administradores ven "Usuarios" */}
             {isAdmin && (
               <li className="menu-item">
-                <NavLink to="Usuarios" className={({isActive}) => `menu-link ${isActive ? 'active' : ''}`}>
+                <NavLink
+                  to="Usuarios"
+                  className={({ isActive }) => `menu-link ${isActive ? 'active' : ''}`}
+                >
                   <img src="/agregaru.png" alt="" />
                   <span>Usuarios</span>
                 </NavLink>
@@ -90,14 +135,19 @@ function DashboardLayout({ userEmail, userRole }) {
               <span className="name">{email.split('@')[0] || 'Usuario'}</span>
               <span className="email">{email}</span>
             </div>
-            <button onClick={handleLogout} className="logout-button" type="button" title="Cerrar sesión">
+            <button
+              onClick={handleLogout}
+              className="logout-button"
+              type="button"
+              title="Cerrar sesión"
+            >
               <img src="/cerrarsesion.png" alt="" width="22" height="22" />
             </button>
           </div>
         </div>
       </aside>
 
-      {/* Botón para abrir drawer en móvil (no hay overlay) */}
+      {/* Botón para abrir drawer en móvil */}
       <button
         type="button"
         className="mobile-trigger"

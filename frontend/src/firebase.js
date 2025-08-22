@@ -1,10 +1,12 @@
-// Import the functions you need from the SDKs you need
+// src/firebase.js
+// SDKs Firebase v9 (modular)
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
-import { getStorage } from 'firebase/storage'; 
+import { getStorage } from 'firebase/storage';
 
+// ⚠️ Usa tus propias credenciales
 const firebaseConfig = {
   apiKey: "AIzaSyBL8onIxodd41sUUc8r9JLQg4lLwGPSmzc",
   authDomain: "grafica-ventas.firebaseapp.com",
@@ -15,20 +17,36 @@ const firebaseConfig = {
   measurementId: "G-QE8FMBLSL0"
 };
 
+// Inicializa Firebase una sola vez
 const app = initializeApp(firebaseConfig);
+
+// Servicios que usas en la app
 const auth = getAuth(app);
 const db = getFirestore(app);
-const messaging = getMessaging(app);
-const storage = getStorage(app); 
+const storage = getStorage(app);
+
+// ✅ OJO: getMessaging puede requerir https/localhost y service worker.
+// Si no lo usas aún, no lo invoques en sitios críticos de carga.
+let messaging;
+try {
+  messaging = getMessaging(app);
+} catch (e) {
+  // Si el navegador no soporta FCM o no estás en HTTPS/localhost,
+  // evita romper la app.
+  console.warn('FCM no disponible en este entorno:', e?.message || e);
+  messaging = undefined;
+}
 
 export {
   app,
   auth,
   db,
-  messaging,
-  storage, 
+  storage,
+  // Auth helpers (si prefieres importarlos desde aquí)
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
+  // FCM (si lo usas)
+  messaging,
   getToken,
-  onMessage
+  onMessage,
 };

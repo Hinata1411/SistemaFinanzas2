@@ -1,9 +1,10 @@
 // src/auth/authService.js
-// Ajusta la ruta si tu firebase está en otro lugar o requiere extensión .js
-import { auth, db, signInWithEmailAndPassword } from '../firebase';
+import { auth } from '../firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { db } from '../firebase';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 
-/** Lee la colección 'usuarios' y devuelve [{email, username}] */
+/** Lee la colección 'usuarios' y devuelve [{email, username, role?}] */
 export async function fetchUsersForSelect() {
   const qs = await getDocs(collection(db, 'usuarios'));
   return qs.docs.map((snap) => {
@@ -11,13 +12,14 @@ export async function fetchUsersForSelect() {
     return {
       email: d.email,
       username: d.username || d.email,
+      role: d.role || d.rol || (d.isAdmin ? 'admin' : undefined),
     };
   });
 }
 
 /**
- * Login con Firebase, obtiene idToken, lo manda al backend y guarda token/email en localStorage.
- * Devuelve { user, backend }
+ * Login con Firebase, postea idToken a tu backend y guarda token/email.
+ * Devuelve { user, token, role?, backend }
  */
 export async function loginAndGetBackendToken(email, password) {
   const cred = await signInWithEmailAndPassword(auth, email, password);
@@ -43,13 +45,17 @@ export async function loginAndGetBackendToken(email, password) {
   }
 
   const data = await resp.json();
-  if (data?.token) {
-    localStorage.setItem('token', data.token);
-  } else {
-    throw new Error(data?.message || 'Respuesta inválida del servidor');
-  }
+  if (!data?.token) throw new Error(data?.message || 'Respuesta inválida del servidor');
 
-  return { user, backend: data };
+  // Guarda el token para PrivateRoute
+  localStorage.setItem('token', data.token);
+
+  return {
+    user,
+    token: data.token,
+    role: data.role || data.rol, // si tu backend lo manda
+    backend: data,
+  };
 }
 
 /** (Opcional) Obtiene doc de usuario para rol u otros datos */
@@ -59,5 +65,4 @@ export async function getUserDoc(uid) {
   return snap.exists() ? snap.data() : null;
 }
 
-// Export default opcional
 export default { fetchUsersForSelect, loginAndGetBackendToken, getUserDoc };

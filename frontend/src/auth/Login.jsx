@@ -19,11 +19,67 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [remember, setRemember] = useState(() => !!localStorage.getItem('remember_email'));
 
-  // Fallback simple: correos que serán admin si el backend no manda rol
+  // === Fallback: correos admin si el backend/JWT/lista no trae rol ===
   const ADMIN_EMAILS = [
-    // <-- agrega tus correos admin aquí
+    'auxiliar.vipizzal@gmail.com', // <-- agregado
     'admin@example.com'
   ];
+
+  // Decode seguro para JWT base64url
+  const decodeJwtPayload = (token) => {
+    try {
+      const base64Url = (token || '').split('.')[1] || '';
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const json = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      return JSON.parse(json);
+    } catch { return {}; }
+  };
+
+  // Normaliza string
+  const lower = (v) => (v ?? '').toString().trim().toLowerCase();
+
+  // Resuelve 'admin' | 'viewer' desde: respuesta login -> JWT -> lista usuarios -> fallback por correo
+  const resolveRole = (loginRes, selectedEmail, usersList) => {
+    // 1) loginRes.role
+    if (loginRes && typeof loginRes === 'object' && loginRes.role) {
+      return lower(loginRes.role);
+    }
+
+    // 2) JWT
+    const token = typeof loginRes === 'string' ? loginRes : loginRes?.token;
+    if (token) {
+      const p = decodeJwtPayload(token);
+      const jwtRole = lower(p.role || p.rol || p['https://example.com/role']);
+      if (jwtRole) return jwtRole;
+      if (typeof p.isAdmin === 'boolean' || typeof p.admin === 'boolean') {
+        return (p.isAdmin || p.admin) ? 'admin' : 'viewer';
+      }
+    }
+
+    // 3) Lista de usuarios (por si fetchUsersForSelect trae el rol)
+    if (Array.isArray(usersList) && usersList.length) {
+      const u = usersList.find(x => lower(x.email) === lower(selectedEmail));
+      if (u) {
+        const fromUser =
+          lower(u.role) ||
+          lower(u.rol) ||
+          lower(u.type) ||
+          lower(u?.perfil?.nombre);
+        if (fromUser === 'admin' || fromUser === 'viewer') return fromUser;
+        if (typeof u.isAdmin === 'boolean') return u.isAdmin ? 'admin' : 'viewer';
+      }
+    }
+
+    // 4) Fallback por correo
+    if (ADMIN_EMAILS.map(lower).includes(lower(selectedEmail))) return 'admin';
+
+    return 'viewer';
+  };
 
   useEffect(() => {
     (async () => {
@@ -40,29 +96,6 @@ export default function Login() {
     })();
   }, []);
 
-  // Extrae rol desde el resultado o desde un JWT (si viene)
-  const extractRole = (loginRes, selectedEmail) => {
-    try {
-      if (loginRes && typeof loginRes === 'object') {
-        if (loginRes.role) return String(loginRes.role).toLowerCase();
-        if (loginRes.token && typeof loginRes.token === 'string') {
-          const payload = JSON.parse(atob(loginRes.token.split('.')[1] || ''));
-          return String(
-            payload.role || payload.rol || payload['https://example.com/role'] || ''
-          ).toLowerCase();
-        }
-      }
-      if (typeof loginRes === 'string') {
-        const payload = JSON.parse(atob(loginRes.split('.')[1] || ''));
-        return String(payload.role || payload.rol || '').toLowerCase();
-      }
-    } catch (_) { /* noop */ }
-
-    // Fallback por correo si no vino rol
-    if (selectedEmail && ADMIN_EMAILS.includes(selectedEmail.toLowerCase())) return 'admin';
-    return 'viewer';
-  };
-
   const onSubmit = async (e) => {
     e.preventDefault();
     setErr(''); setInfo('');
@@ -73,15 +106,21 @@ export default function Login() {
       if (remember) localStorage.setItem('remember_email', email);
       else localStorage.removeItem('remember_email');
 
-      // Puede devolver { token, role } o un token string.
+      // Puede devolver { token, role, ... } o solo token string
       const loginRes = await loginAndGetBackendToken(email.trim(), pwd.trim());
 
-      // Guarda email (útil para el header/sidebar)
+      // Guarda token si viene (para PrivateRoute)
+      let token = '';
+      if (typeof loginRes === 'string') token = loginRes;
+      else if (loginRes?.token) token = loginRes.token;
+      if (token) localStorage.setItem('token', token);
+
+      // Guarda email
       localStorage.setItem('email', email.trim());
 
-      // Determina y guarda el rol
-      const role = extractRole(loginRes, email.trim());
-      localStorage.setItem('role', role); // 'admin' o 'viewer'
+      // Determina y guarda el rol (admin/viewer)
+      const role = resolveRole(loginRes, email.trim(), users);
+      localStorage.setItem('role', role);
 
       navigate(from, { replace: true });
     } catch (e) {
@@ -121,8 +160,7 @@ export default function Login() {
         <aside className="hero">
           <div className="hero-inner">
             <div className="hero-badge">
-              {/* fix: class -> className */}
-              <img src="/Logosinfondo.png" alt="Brand" className="brand-logo"/> 
+              <img src="/Logosinfondo.png" alt="Brand" className="brand-logo"/>
             </div>
             <div className="hero-brand">American Pizza By Vipizza</div>
             <h1 className="hero-title">Sistema<br/>Finanzas</h1>

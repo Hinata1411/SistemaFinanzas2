@@ -9,7 +9,7 @@ import Ventas from './Ventas';
 import Sucursales from './Sucursales';
 import Usuarios from './Usuarios';
 import Login from './auth/Login';
-import { RequireAdmin } from './router/guards';  // <-- con esto basta
+import { RequireAdmin } from './router/guards';
 
 function App() {
   return (
@@ -33,7 +33,7 @@ function App() {
           <Route path="Ventas" element={<Ventas />} />
           <Route path="Sucursales" element={<Sucursales />} />
 
-          {/* 👇 solo ADMIN puede entrar */}
+          {/* solo ADMIN puede entrar */}
           <Route
             path="Usuarios"
             element={
