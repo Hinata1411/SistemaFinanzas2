@@ -1,3 +1,4 @@
+/* src/components/registrar-cierre/RegistrarCierre.css */
 :root{
   --primary:#14B866;
   --dark:#0F3D2E;
@@ -12,23 +13,38 @@
 /* Layout general */
 .rc-shell{
   width:100%;
-  padding: 8px clamp(12px, 2.8vw, 28px);
+  padding: 8px clamp(1px, 2.8vw, 1px);
+  gap: 16px;
 }
 
-/* Header */
+/* Header (izquierda: título + fecha; derecha: acciones) */
 .rc-header{
-  display:flex; align-items:center; gap:16px;
+  display:flex; 
+  align-items:flex-start; 
   justify-content:space-between;
-  margin-bottom: 12px;
+  gap:16px;
+  margin-bottom: 8px;
 }
 .rc-header h1{
   margin:0; color:var(--dark);
   font-size: clamp(24px, 4.2vw, 44px);
   font-weight:800; letter-spacing:.2px;
 }
-.rc-header-right{
-  display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap;
+.rc-header-left{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  align-items:flex-start;
 }
+
+.rc-actions{
+  display:flex; 
+  gap:8px; 
+  flex-wrap:wrap; 
+  justify-content:flex-end;
+}
+
+/* Fecha */
 .rc-date{ display:flex; flex-direction:column; gap:6px; }
 .rc-date label{ font-weight:700; color:var(--dark); }
 .rc-date input[type="date"]{
@@ -48,10 +64,26 @@
   cursor:pointer;
 }
 .rc-btn:hover{ background:#f9fafb; color:black; }
+
+/* Verde (primary) para "Regresar a Ventas" */
 .rc-btn-primary{
-  background:var(--primary); color:#fff; border-color:var(--primary);
+  background:var(--primary); 
+  color:#fff; 
+  border-color:var(--primary);
 }
 .rc-btn-primary:hover{ filter:brightness(.98); }
+
+/* Acento (accent) para "Guardar" */
+.rc-btn-accent{
+  display: flex;
+  background:var(--accent);
+  color:#fff;
+  border-color:var(--accent);
+  justify-content:flex-end;
+  margin-top: 10px;
+}
+.rc-btn-accent:hover{ filter:brightness(.98); }
+
 .rc-btn-outline{
   background:#fff; color:var(--slate);
 }
@@ -59,27 +91,112 @@
   background:transparent; border:1px solid #e7e2d9; color:#b42323;
 }
 
-/* Tabs sucursales */
-.rc-tabs{ display:flex; gap:8px; flex-wrap:wrap; margin: 8px 0 12px; }
-.rc-tab{
-  border:1px solid #e7e2d9; border-radius:12px; padding:8px 12px;
-  background:#fff; font-weight:700; cursor:pointer; color:var(--slate);
+/* ===== Sucursales (pestañas como navegador, pegadas al ArqueoGrid) ===== */
+.rc-tabs-row{
+  display:flex;
+  align-items:flex-end;           /* importante para “pegar” la base de la pestaña */
+  justify-content:space-between;
+  gap:0px;
+  margin: 20px 0 0;              /* sin espacio debajo; pegaremos con -1px en las tabs */
+  position: relative;
+  z-index: 2;  
+  margin-left: 15px;                   /* por encima del borde de la tarjeta */
 }
-.rc-tab:hover{ background:#f9fafb; }
-.rc-tab.active{
-  background:linear-gradient(135deg, var(--primary), #0ebb59);
-  color:#fff; border-color:var(--primary);
+
+/* listado de tabs (scrollable si no caben) */
+.rc-tabs{
+  display:flex;
+  align-items:center;
+  gap:0px;
+  overflow-x:auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  flex: 1 1 auto;
+  padding: 2 2px;
 }
-.rc-tab-empty{ color:#6b7280; padding:8px 0; }
+.rc-tabs::-webkit-scrollbar{ display:none; }
+
+/* botón Guardar a la derecha */
+.rc-tabs-actions{
+  flex: 0 0 auto;
+  display:flex; align-items:center;
+}
+
+/* estilo base de “pestaña” */
+.rc-tabs-browser .rc-tab{
+  position: relative;
+  border:1px solid #e7e2d9;
+  border-bottom: 0;                         /* <- sin borde abajo para que se funda */
+  border-radius: 14px 14px 0 0;             /* redondeado arriba, plano abajo */
+  padding: 9px 16px;
+  background:#f3f5f7;                       /* suave neutro */
+  font-weight:800;
+  color:var(--slate);
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(0,0,0,.06);
+  transition: background .2s ease, transform .05s ease, box-shadow .2s ease;
+  margin-bottom: -1px;                      /* <- solapa 1px sobre la tarjeta */
+}
+.rc-tabs-browser .rc-tab:hover{
+  background:#eef2f4;
+  transform: translateY(-1px);
+}
+
+/* pestaña activa: blanca, sin sombra y “fundiéndose” con la tarjeta */
+.rc-tabs-browser .rc-tab.active{
+  background:#fff;
+  color:var(--dark);
+  border-color:#e7e2d9;
+  box-shadow:none;
+  z-index: 3;
+}
+/* pequeño truco para tapar el borde superior de la tarjeta justo bajo la pestaña activa */
+.rc-tabs-browser .rc-tab.active::after{
+  content:"";
+  position:absolute;
+  left:-1px; right:-1px; bottom:-1px;
+  height:1px;
+  background:#fff;
+}
+
+/* Cuando hay tabs “pegadas” queremos que la primera tarjeta (ArqueoGrid)
+   quede debajo y se funda con la pestaña activa */
+.rc-tabs-attached + .rc-grid > .rc-card:first-child,
+.rc-tabs-attached + .rc-card{         /* por si ArqueoGrid no está dentro de .rc-grid */
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+  margin-top: 0;
+}
+
+/* Ajuste de separación vertical general entre las tabs y el contenido */
+.rc-tabs-attached + .rc-grid { margin-top: 0; }
 
 /* Cards y grid */
-.rc-grid{ display:grid; grid-template-columns: 1fr; gap:16px; }
-.rc-grid-bottom{ display:grid; grid-template-columns: 1fr; }
+.rc-grid{ 
+  display:grid; 
+  grid-template-columns: 1fr; 
+  gap:16px; 
+}
+.rc-grid-bottom{ 
+
+  margin-top: 18px;
+  display:grid; 
+  grid-template-columns: 1fr;
+  gap:16px;
+}
+
+.rc-bill-ico { color: gray; }
+
+
 .rc-card{
-  background:#fff; border:1px solid #e7e2d9; border-radius:var(--radius);
+  background:#fff; 
+  border:1px solid #e7e2d9; 
+  border-radius:var(--radius);
   padding:16px; box-shadow: var(--shadow);
 }
-.rc-card h3{ margin:0; color:var(--dark); }
+.rc-card h3{ 
+  margin-bottom: 10px; 
+  color:var(--dark); }
 .rc-card-hd{
   display:flex; align-items:center; justify-content:space-between;
   margin-bottom:10px;
@@ -98,9 +215,9 @@
 .rc-cell-label.strong{ color:var(--dark); }
 
 .rc-input{
-  width:140px; max-width: 45%;
+  width:90px; max-width: 35%;
   padding:8px 10px; border:1px solid #e0ded7; border-radius:10px;
-  background:#fff; color:var(--slate);
+  background:#fff; color:#1F2937;
 }
 .rc-select{ width:200px; }
 
@@ -149,7 +266,7 @@
   border:1px solid #f0ece6;
   border-radius:12px;
   background:#f9fafb;
-  color:var(--slate);
+  color:#1F2937;
   font-weight:700;
 }
 .rc-res-item + .rc-res-item{ margin-top:8px; }
@@ -184,43 +301,24 @@
 .rc-total-deposit b{ color:var(--primary); font-size:1.1rem; }
 
 /* Total a depositar en negativo */
-.rc-total-deposit.bad{
-  border-color: #b42323;
-}
-
+.rc-total-deposit.bad{ border-color: #b42323; }
 .rc-total-deposit.bad .money,
-.rc-total-deposit.bad b{
-  color: #b42323;
-}
-
-/* (Opcional) si usas la clase directa en el <b> */
-.rc-total-deposit b.neg{
-  color: #b42323;
-}
+.rc-total-deposit.bad b{ color: #b42323; }
 
 /* Comentario */
 .rc-comentario{ margin-top:14px; }
-.rc-comentario label{
-  display:block;
-  font-weight:800;
-  color:var(--dark);
-  margin-bottom:6px;
-}
 .rc-comentario textarea{
   width:100%;
   padding:12px;
   border:1px solid #cfe8db;
   border-radius:12px;
-  background: #cfeee0;          /* verde pastel */
+  background: #cfeee0;
   color:#12352b;
   outline:none;
   resize: vertical;
   box-shadow: inset 0 1px 2px rgba(0,0,0,.03);
 }
-.rc-comentario textarea::placeholder{
-  color:#2f6a57;
-  opacity:.8;
-}
+.rc-comentario textarea::placeholder{ color:#2f6a57; opacity:.8; }
 
 /* ===== Modal Categorías ===== */
 .rc-modal-mask{
@@ -246,24 +344,16 @@
 .rc-input-sm{
   width:220px;
   padding:8px 10px; border:1px solid #e0ded7; border-radius:10px;
-  background:#fff; color:var(--slate);
+  background:#fff; color:#1F2937;
 }
 
 .rc-modal-body{ overflow:auto; max-height:70vh; }
 
 /* Tabla simple */
-.rc-table{
-  width:100%; border-collapse: collapse; background:#fff;
-}
-.rc-table th, .rc-table td{
-  border:1px solid #eee; padding:10px; text-align:left;
-}
-.rc-table thead th{
-  background:#f9fafb; color:#374151; font-weight:800;
-}
-.rc-td-actions{
-  display:flex; gap:8px; flex-wrap:wrap;
-}
+.rc-table{ width:100%; border-collapse: collapse; background:#fff; }
+.rc-table th, .rc-table td{ border:1px solid #eee; padding:10px; text-align:left; }
+.rc-table thead th{ background:#f9fafb; color:#374151; font-weight:800; }
+.rc-td-actions{ display:flex; gap:8px; flex-wrap:wrap; }
 .rc-empty{ text-align:center; color:#6b7280; padding:14px; }
 
 /* Responsive */
@@ -275,3 +365,98 @@
   .rc-select{ width:100%; }
   .rc-qty{ width:120px; }
 }
+@media (max-width: 700px){
+  .rc-header{ 
+    flex-direction:column; 
+    align-items:stretch; 
+    gap:10px; 
+  }
+  .rc-actions{
+    justify-content:flex-start;
+  }
+  .rc-tabs-row{
+    flex-direction:column;
+    align-items:stretch;
+    gap:3px;
+  }
+  .rc-tabs-actions{
+    justify-content:flex-start;
+  }
+}
+
+/* --- Adjuntar tabs al card y ocultar la línea de unión --- */
+.rc-tabs-row.rc-tabs-attached{
+  position: relative;
+  z-index: 3;             /* por encima del borde del card */
+  margin-bottom: 0;       /* sin espacio bajo las tabs */
+}
+
+/* “Puente” blanco que tapa el borde superior del card en toda la fila, 
+   incluyendo debajo del botón Guardar */
+.rc-tabs-row.rc-tabs-attached::after{
+  content:"";
+  position:absolute;
+  left:0; right:0;
+  bottom:-1px;            /* se solapa 1px sobre el card */
+  height:2px;             /* lo justo para cubrir el borde */
+  background:#fff;        /* mismo color que el card */
+  pointer-events:none;
+}
+
+/* El primer card (Arqueo Físico) debajo de las tabs: sin borde superior */
+.rc-tabs-attached + .rc-grid > .rc-card:first-child,
+.rc-tabs-attached + .rc-card{
+  border-top: 0;                 /* QUITA el borde superior */
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+  margin-top: 0;
+}
+
+/* (Opcional) ya no hace falta el “after” de la pestaña activa; 
+   si lo tenías, elimínalo o déjalo sin efecto */
+.rc-tabs-browser .rc-tab.active::after{
+  content: none;
+}
+
+/* ===== Visor de adjuntos (modal grande) ===== */
+.rc-viewer-card{
+  width: min(980px, 96vw);
+  height: min(88vh, 900px);
+  display: flex;
+  flex-direction: column;
+}
+
+.rc-viewer-body{
+  flex: 1 1 auto;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #e7e2d9;
+  border-radius: 12px;
+  padding: 8px;
+}
+
+/* Imagen dentro del visor */
+.rc-viewer-img{
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+  border-radius: 8px;
+}
+
+/* PDF en iframe */
+.rc-viewer-iframe{
+  width: 100%;
+  height: calc(88vh - 120px);
+  border: 0;
+  border-radius: 8px;
+}
+
+/* Botón que envuelve el thumbnail */
+.rc-preview-btn{
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+.rc-preview-btn:focus{ outline: 2px solid #cfe8db; border-radius: 10px; }

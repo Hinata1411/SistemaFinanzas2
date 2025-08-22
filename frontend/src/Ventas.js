@@ -1,21 +1,19 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import { deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { deleteDoc, doc } from 'firebase/firestore';
 import { db } from './firebase';
 
 import { useCuadres } from './hooks/useCuadres';
-import { useCuadreEdicion } from './hooks/useCuadreEdicion';
 import { n } from './utils/numbers';
 import { getTodayLocalISO, formatDate } from './utils/dates';
 import KpiCards from './components/ventas/KpiCards';
 import VentasTable from './components/ventas/VentasTable';
-import DetalleCuadreModal from './components/ventas/DetalleCuadreModal';
 import GroupDownloadModal from './components/ventas/GroupDownloadModal';
 import { exportSingleCuadrePdf, exportGroupedPdf } from './pdf/exportadores';
 import './components/ventas/Ventas.css';
 
-const MODAL_BASE = `/* pega aquí tu string de estilos base */`;
+const MODAL_BASE = `/* (sin uso ya, puedes borrar si quieres) */`;
 
 export default function Ventas() {
   const navigate = useNavigate();
@@ -48,33 +46,25 @@ export default function Ventas() {
     return `${formatDate(best.fecha)} (${fmtQ(max)})`;
   }, [cuadres]);
 
-  // Detalle/edición
-  const [showDetail, setShowDetail] = useState(false);
-  const [seleccionado, setSeleccionado] = useState(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const { state: edit, dispatch, cargar, metrics } = useCuadreEdicion(seleccionado);
-  
-
-  const handleVer = (c) => { setSeleccionado(c); setIsEditing(false); setShowDetail(true); };
-  const handleEditar = (c) => { setSeleccionado(c); setIsEditing(true); cargar(c); setShowDetail(true); };
+  // Navegar a RegistrarCierre con modo
+  const handleVer = (c) => {
+    navigate(`/home/RegistrarCierre?id=${c.id}&mode=view`);
+  };
+  const handleEditar = (c) => {
+    navigate(`/home/RegistrarCierre?id=${c.id}&mode=edit`);
+  };
 
   const handleEliminar = async (id) => {
-    const confirmar = await Swal.fire({ title:'¿Eliminar registro?', text:'Esta acción no se puede deshacer.', icon:'warning', showCancelButton:true });
+    const confirmar = await Swal.fire({
+      title:'¿Eliminar registro?',
+      text:'Esta acción no se puede deshacer.',
+      icon:'warning',
+      showCancelButton:true
+    });
     if (!confirmar.isConfirmed) return;
     await deleteDoc(doc(db, 'cierres', id));
     Swal.fire('Eliminado', 'El registro ha sido eliminado.', 'success');
-    setShowDetail(false); setSeleccionado(null); await refetch();
-  };
-
-  const handleGuardar = async () => {
-    if (!seleccionado || !edit) return;
-    await updateDoc(doc(db, 'cierres', seleccionado.id), {
-      ...edit,
-      cajaChicaUsada: n(edit.cajaChicaUsada),
-      faltantePagado: n(edit.faltantePagado),
-    });
-    Swal.fire({ icon:'success', title:'Actualizado', timer:1600, showConfirmButton:false });
-    setShowDetail(false); setSeleccionado(null); await refetch();
+    await refetch();
   };
 
   // PDFs
@@ -91,8 +81,21 @@ export default function Ventas() {
       <header className="ventas-header">
         <h1>Ventas</h1>
         <div className="ventas-actions">
-          <button className="btn btn-accent" onClick={() => navigate('/home/RegistrarCierre')}>Registrar Cuadre</button>
-          <button className="btn btn-primary" onClick={() => { setSelectedIds(cuadres.map(c=>c.id)); setShowGroup(true); }}>Descargar PDF Agrupado</button>
+          <button
+            className="btn btn-accent"
+            onClick={() => navigate('/home/RegistrarCierre')}
+          >
+            Registrar Cuadre
+          </button>
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              setSelectedIds(cuadres.map(c=>c.id));
+              setShowGroup(true);
+            }}
+          >
+            Descargar PDF Agrupado
+          </button>
         </div>
       </header>
 
@@ -110,7 +113,12 @@ export default function Ventas() {
         </div>
       </div>
 
-      <KpiCards totalVentas={totalVentas} promedioVentas={promedioVentas} diaMasVenta={diaMasVenta} fmtQ={fmtQ} />
+      <KpiCards
+        totalVentas={totalVentas}
+        promedioVentas={promedioVentas}
+        diaMasVenta={diaMasVenta}
+        fmtQ={fmtQ}
+      />
 
       <VentasTable
         cuadres={cuadres}
@@ -120,30 +128,19 @@ export default function Ventas() {
         onDescargar={handleDescargarPDF}
         onEliminar={handleEliminar}
       />
-
-      <DetalleCuadreModal
-        visible={showDetail}
-        onClose={()=>{ setShowDetail(false); }}
-        isEditing={isEditing}
-        fuente={isEditing ? edit : seleccionado}
-        datosEditados={edit}
-        setDatosEditados={(updater)=> updater} // edición vía reducer
-        metrics={metrics}
-        dispatch={dispatch}
-        MODAL_BASE={MODAL_BASE}
-        sucursalesMap={sucursalesMap}
-        sucursalesList={sucursalesList}
-        onEditarClick= {() => {setIsEditing(true); cargar(seleccionado); }}
-        onGuardar={handleGuardar}
-      />
+      {/* ⬆ ahora Ver/Editar redirigen a RegistrarCierre */}
 
       <GroupDownloadModal
         visible={showGroup}
         cuadres={cuadres}
         sucursalesMap={sucursalesMap}
         selectedIds={selectedIds}
-        onToggleAll={() => setSelectedIds(selectedIds.length === cuadres.length ? [] : cuadres.map(c=>c.id))}
-        onToggleOne={(id) => setSelectedIds((prev)=> prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id])}
+        onToggleAll={() =>
+          setSelectedIds(selectedIds.length === cuadres.length ? [] : cuadres.map(c=>c.id))
+        }
+        onToggleOne={(id) =>
+          setSelectedIds((prev)=> prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id])
+        }
         onCancel={()=> setShowGroup(false)}
         onDownload={() => {
           const docs = cuadres.filter(c => selectedIds.includes(c.id));

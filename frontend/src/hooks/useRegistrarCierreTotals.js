@@ -12,10 +12,22 @@ export function useRegistrarCierreTotals({
   cajaChicaUsada,
   faltantePagado,
 }) {
-  const totalEfectivoCaja = (c = {}) =>
-    n(c.q100) + n(c.q50) + n(c.q20) + n(c.q10) + n(c.q5) + n(c.q1);
+  // Mapeo de denominaciones => valor facial
+  const DENOMS = [
+    ['q200', 200],
+    ['q100', 100],
+    ['q50',   50],
+    ['q20',   20],
+    ['q10',   10],
+    ['q5',     5],
+    ['q1',     1],
+  ];
 
-  // ---- ARQUEO (ADMIN)
+  // Cantidad * valor por cada denominación
+  const totalEfectivoCaja = (c = {}) =>
+    DENOMS.reduce((acc, [field, valor]) => acc + (n(c[field]) * valor), 0);
+
+  // ---- ARQUEO (ADMIN) => ahora basado en cantidad × valor
   const totalArqueoEfectivo = useMemo(
     () => (arqueo || []).reduce((acc, c) => acc + totalEfectivoCaja(c), 0),
     [arqueo]
@@ -49,7 +61,7 @@ export function useRegistrarCierreTotals({
     [gastos]
   );
 
-  // Ajuste de caja chica (si lo sigues usando como referencia)
+  // Ajuste de caja chica (si lo usas como referencia)
   const totalAjusteCajaChica = useMemo(
     () =>
       (gastos || []).reduce(
@@ -60,7 +72,6 @@ export function useRegistrarCierreTotals({
   );
 
   // ---- DIFERENCIAS (usando DIRECTAMENTE el efectivo de arqueo)
-  // Regla: efectivo de arqueo - efectivo del sistema
   const diferenciaEfectivo = useMemo(
     () => totalArqueoEfectivo - totalCierreEfectivo,
     [totalArqueoEfectivo, totalCierreEfectivo]
@@ -77,7 +88,7 @@ export function useRegistrarCierreTotals({
   }, [totalGastos, totalArqueoEfectivo, cajaChicaUsada, faltantePagado]);
 
   // ---- TOTAL A DEPOSITAR
-  //   efectivo de arqueo − gastos + cajaChicaUsada + faltantePagado
+  // efectivo de arqueo − gastos + cajaChicaUsada + faltantePagado
   const totalGeneral = useMemo(
     () => totalArqueoEfectivo - totalGastos + n(cajaChicaUsada) + n(faltantePagado),
     [totalArqueoEfectivo, totalGastos, cajaChicaUsada, faltantePagado]
@@ -95,8 +106,8 @@ export function useRegistrarCierreTotals({
 
   return {
     totals: {
-      // Arqueo
-      totalArqueoEfectivo, // 👈 valor único de referencia
+      // Arqueo (basado en cantidad × valor)
+      totalArqueoEfectivo,
       totalArqueoTarjeta,
       totalArqueoMotorista,
 

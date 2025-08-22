@@ -3,25 +3,20 @@ import autoTable from 'jspdf-autotable';
 import { n, totalEfectivoCaja } from '../utils/numbers';
 
 /**
- * Calcula métricas para el resumen del PDF (con APERTURA).
+ * Calcula métricas para el resumen del PDF (SIN APERTURA).
+ * Todo se basa en el efectivo total contado en arqueo (totalArqueoEfectivo).
  */
 export const calcCuadreMetrics = (c) => {
   const arqueo = c.arqueo || [{}, {}, {}];
   const cierre = c.cierre || [{}, {}, {}];
 
-  // Arqueo (bruto)
-  const arqueoEfBruto = arqueo.reduce((s, x) => s + totalEfectivoCaja(x), 0);
-  const arqueoTar     = arqueo.reduce((s, x) => s + n(x.tarjeta), 0);
-  const arqueoMot     = arqueo.reduce((s, x) => s + n(x.motorista), 0);
-
-  // Apertura total (default 1000 por caja si no viene)
-  const aperturaTotal = arqueo.reduce((s, x) => s + n(x.apertura ?? 1000), 0);
-
-  // 🔹 EFECTIVO NETO (para resumen / diferencia / depósito)
-  const arqueoEfNeto = arqueoEfBruto - aperturaTotal;
+  // Arqueo (total)
+  const totalArqueoEfectivo = arqueo.reduce((s, x) => s + totalEfectivoCaja(x), 0);
+  const arqueoTar = arqueo.reduce((s, x) => s + n(x.tarjeta), 0);
+  const arqueoMot = arqueo.reduce((s, x) => s + n(x.motorista), 0);
 
   // Cierre
-  const cierreEf = cierre.reduce((s, x) => s + n(x.efectivo), 0);
+  const cierreEf  = cierre.reduce((s, x) => s + n(x.efectivo), 0);
   const cierreTar = cierre.reduce((s, x) => s + n(x.tarjeta), 0);
   const cierreMot = cierre.reduce((s, x) => s + n(x.motorista), 0);
 
@@ -31,17 +26,13 @@ export const calcCuadreMetrics = (c) => {
   const cajaChicaUsada = n(c.cajaChicaUsada);
   const faltantePagado = n(c.faltantePagado);
 
-  // 🔹 Diferencia y depósito basados en EFECTIVO NETO
-  const diffEf = arqueoEfNeto - cierreEf;
-  // **MISMA LÓGICA QUE EN LA APP**: usar cajaChicaUsada (no “ajuste”)
-  const totalDepositar = arqueoEfNeto - gastos + cajaChicaUsada + faltantePagado;
+  // Diferencia y depósito con EFECTIVO TOTAL (no neto)
+  const diffEf = totalArqueoEfectivo - cierreEf;
+  const totalDepositar = totalArqueoEfectivo - gastos + cajaChicaUsada + faltantePagado;
 
   return {
-    // Para mostrar
-    arqueoEfNeto, arqueoTar, arqueoMot,
+    totalArqueoEfectivo, arqueoTar, arqueoMot,
     cierreEf, cierreTar, cierreMot,
-
-    // Extras
     gastos, cajaChicaUsada, faltantePagado,
     diffEf, totalDepositar,
   };
@@ -85,6 +76,7 @@ export const addFooterPageNumbers = (pdf) => {
 /**
  * Renderiza una sección completa de "Cuadre de ventas" en la página actual del PDF.
  * Incluye: Arqueo Físico, Cierre de Sistema, Gastos y Resumen.
+ * (SIN apertura ni efectivo neto; Q200 incluido; columnas de arqueo son SUBTOTALES)
  */
 export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate) => {
   // Encabezado
@@ -103,38 +95,42 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate) => {
   const arqueoRows = [0, 1, 2].map((i) => {
     const a = arqueo[i] || {};
     const totalCaja = totalEfectivoCaja(a);
-    const apertura = n(a.apertura ?? 1000);
-    const neto = totalCaja - apertura;
+
+    // MOSTRAR SUBTOTALES por denominación (cantidad × valor)
+    const sub200 = n(a.q200) * 200;
+    const sub100 = n(a.q100) * 100;
+    const sub50  = n(a.q50)  * 50;
+    const sub20  = n(a.q20)  * 20;
+    const sub10  = n(a.q10)  * 10;
+    const sub5   = n(a.q5)   * 5;
+    const sub1   = n(a.q1)   * 1;
 
     return [
       `Caja ${i + 1}`,
-      n(a.q100).toFixed(2),
-      n(a.q50).toFixed(2),
-      n(a.q20).toFixed(2),
-      n(a.q10).toFixed(2),
-      n(a.q5).toFixed(2),
-      n(a.q1).toFixed(2),
+      sub200.toFixed(2),
+      sub100.toFixed(2),
+      sub50.toFixed(2),
+      sub20.toFixed(2),
+      sub10.toFixed(2),
+      sub5.toFixed(2),
+      sub1.toFixed(2),
       totalCaja.toFixed(2),       // Total efectivo
-      apertura.toFixed(2),        // Apertura
-      neto.toFixed(2),            // Efectivo neto
       n(a.tarjeta).toFixed(2),    // Tarjeta
       n(a.motorista).toFixed(2),  // Motorista
     ];
   });
 
-  // Totales de arqueo
-  const mArqEfBruto = arqueo.reduce((s, x) => s + totalEfectivoCaja(x), 0);
-  const aperturaTotal = arqueo.reduce((s, x) => s + n(x.apertura ?? 1000), 0);
-  const mArqEfNeto = mArqEfBruto - aperturaTotal;
-  const mArqTar = arqueo.reduce((s, x) => s + n(x.tarjeta), 0);
-  const mArqMot = arqueo.reduce((s, x) => s + n(x.motorista), 0);
+  // Totales de arqueo 
+  const mArqEfTotal = arqueo.reduce((s, x) => s + totalEfectivoCaja(x), 0);
+  const mArqTar     = arqueo.reduce((s, x) => s + n(x.tarjeta), 0);
+  const mArqMot     = arqueo.reduce((s, x) => s + n(x.motorista), 0);
 
   autoTable(pdf, {
     startY: y,
     head: [[
       'Arqueo Físico',
-      'Q100', 'Q50', 'Q20', 'Q10', 'Q5', 'Q1',
-      'Total efectivo', 'Apertura', 'Efectivo neto', 'Tarjeta', 'Motorista'
+      'Q200', 'Q100', 'Q50', 'Q20', 'Q10', 'Q5', 'Q1',
+      'Total efectivo', 'Tarjeta', 'Motorista'
     ]],
     body: arqueoRows,
     styles: { fontSize: 9, cellPadding: 3, lineWidth: 0.2, lineColor: [230, 236, 240] },
@@ -143,18 +139,16 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate) => {
       1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' },
       4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' },
       7: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' },
-      10:{ halign: 'right' }, 11:{ halign: 'right' },
+      10:{ halign: 'right' },
     },
     theme: 'grid',
-    // Fila de totales con etiqueta en la columna Q1 (índice 6)
+    // Fila de totales: etiqueta bajo la columna Q1 (índice 7)
     foot: [[
-      '', '', '', '', '', '',
-      { content: 'Totales', styles: { halign: 'right' } }, // en col Q1
-      { content: mArqEfBruto.toFixed(2),  styles: { halign: 'right' } }, // Total efectivo
-      { content: aperturaTotal.toFixed(2),styles: { halign: 'right' } }, // Apertura
-      { content: mArqEfNeto.toFixed(2),   styles: { halign: 'right' } }, // Efectivo neto
-      { content: mArqTar.toFixed(2),      styles: { halign: 'right' } }, // Tarjeta
-      { content: mArqMot.toFixed(2),      styles: { halign: 'right' } }, // Motorista
+      '', '', '', '', '', '', '',
+      { content: 'Totales', styles: { halign: 'right' } }, // en col Q1 (idx 7)
+      { content: mArqEfTotal.toFixed(2), styles: { halign: 'right' } }, // Total efectivo
+      { content: mArqTar.toFixed(2),     styles: { halign: 'right' } }, // Tarjeta
+      { content: mArqMot.toFixed(2),     styles: { halign: 'right' } }, // Motorista
     ]],
     footStyles: { fillColor: [236, 239, 241], textColor: [33, 37, 41], halign: 'right' },
   });
@@ -179,7 +173,7 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate) => {
   const mCieEf  = cierre.reduce((s, x) => s + n(x.efectivo), 0);
   const mCieTar = cierre.reduce((s, x) => s + n(x.tarjeta), 0);
   const mCieMot = cierre.reduce((s, x) => s + n(x.motorista), 0);
-  const mCieTot = mCieEf + mCieTar; // (respetando tu lógica actual)
+  const mCieTot = mCieEf + mCieTar; // misma lógica que usas en la app
 
   autoTable(pdf, {
     startY: y,
@@ -236,7 +230,7 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate) => {
     const boxTop = y;
     const leftColX = 52;
     const rightColX = width / 2 + 10;
-    const GAP = 16; // separación entre filas
+    const GAP = 16;
 
     // Título
     pdf.setFontSize(12);
@@ -260,9 +254,9 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate) => {
     pdf.text('Ventas Total Sistema', leftColX, leftY);
     pdf.setFont('helvetica', 'normal');
     leftY += GAP;
-    drawLine(leftColX, leftY, 'Efectivo', `Q ${m.cierreEf.toFixed(2)}`);       leftY += GAP;
-    drawLine(leftColX, leftY, 'Tarjeta',  `Q ${m.cierreTar.toFixed(2)}`);      leftY += GAP;
-    drawLine(leftColX, leftY, 'A domicilio', `Q ${m.cierreMot.toFixed(2)}`);   leftY += GAP;
+    drawLine(leftColX, leftY, 'Efectivo',   `Q ${m.cierreEf.toFixed(2)}`);  leftY += GAP;
+    drawLine(leftColX, leftY, 'Tarjeta',    `Q ${m.cierreTar.toFixed(2)}`); leftY += GAP;
+    drawLine(leftColX, leftY, 'A domicilio',`Q ${m.cierreMot.toFixed(2)}`); leftY += GAP;
 
     const totalSistema = m.cierreEf + m.cierreTar; // tu lógica
     drawLine(leftColX, leftY, 'Total Sistema', `Q ${totalSistema.toFixed(2)}`);
@@ -273,18 +267,15 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate) => {
     pdf.text('Control Administración', rightColX, rightY);
     pdf.setFont('helvetica', 'normal');
     rightY += GAP;
-    drawLine(rightColX, rightY, 'Efectivo (neto)', `Q ${m.arqueoEfNeto.toFixed(2)}`); rightY += GAP;
-    drawLine(rightColX, rightY, 'A domicilio',     `Q ${m.arqueoMot.toFixed(2)}`);    rightY += GAP;
-    drawLine(rightColX, rightY, 'Gastos',          `Q ${m.gastos.toFixed(2)}`);       rightY += GAP;
+    // EFECTIVO = totalArqueoEfectivo (no neto)
+    drawLine(rightColX, rightY, 'Efectivo',       `Q ${m.totalArqueoEfectivo.toFixed(2)}`); rightY += GAP;
+    drawLine(rightColX, rightY, 'A domicilio',    `Q ${m.arqueoMot.toFixed(2)}`);           rightY += GAP;
+    drawLine(rightColX, rightY, 'Gastos',         `Q ${m.gastos.toFixed(2)}`);              rightY += GAP;
+    drawLine(rightColX, rightY, 'Caja chica (usada)', `Q ${m.cajaChicaUsada.toFixed(2)}`);  rightY += GAP;
 
-    // Caja chica usada
-    drawLine(rightColX, rightY, 'Caja chica (usada)', `Q ${m.cajaChicaUsada.toFixed(2)}`); rightY += GAP;
-
-    // Sobrante/Faltante con neto
     const diffLabel = m.diffEf >= 0 ? 'Sobrante' : 'Faltante';
-    drawLine(rightColX, rightY, diffLabel, `Q ${Math.abs(m.diffEf).toFixed(2)}`);       rightY += GAP;
+    drawLine(rightColX, rightY, diffLabel, `Q ${Math.abs(m.diffEf).toFixed(2)}`);           rightY += GAP;
 
-    // Faltante pagado (solo si > 0)
     if (m.faltantePagado > 0) {
       drawLine(rightColX, rightY, 'Faltante pagado', `Q ${m.faltantePagado.toFixed(2)}`);
       rightY += GAP;
@@ -292,7 +283,7 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate) => {
 
     const contentBottom = Math.max(leftY, rightY);
 
-    // ---- Total a depositar: pegado al contenido (centrado)
+    // ---- Total a depositar
     const totalDepY = contentBottom + 20;
     const depColor = m.totalDepositar < 0 ? [183, 28, 28] : [27, 94, 32];
     pdf.setFont('helvetica', 'bold');

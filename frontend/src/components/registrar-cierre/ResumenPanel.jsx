@@ -10,15 +10,22 @@ export default function ResumenPanel({
   faltantePagado,
 }) {
   const {
+    // Arqueo (ahora basado en conteo x denominación)
     totalArqueoEfectivo,
     totalArqueoTarjeta,
     totalArqueoMotorista,
+
+    // Cierre (sistema)
     totalCierreEfectivo,
     totalCierreTarjeta,
     totalCierreMotorista,
+
+    // Gastos y diferencias
     totalGastos,
     diferenciaEfectivo,
     faltanteEfectivo,
+
+    // Depósito
     totalGeneral,
   } = totals;
 

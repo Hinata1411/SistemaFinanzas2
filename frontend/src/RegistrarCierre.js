@@ -1,6 +1,6 @@
 // src/RegistrarCierre.js
-import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useMemo, useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   collection,
   addDoc,
@@ -9,6 +9,7 @@ import {
   where,
   getDocs,
   doc,
+  getDoc,
   updateDoc,
   increment,
 } from 'firebase/firestore';
@@ -48,6 +49,7 @@ const INIT_GASTO_CATEGORIAS = [
 ];
 
 const emptyArqueoCaja = () => ({
+  q200: '',
   q100: '',
   q50: '',
   q20: '',
@@ -66,6 +68,12 @@ const emptyCierreCaja = () => ({
 
 export default function RegistrarCierre() {
   const navigate = useNavigate();
+  const [sp] = useSearchParams();
+  const editId = sp.get('id') || null;
+  const mode = (sp.get('mode') || '').toLowerCase(); // 'edit' | 'view' | ''
+  const isViewing = mode === 'view';
+  const isEditingExisting = !!editId && mode === 'edit';
+  const [originalDoc, setOriginalDoc] = useState(null);
 
   // Sucursales
   const sucursales = useSucursales();
@@ -79,11 +87,60 @@ export default function RegistrarCierre() {
   const [cierre, setCierre] = useState([emptyCierreCaja(), emptyCierreCaja(), emptyCierreCaja()]);
   const [categorias, setCategorias] = useState(INIT_GASTO_CATEGORIAS);
   const [gastos, setGastos] = useState([
-    { categoria: INIT_GASTO_CATEGORIAS[0], descripcion: '', cantidad: '' },
+    {
+      categoria: INIT_GASTO_CATEGORIAS[0],
+      descripcion: '',
+      cantidad: '',
+      ref: '',
+      locked: false,
+      // adjunto (solo memoria local; NO se sube ni guarda)
+      fileUrl: '',
+      fileBlob: null,
+      filePreview: '',
+      fileMime: '',
+      fileName: '',
+    },
   ]);
   const [comentario, setComentario] = useState('');
   const [cajaChicaUsada, setCajaChicaUsada] = useState(0);
   const [faltantePagado, setFaltantePagado] = useState(0);
+
+  useEffect(() => {
+    if (!editId) return;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, 'cierres', editId));
+        if (!snap.exists()) return;
+        const d = snap.data() || {};
+        setOriginalDoc(d);
+
+        setActiveSucursalId(d.sucursalId || null);
+        setFecha(d.fecha || todayISO);
+
+        setArqueo(
+          Array.isArray(d.arqueo) && d.arqueo.length
+            ? d.arqueo
+            : [emptyArqueoCaja(), emptyArqueoCaja(), emptyArqueoCaja()]
+        );
+        setCierre(
+          Array.isArray(d.cierre) && d.cierre.length
+            ? d.cierre
+            : [emptyCierreCaja(), emptyCierreCaja(), emptyCierreCaja()]
+        );
+
+        setGastos(Array.isArray(d.gastos) ? d.gastos : []);
+        setCategorias(
+          Array.isArray(d.categorias) && d.categorias.length ? d.categorias : INIT_GASTO_CATEGORIAS
+        );
+
+        setComentario(d.comentario || '');
+        setCajaChicaUsada(n(d.cajaChicaUsada));
+        setFaltantePagado(n(d.faltantePagado));
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+  }, [editId]);
 
   const [busy, setBusy] = useState(false);
 
@@ -93,12 +150,13 @@ export default function RegistrarCierre() {
 
   // Sucursal activa + caja chica
   const activeSucursal = useMemo(
-    () => sucursales.find((s) => s.id === (activeSucursalId || (sucursales[0]?.id || null))) || null,
+    () =>
+      sucursales.find((s) => s.id === (activeSucursalId || (sucursales[0]?.id || null))) || null,
     [sucursales, activeSucursalId]
   );
   const cajaChicaDisponible = activeSucursal?.cajaChica || 0;
 
-  // Totales centralizados (sin apertura)
+  // Totales
   const { totals, flags } = useRegistrarCierreTotals({
     arqueo,
     cierre,
@@ -107,10 +165,11 @@ export default function RegistrarCierre() {
     faltantePagado,
   });
 
-  const { totalGastos, faltanteEfectivo, faltantePorGastos } = totals;
+  const { faltanteEfectivo, faltantePorGastos } = totals;
 
   // Handlers de edición
   const setArq = (idx, field, value) => {
+    if (isViewing) return;
     setArqueo((prev) => {
       const copy = prev.map((c) => ({ ...c }));
       copy[idx][field] = value;
@@ -119,6 +178,7 @@ export default function RegistrarCierre() {
   };
 
   const setCier = (idx, field, value) => {
+    if (isViewing) return;
     setCierre((prev) => {
       const copy = prev.map((c) => ({ ...c }));
       copy[idx][field] = value;
@@ -126,28 +186,50 @@ export default function RegistrarCierre() {
     });
   };
 
-  const addGasto = () =>
-    setGastos((g) => [...g, { categoria: categorias[0] || '', descripcion: '', cantidad: '' }]);
+  // Bloqueo + alta de nuevo gasto
+  const addGasto = () => {
+    if (isViewing) return;
+    setGastos((g) => {
+      const prevLocked = g.map((item) => ({ ...item, locked: true }));
+      const nuevo = {
+        categoria: categorias[0] || '',
+        descripcion: '',
+        cantidad: '',
+        ref: '',
+        locked: false,
+        fileUrl: '',
+        fileBlob: null,
+        filePreview: '',
+        fileMime: '',
+        fileName: '',
+      };
+      return [...prevLocked, nuevo];
+    });
+  };
 
-  const setGasto = (i, field, val) =>
+  const setGasto = (i, field, val) => {
+    if (isViewing) return;
     setGastos((prev) => {
       const c = [...prev];
       c[i] = { ...c[i], [field]: val };
       return c;
     });
+  };
 
-  const removeGasto = (i) => setGastos((prev) => prev.filter((_, idx) => idx !== i));
+  const removeGasto = (i) => {
+    if (isViewing) return;
+    setGastos((prev) => prev.filter((_, idx) => idx !== i));
+  };
 
   // Categorías modal callback
   const handleChangeCategorias = (nextCategorias, oldName, newName) => {
+    if (isViewing) return;
     setCategorias(nextCategorias);
     if (oldName && newName) {
-      // Renombrar
       setGastos((prev) =>
         prev.map((g) => (g.categoria === oldName ? { ...g, categoria: newName } : g))
       );
     } else if (oldName && !newName) {
-      // Eliminar
       const fallback = nextCategorias[0] || '';
       setGastos((prev) =>
         prev.map((g) => (g.categoria === oldName ? { ...g, categoria: fallback } : g))
@@ -155,12 +237,12 @@ export default function RegistrarCierre() {
     }
   };
 
-  // Abrir / aplicar caja chica (modal React)
-  const openCajaChica = () => setShowCajaChica(true);
-  const applyCajaChica = (monto) => setCajaChicaUsada((prev) => prev + monto);
-
   // Pagar faltante
   const handlePagarFaltante = async () => {
+    if (isViewing) {
+      Swal.fire('Solo lectura', 'No puedes pagar faltante en modo ver.', 'info');
+      return;
+    }
     if (faltanteEfectivo <= 0) return;
     const confirmar = await Swal.fire({
       title: 'Pagar faltante',
@@ -207,57 +289,100 @@ export default function RegistrarCierre() {
   };
 
   const onSave = async () => {
-    if (busy) return;
+    if (busy || isViewing) return;
     if (!validate()) return;
 
     setBusy(true);
     try {
-      // Validación: un cuadre por sucursal por fecha
       const cierresRef = collection(db, 'cierres');
-      const fechaQ = query(cierresRef, where('fecha', '==', fecha));
-      const snap = await getDocs(fechaQ);
-      const existe = snap.docs.some((d) => (d.data()?.sucursalId || '') === activeSucursal.id);
 
-      if (existe) {
-        await Swal.fire({
-          icon: 'warning',
-          title: 'Ya existe un cuadre',
-          text: `Ya hay un cuadre registrado para "${activeSucursal.nombre}" en la fecha ${fecha}.`,
-        });
-        return;
+      // Si estás creando, valida duplicado (sucursal+fecha)
+      if (!isEditingExisting) {
+        const fechaQ = query(cierresRef, where('fecha', '==', fecha));
+        const snap = await getDocs(fechaQ);
+        const existe = snap.docs.some((d) => (d.data()?.sucursalId || '') === activeSucursal.id);
+        if (existe) {
+          await Swal.fire({
+            icon: 'warning',
+            title: 'Ya existe un cuadre',
+            text: `Ya hay un cuadre registrado para "${activeSucursal.nombre}" en la fecha ${fecha}.`,
+          });
+          return;
+        }
       }
 
-      const payload = {
+      // SIN STORAGE: no subimos archivos; omitimos blobs/local preview
+      const gastosListos = (gastos || []).map((g) => {
+        const { fileBlob, filePreview, ...rest } = g;
+        return {
+          ...rest,
+          fileUrl: '',
+          fileName: '',
+          fileMime: '',
+        };
+      });
+
+      const payloadBase = {
         fecha,
         sucursalId: activeSucursal.id,
         arqueo,
         cierre,
-        gastos,
+        gastos: gastosListos,
         comentario,
         categorias,
         cajaChicaUsada,
         faltantePagado,
-        // Guardamos los totales calculados
         totales: { ...totals },
-        createdAt: serverTimestamp(),
       };
-      await addDoc(cierresRef, payload);
 
-      // Actualizamos caja chica de la sucursal: usado (negativo) + ajustes (positivo)
-      const ajustePositivo = getTotalAjusteCajaChica(gastos);
-      const delta = -n(cajaChicaUsada) + n(ajustePositivo);
-      if (delta !== 0) {
-        const sucRef = doc(db, 'sucursales', activeSucursal.id);
-        await updateDoc(sucRef, { cajaChica: increment(delta) });
+      if (isEditingExisting) {
+        // === Actualizar existente (preservar createdAt) ===
+        await updateDoc(doc(db, 'cierres', editId), {
+          ...payloadBase,
+          updatedAt: serverTimestamp(),
+        });
+
+        // Ajuste de caja chica: aplicar diferencia vs documento original
+        const oldAjuste = getTotalAjusteCajaChica(originalDoc?.gastos || []);
+        const newAjuste = getTotalAjusteCajaChica(gastos);
+        const oldUsada = n(originalDoc?.cajaChicaUsada);
+        const newUsada = n(cajaChicaUsada);
+        const deltaCaja = -(newUsada - oldUsada) + (newAjuste - oldAjuste);
+        if (deltaCaja !== 0) {
+          const sucRef = doc(db, 'sucursales', activeSucursal.id);
+          await updateDoc(sucRef, { cajaChica: increment(deltaCaja) });
+        }
+
+        await Swal.fire({
+          icon: 'success',
+          title: 'Actualizado',
+          text: 'El cuadre se actualizó correctamente.',
+          timer: 1600,
+          showConfirmButton: false,
+        });
+      } else {
+        // === Crear nuevo ===
+        await addDoc(cierresRef, {
+          ...payloadBase,
+          createdAt: serverTimestamp(),
+        });
+
+        // Actualizamos caja chica (como ya lo hacías)
+        const ajustePositivo = getTotalAjusteCajaChica(gastos);
+        const delta = -n(cajaChicaUsada) + n(ajustePositivo);
+        if (delta !== 0) {
+          const sucRef = doc(db, 'sucursales', activeSucursal.id);
+          await updateDoc(sucRef, { cajaChica: increment(delta) });
+        }
+
+        await Swal.fire({
+          icon: 'success',
+          title: 'Guardado',
+          text: 'El cuadre se guardó correctamente.',
+          timer: 1600,
+          showConfirmButton: false,
+        });
       }
-
-      await Swal.fire({
-        icon: 'success',
-        title: 'Guardado',
-        text: 'El cuadre se guardó correctamente.',
-        timer: 1600,
-        showConfirmButton: false,
-      });
       navigate('/home/Ventas');
     } catch (err) {
       console.error(err);
@@ -269,10 +394,12 @@ export default function RegistrarCierre() {
 
   return (
     <div className="rc-shell">
-      {/* HEADER */}
+      {/* HEADER (izquierda: título + fecha; derecha: regresar) */}
       <div className="rc-header">
-        <h1>Registrar cuadre</h1>
-        <div className="rc-header-right">
+        <div className="rc-header-left">
+          <h1>
+            Registrar cuadre {isEditingExisting ? '(editando)' : isViewing ? '(viendo)' : ''}
+          </h1>
           <div className="rc-date">
             <label htmlFor="rc-fecha">Fecha</label>
             <input
@@ -280,50 +407,63 @@ export default function RegistrarCierre() {
               type="date"
               value={fecha}
               onChange={(e) => setFecha(e.target.value)}
+              disabled={isViewing}
+              readOnly={isViewing}
             />
+            <div className="rc-tabs-actions">
+              {!isViewing && (
+                <button
+                  type="button"
+                  className="rc-btn rc-btn-accent"
+                  onClick={onSave}
+                  disabled={busy}
+                  title={isEditingExisting ? 'Actualizar cuadre' : 'Guardar cuadre'}
+                >
+                  {busy ? 'Guardando…' : isEditingExisting ? 'Actualizar' : 'Guardar'}
+                </button>
+              )}
+            </div>
           </div>
+        </div>
 
-          <div className="rc-tabs" role="tablist" aria-label="Sucursales">
-            {sucursales.map((s) => (
-              <button
-                key={s.id}
-                className={`rc-tab ${activeSucursal?.id === s.id ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveSucursalId(s.id);
-                  setCajaChicaUsada(0); // reset por sucursal
-                  setFaltantePagado(0); // reset por sucursal
-                }}
-                type="button"
-                role="tab"
-                aria-selected={activeSucursal?.id === s.id}
-                aria-controls={`panel-${s.id}`}
-                id={`tab-${s.id}`}
-              >
-                {s.nombre}
-              </button>
-            ))}
-            {!sucursales.length && <div className="rc-tab-empty">No hay sucursales</div>}
-          </div>
-
+        <div className="rc-actions">
           <button
             type="button"
-            className="rc-btn rc-btn-outline"
+            className="rc-btn rc-btn-primary"
             onClick={onBack}
             disabled={busy}
             title="Regresar a Ventas"
           >
             Regresar a Ventas
           </button>
+        </div>
+      </div>
 
-          <button
-            type="button"
-            className="rc-btn rc-btn-primary"
-            onClick={onSave}
-            disabled={busy}
-            title="Guardar cuadre"
-          >
-            {busy ? 'Guardando…' : 'Guardar'}
-          </button>
+      {/* SUCURSALES (tabs pegadas) */}
+      <div className="rc-tabs-row rc-tabs-attached">
+        <div className="rc-tabs rc-tabs-browser" role="tablist" aria-label="Sucursales">
+          {sucursales.map((s) => (
+            <button
+              key={s.id}
+              className={`rc-tab ${activeSucursal?.id === s.id ? 'active' : ''}`}
+              onClick={() => {
+                // Si solo estás viendo, no permitas cambiar sucursal accidentalmente
+                if (isViewing) return;
+                setActiveSucursalId(s.id);
+                setCajaChicaUsada(0);
+                setFaltantePagado(0);
+              }}
+              type="button"
+              role="tab"
+              aria-selected={activeSucursal?.id === s.id}
+              aria-controls={`panel-${s.id}`}
+              id={`tab-${s.id}`}
+              disabled={isViewing}
+            >
+              {s.nombre}
+            </button>
+          ))}
+          {!sucursales.length && <div className="rc-tab-empty">No hay sucursales</div>}
         </div>
       </div>
 
@@ -333,8 +473,9 @@ export default function RegistrarCierre() {
           arqueo={arqueo}
           setArq={setArq}
           cajaChicaDisponible={cajaChicaDisponible}
+          readOnly={isViewing}
         />
-        <CierreGrid cierre={cierre} setCier={setCier} />
+        <CierreGrid cierre={cierre} setCier={setCier} readOnly={isViewing} />
       </div>
 
       {/* GASTOS + RESUMEN */}
@@ -345,22 +486,24 @@ export default function RegistrarCierre() {
           setGasto={setGasto}
           addGasto={addGasto}
           removeGasto={removeGasto}
-          onOpenCategorias={() => setShowCatModal(true)}
+          onOpenCategorias={!isViewing ? () => setShowCatModal(true) : null}
           onUseCajaChica={() => setShowCajaChica(true)}
           activeSucursalNombre={activeSucursal?.nombre}
           cajaChicaDisponible={cajaChicaDisponible}
           faltantePorGastos={faltantePorGastos}
+          readOnly={isViewing}
         />
 
         <ResumenPanel
           totals={totals}
           flags={flags}
           cajaChicaUsada={cajaChicaUsada}
-          onUseCajaChica={() => setShowCajaChica(true)}
-          onPagarFaltante={handlePagarFaltante}
+          onPagarFaltante={
+            isViewing
+              ? () => Swal.fire('Solo lectura', 'No puedes pagar faltante en modo ver.', 'info')
+              : handlePagarFaltante
+          }
           faltantePagado={faltantePagado}
-          activeSucursalNombre={activeSucursal?.nombre}
-          cajaChicaDisponible={cajaChicaDisponible}
         />
 
         <section className="rc-card">
@@ -372,6 +515,8 @@ export default function RegistrarCierre() {
               onChange={(e) => setComentario(e.target.value)}
               placeholder="Agrega un comentario"
               rows={3}
+              disabled={isViewing}
+              readOnly={isViewing}
             />
           </div>
         </section>
@@ -392,7 +537,10 @@ export default function RegistrarCierre() {
         cajaChicaDisponible={cajaChicaDisponible}
         // ya incluye faltantePagado en el cálculo:
         faltantePorGastos={faltantePorGastos}
-        onApply={applyCajaChica}
+        onApply={(monto) => {
+          if (isViewing) return;
+          setCajaChicaUsada((prev) => prev + monto);
+        }}
       />
     </div>
   );

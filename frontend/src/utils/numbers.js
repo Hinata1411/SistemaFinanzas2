@@ -9,4 +9,10 @@ export const isNumericOrEmpty = (v) =>
   v === '' || v === null || v === undefined || !isNaN(parseFloat(v));
 
 export const totalEfectivoCaja = (c = {}) =>
-  n(c.q100) + n(c.q50) + n(c.q20) + n(c.q10) + n(c.q5) + n(c.q1);
+  200 * n(c.q200) +
+  100 * n(c.q100) +
+   50 * n(c.q50)  +
+   20 * n(c.q20)  +
+   10 * n(c.q10)  +
+    5 * n(c.q5)   +
+    1 * n(c.q1);
