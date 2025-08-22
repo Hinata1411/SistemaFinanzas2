@@ -1,6 +1,6 @@
 // src/components/ventas/VentasTable.jsx
 import React from 'react';
-import { n } from '../../utils/numbers';
+import { n, totalEfectivoCaja } from '../../utils/numbers';
 import { formatDate } from '../../utils/dates';
 
 export default function VentasTable({
@@ -68,12 +68,15 @@ export default function VentasTable({
             </tr>
           ) : (
             cuadres.map((c) => {
-              // Si no hay cierre, cae al arqueo (efectivo en arqueo será 0 por estructura, y está bien)
-              const base = Array.isArray(c.cierre) && c.cierre.length ? c.cierre : (c.arqueo || []);
-              const ef = base.reduce((acc, x) => acc + n(x.efectivo), 0);
-              const tar = base.reduce((acc, x) => acc + n(x.tarjeta), 0);
-              const mot = base.reduce((acc, x) => acc + n(x.motorista), 0);
-              const tot = ef + tar + mot;
+              // Usar SIEMPRE Arqueo Físico
+              const arq = Array.isArray(c.arqueo) ? c.arqueo : [];
+
+              const ef  = arq.reduce((acc, x) => acc + totalEfectivoCaja(x), 0);
+              const tar = arq.reduce((acc, x) => acc + n(x.tarjeta), 0);
+              const mot = arq.reduce((acc, x) => acc + n(x.motorista), 0);
+
+              // Total solo incluye EFECTIVO + TARJETA (motorista es referencia)
+              const tot = ef + tar;
 
               return (
                 <tr key={c.id}>

@@ -13,7 +13,8 @@ import {
   updateDoc,
   increment,
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { db, auth } from './firebase';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import './components/registrar-cierre/RegistrarCierre.css';
@@ -75,9 +76,47 @@ export default function RegistrarCierre() {
   const isEditingExisting = !!editId && mode === 'edit';
   const [originalDoc, setOriginalDoc] = useState(null);
 
+  // ===== Perfil usuario (rol + sucursal asignada si viewer) =====
+  const [me, setMe] = useState({ loaded: false, role: 'viewer', sucursalId: null });
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setMe({ loaded: true, role: 'viewer', sucursalId: null });
+        return;
+      }
+      try {
+        const snap = await getDoc(doc(db, 'usuarios', user.uid));
+        const data = snap.exists() ? snap.data() : {};
+        setMe({
+          loaded: true,
+          role: data.role || 'viewer',
+          sucursalId: data.sucursalId || null,
+        });
+      } catch (e) {
+        console.error(e);
+        setMe({ loaded: true, role: 'viewer', sucursalId: null });
+      }
+    });
+    return () => unsub();
+  }, []);
+  const isAdmin = me.role === 'admin';
+
   // Sucursales
   const sucursales = useSucursales();
+  // Sucursales visibles según rol
+  const sucursalesVisibles = useMemo(() => {
+    if (!me.loaded) return [];
+    return isAdmin ? sucursales : sucursales.filter((s) => s.id === me.sucursalId);
+  }, [sucursales, me, isAdmin]);
+
   const [activeSucursalId, setActiveSucursalId] = useState(null);
+
+  // Al cargar rol/sucursales, fijar sucursal activa para viewer
+  useEffect(() => {
+    if (!me.loaded || !sucursalesVisibles.length) return;
+    // Si ya hay activa, mantener; si no, fijar primera visible (o la asignada del viewer)
+    setActiveSucursalId((prev) => prev || sucursalesVisibles[0]?.id || null);
+  }, [me.loaded, sucursalesVisibles]);
 
   // Fecha
   const [fecha, setFecha] = useState(todayISO);
@@ -150,8 +189,7 @@ export default function RegistrarCierre() {
 
   // Sucursal activa + caja chica
   const activeSucursal = useMemo(
-    () =>
-      sucursales.find((s) => s.id === (activeSucursalId || (sucursales[0]?.id || null))) || null,
+    () => sucursales.find((s) => s.id === activeSucursalId) || null,
     [sucursales, activeSucursalId]
   );
   const cajaChicaDisponible = activeSucursal?.cajaChica || 0;
@@ -237,8 +275,12 @@ export default function RegistrarCierre() {
     }
   };
 
-  // Pagar faltante
+  // Pagar faltante (solo admin)
   const handlePagarFaltante = async () => {
+    if (!isAdmin) {
+      Swal.fire('Solo administradores', 'No puedes pagar faltante.', 'info');
+      return;
+    }
     if (isViewing) {
       Swal.fire('Solo lectura', 'No puedes pagar faltante en modo ver.', 'info');
       return;
@@ -271,6 +313,11 @@ export default function RegistrarCierre() {
   const validate = () => {
     if (!activeSucursal?.id) {
       Swal.fire('Sucursal', 'Selecciona una sucursal en las pestañas.', 'warning');
+      return false;
+    }
+    // Viewer solo puede su sucursal asignada
+    if (!isAdmin && me.loaded && me.sucursalId && activeSucursal.id !== me.sucursalId) {
+      Swal.fire('Permisos', 'Solo puedes registrar en tu sucursal asignada.', 'warning');
       return false;
     }
     if (!fecha) {
@@ -392,8 +439,29 @@ export default function RegistrarCierre() {
     }
   };
 
+  // ===== Esperar perfil/sucursales =====
+  if (!me.loaded) {
+    return (
+      <div className="rc-shell">
+        <div className="rc-header"><h1>Registrar cuadre</h1></div>
+        <div className="rc-tab-empty">Cargando permisos…</div>
+      </div>
+    );
+  }
+
+  // ===== CSS de ocultación para viewer (sin tocar componentes) =====
+  // - Oculta el botón "Categorías" en Gastos (es el último botón del header de Gastos).
+  // - Oculta el botón "Pagar faltante" dentro del Resumen.
+  const hideAdminButtonsCss = !isAdmin ? `
+    .hide-cats .rc-card-hd > .rc-btn.rc-btn-outline:last-child { display: none !important; }
+    .hide-pay  .rc-res-item .rc-btn.rc-btn-primary { display: none !important; }
+  ` : '';
+
   return (
     <div className="rc-shell">
+      {/* estilos condicionales para ocultar botones si viewer */}
+      {hideAdminButtonsCss && <style>{hideAdminButtonsCss}</style>}
+
       {/* HEADER (izquierda: título + fecha; derecha: regresar) */}
       <div className="rc-header">
         <div className="rc-header-left">
@@ -442,13 +510,14 @@ export default function RegistrarCierre() {
       {/* SUCURSALES (tabs pegadas) */}
       <div className="rc-tabs-row rc-tabs-attached">
         <div className="rc-tabs rc-tabs-browser" role="tablist" aria-label="Sucursales">
-          {sucursales.map((s) => (
+          {sucursalesVisibles.map((s) => (
             <button
               key={s.id}
               className={`rc-tab ${activeSucursal?.id === s.id ? 'active' : ''}`}
               onClick={() => {
-                // Si solo estás viendo, no permitas cambiar sucursal accidentalmente
                 if (isViewing) return;
+                // Si viewer, no permitir cambiar a otra distinta (por si hubiera 2 visibles por algún motivo)
+                if (!isAdmin && me.sucursalId && s.id !== me.sucursalId) return;
                 setActiveSucursalId(s.id);
                 setCajaChicaUsada(0);
                 setFaltantePagado(0);
@@ -458,12 +527,12 @@ export default function RegistrarCierre() {
               aria-selected={activeSucursal?.id === s.id}
               aria-controls={`panel-${s.id}`}
               id={`tab-${s.id}`}
-              disabled={isViewing}
+              disabled={isViewing || (!isAdmin && me.sucursalId && s.id !== me.sucursalId)}
             >
               {s.nombre}
             </button>
           ))}
-          {!sucursales.length && <div className="rc-tab-empty">No hay sucursales</div>}
+          {!sucursalesVisibles.length && <div className="rc-tab-empty">No hay sucursales disponibles</div>}
         </div>
       </div>
 
@@ -475,54 +544,59 @@ export default function RegistrarCierre() {
           cajaChicaDisponible={cajaChicaDisponible}
           readOnly={isViewing}
         />
-        <CierreGrid cierre={cierre} setCier={setCier} readOnly={isViewing} />
+
+        {/* Cierre de Sistema: solo admin */}
+        {isAdmin && (
+          <CierreGrid cierre={cierre} setCier={setCier} readOnly={isViewing} />
+        )}
       </div>
 
       {/* GASTOS + RESUMEN */}
       <div className="rc-grid rc-grid-bottom">
-        <GastosList
-          gastos={gastos}
-          categorias={categorias}
-          setGasto={setGasto}
-          addGasto={addGasto}
-          removeGasto={removeGasto}
-          onOpenCategorias={!isViewing ? () => setShowCatModal(true) : null}
-          onUseCajaChica={() => setShowCajaChica(true)}
-          activeSucursalNombre={activeSucursal?.nombre}
-          cajaChicaDisponible={cajaChicaDisponible}
-          faltantePorGastos={faltantePorGastos}
-          readOnly={isViewing}
-        />
+          <GastosList
+            gastos={gastos}
+            categorias={categorias}
+            setGasto={setGasto}
+            addGasto={addGasto}
+            removeGasto={removeGasto}
+            showCategoriasBtn={isAdmin && !isViewing}
+            onOpenCategorias={() => setShowCatModal(true)}
+            onUseCajaChica={() => setShowCajaChica(true)}
+            activeSucursalNombre={activeSucursal?.nombre}
+            cajaChicaDisponible={cajaChicaDisponible}
+            faltantePorGastos={faltantePorGastos}
+            readOnly={isViewing}
+          />
+        </div>
 
-        <ResumenPanel
-          totals={totals}
-          flags={flags}
-          cajaChicaUsada={cajaChicaUsada}
-          onPagarFaltante={
-            isViewing
-              ? () => Swal.fire('Solo lectura', 'No puedes pagar faltante en modo ver.', 'info')
-              : handlePagarFaltante
-          }
-          faltantePagado={faltantePagado}
-        />
+        {/* envolvemos Resumen con clase para ocultar 'Pagar faltante' si viewer */}
+        <div className={isAdmin ? '' : 'hide-pay'}>
+          <ResumenPanel
+            totals={totals}
+            flags={flags}
+            cajaChicaUsada={cajaChicaUsada}
+            onPagarFaltante={handlePagarFaltante} // si viewer, el botón no se ve por CSS
+            faltantePagado={faltantePagado}
+          />
+        </div>
 
-        <section className="rc-card">
-          <h3>Comentario</h3>
-          <div className="rc-comentario">
-            <textarea
-              id="rc-comentario"
-              value={comentario}
-              onChange={(e) => setComentario(e.target.value)}
-              placeholder="Agrega un comentario"
-              rows={3}
-              disabled={isViewing}
-              readOnly={isViewing}
-            />
-          </div>
-        </section>
-      </div>
-
-      {/* MODAL Categorías */}
+        {isAdmin && (
+          <section className="rc-card">
+            <h3>Comentario</h3>
+            <div className="rc-comentario">
+              <textarea
+                id="rc-comentario"
+                value={comentario}
+                onChange={(e) => setComentario(e.target.value)}
+                placeholder="Agrega un comentario"
+                rows={3}
+                disabled={isViewing}
+                readOnly={isViewing}
+              />
+            </div>
+          </section>
+        )}
+        {/* MODAL Categorías */}
       <CategoriasModal
         open={showCatModal}
         onClose={() => setShowCatModal(false)}
@@ -542,6 +616,9 @@ export default function RegistrarCierre() {
           setCajaChicaUsada((prev) => prev + monto);
         }}
       />
-    </div>
-  );
+        
+      </div>
+  )
+
+      
 }

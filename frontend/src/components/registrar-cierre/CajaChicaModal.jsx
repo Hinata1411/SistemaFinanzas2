@@ -50,7 +50,6 @@ export default function CajaChicaModal({
 
         <div className="rc-modal-body">
           <p><b>Disponible:</b> {toMoney(cajaChicaDisponible)}</p>
-          <p><b>Faltante por gastos:</b> {toMoney(faltantePorGastos)}</p>
 
           <div style={{ marginTop: 8 }}>
             <label className="rc-cell-label">Monto a usar (Q)</label>
@@ -63,7 +62,6 @@ export default function CajaChicaModal({
               onChange={(e) => setMonto(e.target.value)}
               placeholder="0.00"
             />
-            <div className="rc-help">Máximo permitido: {toMoney(maxPermitido)}</div>
           </div>
         </div>
       </div>

@@ -8,6 +8,9 @@
 
   --radius:14px;
   --shadow:0 20px 60px rgba(0,0,0,.08);
+
+  /* ===== columnas uniformes para Gastos ===== */
+  --gastos-cols: 220px 1fr 140px 140px 120px;  /* Cat | Desc | Ref | Cant | Acc */
 }
 
 /* Layout general */
@@ -229,9 +232,57 @@
   padding:8px 10px;
 }
 
-/* Gastos */
+/* ===== Gastos ===== */
 .rc-gastos{ display:flex; flex-direction:column; gap:8px; }
-.rc-gasto-row{ display:flex; gap:8px; align-items:center; }
+
+/* Leyenda: puro texto, gris y centrado por columna (simétrica) */
+.rc-gastos-legend{
+  display:grid;
+  grid-template-columns: var(--gastos-cols);
+  align-items:center;
+  text-align:center;
+  margin: 2px 0 8px;
+  font-size:13px;
+  font-weight:600;
+  color:#6b7280;
+  line-height:1;
+  min-height: 22px;
+}
+.rc-gastos-legend span{
+  display:block;
+  white-space:nowrap;
+}
+
+/* Filas: misma grilla y alturas consistentes */
+.rc-gasto-row{
+  display:grid;
+  grid-template-columns: var(--gastos-cols);
+  align-items:center;
+  gap:8px;
+  min-height: 48px; /* altura pareja */
+}
+
+/* Los campos llenan su celda (simetría visual) */
+.rc-gasto-row .rc-select{ width:100%; }
+.rc-gasto-row .rc-desc{ width:100%; min-width:0; }
+.rc-gasto-row input[aria-label="Referencia"],
+.rc-gasto-row .rc-qty{ width:100%; }
+
+/* Alineaciones internas:
+   - Descripción a la izquierda (más cómodo para escribir)
+   - Ref, Cantidad y Acciones centrados para simetría
+*/
+.rc-gasto-row .rc-desc{ text-align:left; }
+.rc-gasto-row input[aria-label="Referencia"],
+.rc-gasto-row .rc-qty{ text-align:center; }
+
+.rc-gasto-row > div:last-child{
+  display:flex;
+  justify-content:center;
+  gap:6px;
+}
+
+/* Mantener reglas originales */
 .rc-desc{ flex: 1 1 320px; min-width: 180px; }
 .rc-qty{ width: 140px; }
 
@@ -364,6 +415,15 @@
   .rc-sheet-3cols{ grid-template-columns: 1fr; }
   .rc-select{ width:100%; }
   .rc-qty{ width:120px; }
+
+  /* Gastos: grilla adaptable manteniendo simetría */
+  .rc-gastos-legend{
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+    font-size:12px;
+  }
+  .rc-gasto-row{
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+  }
 }
 @media (max-width: 700px){
   .rc-header{ 
@@ -460,3 +520,43 @@
   cursor: pointer;
 }
 .rc-preview-btn:focus{ outline: 2px solid #cfe8db; border-radius: 10px; }
+
+/* ===== Gastos como tabla ===== */
+.rc-gastos-table {
+  width: 100%;
+}
+
+.rc-gastos-table thead th {
+  text-align: center;          /* encabezados centrados */
+  color: #6b7280;              /* gris medio */
+  font-weight: 700;
+}
+
+.rc-gastos-table td {
+  vertical-align: middle;      /* alinea inputs y botones a media altura */
+}
+
+.rc-gastos-table td:nth-child(2) {  /* Descripción */
+  text-align: left;
+}
+.rc-gastos-table td:not(:nth-child(2)) {
+  text-align: center;          /* Cat, Ref, Cant, Acciones */
+}
+
+.rc-gastos-table .rc-input,
+.rc-gastos-table .rc-select {
+  width: 100%;                 /* inputs llenan su celda */
+}
+/* === Fix: inputs/selects llenan la celda en la tabla de Gastos === */
+.rc-gastos-table td .rc-input,
+.rc-gastos-table td .rc-select {
+  width: 100% !important;   /* llenar celda */
+  max-width: none !important;/* neutraliza el max-width:35% global */
+  display: block;            /* elimina comportamiento inline */
+  box-sizing: border-box;    /* que el padding cuente dentro del 100% */
+}
+
+/* Opcional: centra Ref y Cantidad; deja Descripción a la izquierda */
+.rc-gastos-table td:nth-child(2) .rc-input { text-align: left; }
+.rc-gastos-table td:nth-child(3) .rc-input,
+.rc-gastos-table td:nth-child(4) .rc-input { text-align: center; }
