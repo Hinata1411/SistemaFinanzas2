@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { db } from './firebase';
+// src/Sucursales.js
+import React, { useState, useEffect, useMemo } from 'react';
+import { db, auth } from './firebase';
 import {
   collection,
   addDoc,
@@ -7,13 +8,18 @@ import {
   deleteDoc,
   updateDoc,
   doc,
+  getDoc,
 } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 import Swal from 'sweetalert2';
 import './Sucursales.css';
 
 export default function Sucursales() {
   const [sucursales, setSucursales] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // Perfil del usuario logueado
+  const [me, setMe] = useState({ role: null, sucursalId: null, loaded: false });
 
   // Modal + formulario
   const [modalOpen, setModalOpen] = useState(false);
@@ -25,6 +31,33 @@ export default function Sucursales() {
 
   const sucursalRef = collection(db, 'sucursales');
 
+  // ===== Perfil del usuario (rol y sucursal asignada si viewer) =====
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        // Sin sesión: por seguridad tratamos como viewer sin permisos
+        setMe({ role: 'viewer', sucursalId: null, loaded: true });
+        return;
+      }
+      try {
+        const snap = await getDoc(doc(db, 'usuarios', user.uid));
+        const data = snap.exists() ? snap.data() : {};
+        setMe({
+          role: data.role || 'viewer',
+          sucursalId: data.sucursalId || null,
+          loaded: true,
+        });
+      } catch (e) {
+        console.error(e);
+        setMe({ role: 'viewer', sucursalId: null, loaded: true });
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const canManage = me.role === 'admin';
+
+  // ===== Cargar sucursales =====
   const obtenerSucursales = async () => {
     try {
       setLoading(true);
@@ -43,7 +76,20 @@ export default function Sucursales() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Lista visible según rol
+  const visibleSucursales = useMemo(() => {
+    if (!me.loaded) return [];
+    if (me.role === 'admin') return sucursales;
+    // viewer: solo su sucursal asignada
+    return sucursales.filter((s) => s.id === me.sucursalId);
+  }, [sucursales, me]);
+
+  // ===== Modal actions =====
   const openNewModal = () => {
+    if (!canManage) {
+      Swal.fire('Sin permisos', 'No puedes crear sucursales.', 'info');
+      return;
+    }
     setEditandoId(null);
     setNombre('');
     setEmpresa('');
@@ -53,6 +99,10 @@ export default function Sucursales() {
   };
 
   const openEditModal = (s) => {
+    if (!canManage) {
+      Swal.fire('Sin permisos', 'No puedes editar sucursales.', 'info');
+      return;
+    }
     setEditandoId(s.id);
     setNombre(s.nombre || '');
     setEmpresa(s.empresa || '');
@@ -81,7 +131,12 @@ export default function Sucursales() {
   };
 
   const handleGuardar = async () => {
+    if (!canManage) {
+      Swal.fire('Sin permisos', 'No puedes guardar cambios.', 'info');
+      return;
+    }
     if (!validar()) return;
+
     try {
       const payload = {
         nombre: nombre.trim(),
@@ -107,6 +162,10 @@ export default function Sucursales() {
   };
 
   const handleEliminar = async (id) => {
+    if (!canManage) {
+      Swal.fire('Sin permisos', 'No puedes eliminar sucursales.', 'info');
+      return;
+    }
     const confirm = await Swal.fire({
       title: '¿Eliminar?',
       text: 'Esta acción no se puede deshacer.',
@@ -125,63 +184,94 @@ export default function Sucursales() {
     }
   };
 
+  // ===== Render =====
   return (
     <div className="sucursales-shell">
       <header className="sucursales-header">
         <h1>Sucursales</h1>
+
         <div className="sucursales-actions">
-          <button className="btn btn-primary" onClick={openNewModal}>
-            Nueva sucursal
-          </button>
+          {canManage && (
+            <button className="btn btn-primary" onClick={openNewModal}>
+              Nueva sucursal
+            </button>
+          )}
         </div>
       </header>
 
-      <div className="tabla-wrap">
-        <table className="tabla">
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>Empresa</th>
-              <th>Ubicación</th>
-              <th>Caja Chica (Q)</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
+      {!me.loaded ? (
+        <div className="tabla-wrap">
+          <table className="tabla">
+            <thead>
               <tr>
-                <td colSpan="5" className="empty">Cargando…</td>
+                <th>Nombre</th>
+                <th>Empresa</th>
+                <th>Ubicación</th>
+                <th>Caja Chica (Q)</th>
+                {canManage && <th>Acciones</th>}
               </tr>
-            ) : sucursales.length ? (
-              sucursales.map((s) => (
-                <tr key={s.id}>
-                  <td>{s.nombre}</td>
-                  <td>{s.empresa}</td>
-                  <td>{s.ubicacion}</td>
-                  <td>{typeof s.cajaChica === 'number' ? s.cajaChica.toFixed(2) : '0.00'}</td>
-                  <td>
-                    <div className="acciones">
-                      <button className="btn-min" onClick={() => openEditModal(s)}>
-                        Editar
-                      </button>
-                      <button className="btn-min danger" onClick={() => handleEliminar(s.id)}>
-                        Eliminar
-                      </button>
-                    </div>
+            </thead>
+            <tbody>
+              <tr>
+                <td colSpan={canManage ? 5 : 4} className="empty">Cargando perfil…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="tabla-wrap">
+          <table className="tabla">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Empresa</th>
+                <th>Ubicación</th>
+                <th>Caja Chica (Q)</th>
+                {canManage && <th>Acciones</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={canManage ? 5 : 4} className="empty">Cargando…</td>
+                </tr>
+              ) : visibleSucursales.length ? (
+                visibleSucursales.map((s) => (
+                  <tr key={s.id}>
+                    <td>{s.nombre}</td>
+                    <td>{s.empresa}</td>
+                    <td>{s.ubicacion}</td>
+                    <td>{typeof s.cajaChica === 'number' ? s.cajaChica.toFixed(2) : '0.00'}</td>
+                    {canManage && (
+                      <td>
+                        <div className="acciones">
+                          <button className="btn-min" onClick={() => openEditModal(s)}>
+                            Editar
+                          </button>
+                          <button className="btn-min danger" onClick={() => handleEliminar(s.id)}>
+                            Eliminar
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={canManage ? 5 : 4} className="empty">
+                    {me.role === 'viewer'
+                      ? 'No tienes una sucursal asignada.'
+                      : 'Sin sucursales'}
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="5" className="empty">Sin sucursales</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      {/* Modal para nueva/editar sucursal */}
-      {modalOpen && (
+      {/* Modal para nueva/editar sucursal (solo admin) */}
+      {modalOpen && canManage && (
         <div className="modal-mask" onClick={closeModal}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <h3 className="card-title">

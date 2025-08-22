@@ -21,19 +21,17 @@ import './Usuarios.css';
 export default function Usuarios() {
   const [usuarios, setUsuarios] = useState([]);
   const [sucursales, setSucursales] = useState([]);
+
   const sucMap = useMemo(
-    () =>
-      Object.fromEntries(
-        sucursales.map(s => [s.id, s.nombre])
-      ),
+    () => Object.fromEntries(sucursales.map(s => [s.id, s.nombre])),
     [sucursales]
   );
 
   // Form registro
   const [username, setUsername] = useState('');
-  const [email, setEmail]     = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole]       = useState('viewer');
+  const [role, setRole]         = useState('viewer');
   const [sucursalId, setSucursalId] = useState(''); // requerido si role === 'viewer'
 
   // Selección de fila
@@ -88,7 +86,11 @@ export default function Usuarios() {
 
     try {
       // Crear cuenta (esto cambia la sesión a la del nuevo usuario)
-      const userCred = await createUserWithEmailAndPassword(auth, email.trim(), password.trim());
+      const userCred = await createUserWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password.trim()
+      );
       const newUser = userCred.user;
 
       // Guardar doc en Firestore
@@ -140,14 +142,14 @@ export default function Usuarios() {
     }
   };
 
-  // ========= Editar =========
+  // ========= Editar (username, rol, sucursal; opcional cambio de contraseña si es su propia cuenta) =========
   const handleEdit = async () => {
     if (!selectedId) return;
     const u = usuarios.find(x => x.id === selectedId);
     if (!u) return;
 
     // 1) Username
-    const promptUser = await Swal.fire({
+    const rUser = await Swal.fire({
       title: 'Editar usuario',
       input: 'text',
       inputLabel: 'Nombre de usuario',
@@ -156,11 +158,11 @@ export default function Usuarios() {
       confirmButtonText: 'Siguiente',
       inputValidator: (v) => (!v || !v.trim() ? 'Requerido' : undefined)
     });
-    if (!promptUser.isConfirmed) return;
-    const newUsername = promptUser.value.trim();
+    if (!rUser.isConfirmed) return;
+    const newUsername = rUser.value.trim();
 
     // 2) Rol
-    const promptRole = await Swal.fire({
+    const rRole = await Swal.fire({
       title: 'Rol',
       input: 'select',
       inputOptions: {
@@ -171,16 +173,16 @@ export default function Usuarios() {
       showCancelButton: true,
       confirmButtonText: 'Siguiente'
     });
-    if (!promptRole.isConfirmed) return;
-    const newRole = promptRole.value;
+    if (!rRole.isConfirmed) return;
+    const newRole = rRole.value;
 
     // 3) Sucursal si viewer
     let newSucursalId = u.sucursalId || '';
     if (newRole === 'viewer') {
       const inputOptions = Object.fromEntries(
-        sucursales.map(s => [s.id, s.nombre])
+        sucursales.map(s => [s.id, s.nombre + (s.ubicacion ? ` – ${s.ubicacion}` : '')])
       );
-      const promptSuc = await Swal.fire({
+      const rSuc = await Swal.fire({
         title: 'Sucursal asignada',
         input: 'select',
         inputOptions,
@@ -189,8 +191,8 @@ export default function Usuarios() {
         showCancelButton: true,
         confirmButtonText: 'Guardar'
       });
-      if (!promptSuc.isConfirmed) return;
-      newSucursalId = promptSuc.value;
+      if (!rSuc.isConfirmed) return;
+      newSucursalId = rSuc.value;
       if (!newSucursalId) {
         Swal.fire('Advertencia', 'Debes seleccionar una sucursal para viewer', 'warning');
         return;
@@ -204,11 +206,11 @@ export default function Usuarios() {
         sucursalId: newRole === 'viewer' ? newSucursalId : null
       });
 
-      // Cambio de contraseña solo si edita su propia cuenta (opcional)
+      // Cambio de contraseña (solo si edita su propia cuenta)
       if (u.id === auth.currentUser?.uid) {
         const askPwd = await Swal.fire({
           title: '¿Cambiar tu contraseña?',
-          text: 'Esta acción requiere tu contraseña actual.',
+          text: 'Requiere tu contraseña actual.',
           icon: 'question',
           showCancelButton: true,
           confirmButtonText: 'Sí, cambiar',
@@ -219,7 +221,6 @@ export default function Usuarios() {
           if (!currentPass) return;
           const newPass = prompt('Nueva contraseña:');
           if (!newPass) return;
-
           const cred = EmailAuthProvider.credential(auth.currentUser.email, currentPass.trim());
           await reauthenticateWithCredential(auth.currentUser, cred);
           await updatePassword(auth.currentUser, newPass.trim());
@@ -250,7 +251,8 @@ export default function Usuarios() {
             <div className="form-row">
               <label>Nombre de usuario</label>
               <input
-                type="text" placeholder="Nombre"
+                type="text"
+                placeholder="Nombre"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
               />
@@ -259,7 +261,8 @@ export default function Usuarios() {
             <div className="form-row">
               <label>Email</label>
               <input
-                type="email" placeholder="email@dominio.com"
+                type="email"
+                placeholder="email@dominio.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
               />
@@ -268,7 +271,8 @@ export default function Usuarios() {
             <div className="form-row">
               <label>Contraseña</label>
               <input
-                type="password" placeholder="••••••••"
+                type="password"
+                placeholder="••••••••"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
               />
@@ -285,10 +289,15 @@ export default function Usuarios() {
             {role === 'viewer' && (
               <div className="form-row">
                 <label>Sucursal asignada</label>
-                <select value={sucursalId} onChange={(e)=> setSucursalId(e.target.value)}>
+                <select
+                  value={sucursalId}
+                  onChange={(e)=> setSucursalId(e.target.value)}
+                >
                   <option value="">Selecciona sucursal</option>
                   {sucursales.map(s => (
-                    <option key={s.id} value={s.id}>{s.ubicacion}</option>
+                    <option key={s.id} value={s.id}>
+                      {s.nombre}{s.ubicacion ? ` – ${s.ubicacion}` : ''}
+                    </option>
                   ))}
                 </select>
               </div>
