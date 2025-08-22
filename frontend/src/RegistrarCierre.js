@@ -619,6 +619,10 @@ const showAmexBtn = _amex;
           cajaChicaUsada={cajaChicaUsada}
           onPagarFaltante={handlePagarFaltante}
           faltantePagado={faltantePagado}
+          pedidosYaCantidad={pedidosYaCantidad}
+          amexTotal={amexTotal}
+          showPedidosYa={showPedidosYaBtn}   
+          showAmex={showAmexBtn} 
         />
       </div>
 

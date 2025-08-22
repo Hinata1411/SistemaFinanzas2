@@ -1,4 +1,3 @@
-// src/components/registrar-cierre/ResumenPanel.jsx
 import React from 'react';
 import { toMoney } from '../../utils/numbers';
 
@@ -8,24 +7,26 @@ export default function ResumenPanel({
   cajaChicaUsada,
   onPagarFaltante,
   faltantePagado,
+
+  // Extras
+  pedidosYaCantidad = 0,   // cantidad (und)
+  amexTotal = 0,           // monto (Q)
+  showPedidosYa = false,   // 👈 por sucursal
+  showAmex = false,        // 👈 por sucursal
 }) {
   const {
-    // Arqueo (ahora basado en conteo x denominación)
     totalArqueoEfectivo,
     totalArqueoTarjeta,
     totalArqueoMotorista,
 
-    // Cierre (sistema)
     totalCierreEfectivo,
     totalCierreTarjeta,
     totalCierreMotorista,
 
-    // Gastos y diferencias
     totalGastos,
     diferenciaEfectivo,
     faltanteEfectivo,
 
-    // Depósito
     totalGeneral,
   } = totals;
 
@@ -57,7 +58,6 @@ export default function ResumenPanel({
             <b>{toMoney(cajaChicaUsada)}</b>
           </div>
 
-          {/* Diferencia faltante/sobrante */}
           <div className={`rc-res-item ${diffEsPositivo ? 'ok' : 'bad'}`}>
             <span>{diffLabel}</span>
             <b>{toMoney(diffAbs)}</b>
@@ -99,10 +99,24 @@ export default function ResumenPanel({
             <span>Gastos</span>
             <b>{toMoney(totalGastos)}</b>
           </div>
+
+          {/* Extras por sucursal */}
+          {showPedidosYa && (
+            <div className="rc-res-item">
+              <span>Total Pedidos Ya</span>
+              <b>{toMoney(pedidosYaCantidad)}</b>
+            </div>
+          )}
+          {showAmex && (
+            <div className="rc-res-item">
+              <span>Total American Express</span>
+              <b>{toMoney(amexTotal)}</b>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Total a depositar (contenedor APARTE) */}
+      {/* Total a depositar */}
       <div className={`rc-total-deposit ${isDepositNegative ? 'bad' : ''}`}>
         <span className="money">
           <svg viewBox="0 0 24 24" aria-hidden="true">

@@ -1,6 +1,5 @@
-// src/pages/ventas/pdf/cuadrePdf.js
 import autoTable from 'jspdf-autotable';
-import { n, totalEfectivoCaja } from '../utils/numbers';
+import { n, totalEfectivoCaja, toMoney } from '../utils/numbers';
 
 /**
  * Calcula métricas para el resumen del PDF (SIN APERTURA).
@@ -26,6 +25,19 @@ export const calcCuadreMetrics = (c) => {
   const cajaChicaUsada = n(c.cajaChicaUsada);
   const faltantePagado = n(c.faltantePagado);
 
+  // === NUEVO: extras del cierre ===
+  const ex = c.extras || {};
+  // Pedidos Ya: tratamos el valor como MONTO (si antes guardaste “cantidad”, se verá igual pero en formato dinero)
+  const pedidosYaMonto = n(
+    ex.pedidosYaMonto ?? ex.pedidosYaCantidad ?? c.pedidosYaMonto ?? c.pedidosYaCantidad ?? 0
+  );
+  // American Express: total monetario que guardamos desde el modal
+  const amexTotal = n(
+    (ex.americanExpress && ex.americanExpress.total) ??
+    c.americanExpressTotal ??
+    0
+  );
+
   // Diferencia y depósito con EFECTIVO TOTAL (no neto)
   const diffEf = totalArqueoEfectivo - cierreEf;
   const totalDepositar = totalArqueoEfectivo - gastos + cajaChicaUsada + faltantePagado;
@@ -34,6 +46,7 @@ export const calcCuadreMetrics = (c) => {
     totalArqueoEfectivo, arqueoTar, arqueoMot,
     cierreEf, cierreTar, cierreMot,
     gastos, cajaChicaUsada, faltantePagado,
+    pedidosYaMonto, amexTotal,       // 👈 NUEVO
     diffEf, totalDepositar,
   };
 };
@@ -74,11 +87,18 @@ export const addFooterPageNumbers = (pdf) => {
 };
 
 /**
- * Renderiza una sección completa de "Cuadre de ventas" en la página actual del PDF.
- * Incluye: Arqueo Físico, Cierre de Sistema, Gastos y Resumen.
- * (SIN apertura ni efectivo neto; Q200 incluido; columnas de arqueo son SUBTOTALES)
+ * renderCuadreSection(
+ *   pdf, c, sucursalNombre, formatDate,
+ *   { showPedidosYa?: boolean, showAmex?: boolean } = {}
+ * )
+ *
+ * Notas:
+ * - Si no pasas flags, igual mostramos la fila si hay datos (> 0) en el cierre.
+ * - “Total Pedidos Ya” se imprime como dinero (toMoney).
  */
-export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate) => {
+export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate, options = {}) => {
+  const { showPedidosYa: optPY = false, showAmex: optAmex = false } = options;
+
   // Encabezado
   addHeader(pdf, {
     title: 'Cuadre de ventas',
@@ -142,7 +162,7 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate) => {
       10:{ halign: 'right' },
     },
     theme: 'grid',
-    // Fila de totales: etiqueta bajo la columna Q1 (índice 7)
+    // Fila de totales
     foot: [[
       '', '', '', '', '', '', '',
       { content: 'Totales', styles: { halign: 'right' } }, // en col Q1 (idx 7)
@@ -254,30 +274,44 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate) => {
     pdf.text('Ventas Total Sistema', leftColX, leftY);
     pdf.setFont('helvetica', 'normal');
     leftY += GAP;
-    drawLine(leftColX, leftY, 'Efectivo',   `Q ${m.cierreEf.toFixed(2)}`);  leftY += GAP;
-    drawLine(leftColX, leftY, 'Tarjeta',    `Q ${m.cierreTar.toFixed(2)}`); leftY += GAP;
-    drawLine(leftColX, leftY, 'A domicilio',`Q ${m.cierreMot.toFixed(2)}`); leftY += GAP;
+    drawLine(leftColX, leftY, 'Efectivo',   toMoney(m.cierreEf));  leftY += GAP;
+    drawLine(leftColX, leftY, 'Tarjeta',    toMoney(m.cierreTar)); leftY += GAP;
+    drawLine(leftColX, leftY, 'A domicilio',toMoney(m.cierreMot)); leftY += GAP;
 
     const totalSistema = m.cierreEf + m.cierreTar; // tu lógica
-    drawLine(leftColX, leftY, 'Total Sistema', `Q ${totalSistema.toFixed(2)}`);
+    drawLine(leftColX, leftY, 'Total Sistema', toMoney(totalSistema));
 
-    // -------- Columna derecha: Control Administración (Arqueo) + ajustes
+    // -------- Columna derecha: Control Administración
     let rightY = boxTop + 36;
     pdf.setFont('helvetica', 'bold');
     pdf.text('Control Administración', rightColX, rightY);
     pdf.setFont('helvetica', 'normal');
     rightY += GAP;
-    // EFECTIVO = totalArqueoEfectivo (no neto)
-    drawLine(rightColX, rightY, 'Efectivo',       `Q ${m.totalArqueoEfectivo.toFixed(2)}`); rightY += GAP;
-    drawLine(rightColX, rightY, 'A domicilio',    `Q ${m.arqueoMot.toFixed(2)}`);           rightY += GAP;
-    drawLine(rightColX, rightY, 'Gastos',         `Q ${m.gastos.toFixed(2)}`);              rightY += GAP;
-    drawLine(rightColX, rightY, 'Caja chica (usada)', `Q ${m.cajaChicaUsada.toFixed(2)}`);  rightY += GAP;
+
+    drawLine(rightColX, rightY, 'Efectivo',            toMoney(m.totalArqueoEfectivo)); rightY += GAP;
+    drawLine(rightColX, rightY, 'A domicilio',         toMoney(m.arqueoMot));           rightY += GAP;
+    drawLine(rightColX, rightY, 'Gastos',              toMoney(m.gastos));              rightY += GAP;
+
+    // Flags por sucursal + fallback por datos (>0)
+    const showPY = Boolean(optPY || m.pedidosYaMonto > 0);
+    const showAX = Boolean(optAmex || m.amexTotal > 0);
+
+    if (showPY) {
+      drawLine(rightColX, rightY, 'Total Pedidos Ya',  toMoney(m.pedidosYaMonto));
+      rightY += GAP;
+    }
+    if (showAX) {
+      drawLine(rightColX, rightY, 'Total American Express', toMoney(m.amexTotal));
+      rightY += GAP;
+    }
+
+    drawLine(rightColX, rightY, 'Caja chica (usada)',  toMoney(m.cajaChicaUsada));      rightY += GAP;
 
     const diffLabel = m.diffEf >= 0 ? 'Sobrante' : 'Faltante';
-    drawLine(rightColX, rightY, diffLabel, `Q ${Math.abs(m.diffEf).toFixed(2)}`);           rightY += GAP;
+    drawLine(rightColX, rightY, diffLabel,             toMoney(Math.abs(m.diffEf)));    rightY += GAP;
 
     if (m.faltantePagado > 0) {
-      drawLine(rightColX, rightY, 'Faltante pagado', `Q ${m.faltantePagado.toFixed(2)}`);
+      drawLine(rightColX, rightY, 'Faltante pagado',   toMoney(m.faltantePagado));
       rightY += GAP;
     }
 
@@ -291,7 +325,7 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate) => {
 
     const centerX = width / 2;
     pdf.text(
-      `Total a depositar: Q ${m.totalDepositar.toFixed(2)}`,
+      `Total a depositar: ${toMoney(m.totalDepositar)}`,
       centerX,
       totalDepY,
       { align: 'center' }
