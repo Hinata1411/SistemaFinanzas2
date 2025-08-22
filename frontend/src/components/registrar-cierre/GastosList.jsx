@@ -125,13 +125,8 @@ export default function GastosList({
 
       {/* ===== Tabla de gastos ===== */}
       <table className="rc-table rc-gastos-table">
-        <colgroup>
-          <col style={{ width: '220px' }} /> {/* Categoría */}
-          <col style={{ width: 'auto' }} />   {/* Descripción */}
-          <col style={{ width: '140px' }} /> {/* Ref */}
-          <col style={{ width: '140px' }} /> {/* Cantidad */}
-          <col style={{ width: '120px' }} /> {/* Acciones */}
-        </colgroup>
+        {/* prettier-ignore */}
+        <colgroup><col style={{width:'220px'}}/><col style={{width:'auto'}}/><col style={{width:'140px'}}/><col style={{width:'140px'}}/><col style={{width:'120px'}}/></colgroup>
         <thead>
           <tr>
             <th style={{ textAlign: 'center' }}>Categoría</th>

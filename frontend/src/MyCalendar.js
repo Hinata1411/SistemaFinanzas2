@@ -22,7 +22,11 @@ const emptyEvent = {
   alertChannel: 'Pestaña emergente',
   frequency:    'Nunca',
   category:     '',
-  status:       'Pendiente'
+  status:       'Pendiente',
+  // 👇 NUEVO
+  visibility:   'all',  // 'mine' | 'all' | 'branch'
+  branchId:     '',     // requerido si visibility === 'branch'
+  ownerEmail:   ''      // para "Solo para mi"
 };
 
 // Helper para capitalizar la primera letra
@@ -30,7 +34,7 @@ const capitalize = str =>
   str.charAt(0).toUpperCase() + str.slice(1);
 
 // Toolbar personalizado de React Big Calendar
-function MyToolbar({ label, onNavigate, onView, openModal }) {
+function MyToolbar({ label, onNavigate, onView, openModal, canAdd }) {
   const capitalizedLabel = capitalize(label);
   return (
     <div className="rbc-toolbar d-flex justify-content-between align-items-center mb-3">
@@ -45,7 +49,10 @@ function MyToolbar({ label, onNavigate, onView, openModal }) {
         <button className="btn btn-outline-secondary btn-sm me-1" onClick={() => onView('week')}>Semana</button>
         <button className="btn btn-outline-secondary btn-sm me-1" onClick={() => onView('day')}>Día</button>
         <button className="btn btn-outline-secondary btn-sm me-3" onClick={() => onView('agenda')}>Agenda</button>
-        <button className="btn btn-primary btn-sm" onClick={openModal}>➕ Agregar Actividad</button>
+        {/* 👇 Solo admin puede agregar */}
+        {canAdd && (
+          <button className="btn btn-primary btn-sm" onClick={openModal}>➕ Agregar Actividad</button>
+        )}
       </div>
     </div>
   );
@@ -58,6 +65,19 @@ const MyCalendar = () => {
   const [editIndex, setEditIndex] = useState(null);
   const [newEvent, setNewEvent]   = useState(emptyEvent);
 
+  // Rol y contexto actual
+  const role = (localStorage.getItem('role') || 'viewer').toLowerCase();
+  const isAdmin = role === 'admin';
+  const currentEmail = localStorage.getItem('email') || '';
+  const activeSucursalId = localStorage.getItem('activeSucursalId') || '';
+
+  // Sucursales para el select (opcional, desde localStorage)
+  let sucursales = [];
+  try {
+    const raw = localStorage.getItem('sucursales');
+    if (raw) sucursales = JSON.parse(raw); // [{id,nombre}]
+  } catch { /* noop */ }
+
   // Para almacenar referencias a los popups abiertos
   const popupRefs = useRef({}); // { [eventoId]: windowReference }
 
@@ -66,6 +86,10 @@ const MyCalendar = () => {
     const saved = localStorage.getItem('events');
     if (saved) {
       const parsed = JSON.parse(saved).map(evt => ({
+        // valores por defecto para compatibilidad
+        visibility: 'all',
+        branchId: '',
+        ownerEmail: '',
         ...evt,
         start: new Date(evt.start),
         end:   new Date(evt.end)
@@ -96,13 +120,19 @@ const MyCalendar = () => {
 
   // 3) Abrir modal para agregar
   const openAddModal = () => {
+    if (!isAdmin) return; // viewers no agregan
     setIsEditing(false);
-    setNewEvent(emptyEvent);
+    setNewEvent({
+      ...emptyEvent,
+      ownerEmail: currentEmail,
+      branchId: activeSucursalId || ''
+    });
     setModalOpen(true);
   };
 
   // 4) Abrir modal para editar (precarga datos)
   const openEditModal = (event, index) => {
+    if (!isAdmin) return; // viewers no editan
     const date      = moment(event.start).format('YYYY-MM-DD');
     const startTime = moment(event.start).format('HH:mm');
     const endTime   = moment(event.end).format('HH:mm');
@@ -131,17 +161,22 @@ const MyCalendar = () => {
       alertTime,
       frequency,
       category,
-      status
+      status,
+      visibility,
+      branchId
     } = newEvent;
 
     if (!title || !date || !startTime || !endTime) {
       return window.alert('Completa título, fecha e horas');
     }
+    if (visibility === 'branch' && !branchId) {
+      return window.alert('Selecciona una sucursal para la visibilidad por sucursal.');
+    }
 
     // 5.1) Calcula start y end como Date
     const start = new Date(`${date}T${startTime}`);
     const end   = new Date(`${date}T${endTime}`);
-    const evt   = { ...newEvent, start, end };
+    const evt   = { ...newEvent, start, end, ownerEmail: newEvent.ownerEmail || currentEmail };
 
     // 5.2) Actualiza lista de eventos
     let eventoId;
@@ -277,13 +312,30 @@ const MyCalendar = () => {
     }
   };
 
+  // === FILTRADO para viewer ===
+  const filteredEvents = isAdmin
+    ? events
+    : events.filter(evt => {
+        // Todos
+        if ((evt.visibility || 'all') === 'all') return true;
+        // Por sucursal (debe coincidir la sucursal activa)
+        if (evt.visibility === 'branch') {
+          return activeSucursalId && evt.branchId && evt.branchId === activeSucursalId;
+        }
+        // Solo para mi (opcional: si es el dueño, puede verlo)
+        if (evt.visibility === 'mine') {
+          return (evt.ownerEmail || '') === currentEmail;
+        }
+        return false;
+      });
+
   return (
     <div className="p-3">
       {/* Calendario con toolbar personalizado */}
       <div className="calendar-container">
         <Calendar
           localizer={localizer}
-          events={events}
+          events={filteredEvents}
           startAccessor="start"
           endAccessor="end"
           defaultView="month"
@@ -291,10 +343,11 @@ const MyCalendar = () => {
           style={{ height: 500 }}
           components={{
             toolbar: toolbarProps => (
-              <MyToolbar {...toolbarProps} openModal={openAddModal} />
+              <MyToolbar {...toolbarProps} openModal={openAddModal} canAdd={isAdmin} />
             )
           }}
           onSelectEvent={event => {
+            if (!isAdmin) return; // viewer no edita
             const idx = events.findIndex(e =>
               e.start.getTime() === event.start.getTime() &&
               e.end.getTime()   === event.end.getTime() &&
@@ -487,6 +540,86 @@ const MyCalendar = () => {
                       <option value="En curso">En curso</option>
                       <option value="Completado">Completado</option>
                     </select>
+                  </div>
+
+                  {/* 👇 NUEVO: Visibilidad de actividad */}
+                  <div className="mb-3">
+                    <label className="form-label d-block">Visibilidad de actividad</label>
+
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="radio"
+                        name="visibility"
+                        id="visMine"
+                        value="mine"
+                        checked={newEvent.visibility === 'mine'}
+                        onChange={handleChange('visibility')}
+                      />
+                      <label className="form-check-label" htmlFor="visMine">
+                        Solo para mi
+                      </label>
+                    </div>
+
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="radio"
+                        name="visibility"
+                        id="visAll"
+                        value="all"
+                        checked={newEvent.visibility === 'all'}
+                        onChange={handleChange('visibility')}
+                      />
+                      <label className="form-check-label" htmlFor="visAll">
+                        Todos
+                      </label>
+                    </div>
+
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="radio"
+                        name="visibility"
+                        id="visBranch"
+                        value="branch"
+                        checked={newEvent.visibility === 'branch'}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setNewEvent(evt => ({
+                            ...evt,
+                            visibility: val,
+                            branchId: evt.branchId || activeSucursalId || ''
+                          }));
+                        }}
+                      />
+                      <label className="form-check-label" htmlFor="visBranch">
+                        Por sucursal
+                      </label>
+                    </div>
+
+                    {newEvent.visibility === 'branch' && (
+                      <div className="mt-2">
+                        <label className="form-label">Sucursal</label>
+                        <select
+                          className="form-select"
+                          value={newEvent.branchId}
+                          onChange={handleChange('branchId')}
+                        >
+                          <option value="">— Selecciona sucursal —</option>
+                          {Array.isArray(sucursales) && sucursales.map(s => {
+                            const labelNombre = s.nombre || s.name || s.id;
+                            const labelUbi = s.ubicacion || s.location || '';
+                            const label = labelUbi ? `${labelNombre} — ${labelUbi}` : labelNombre;
+                            return (
+                              <option key={s.id} value={s.id}>
+                                {label}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                    )}
                   </div>
                 </div>
 

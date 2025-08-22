@@ -1,4 +1,3 @@
-// src/RegistrarCierre.js
 import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -18,6 +17,8 @@ import { db, auth } from './firebase';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import './components/registrar-cierre/RegistrarCierre.css';
+import AmexModal from './components/registrar-cierre/AmexModal';
+
 
 import { todayISO } from './utils/dates';
 import { n } from './utils/numbers';
@@ -31,7 +32,6 @@ import ResumenPanel from './components/registrar-cierre/ResumenPanel';
 import CajaChicaModal from './components/registrar-cierre/CajaChicaModal';
 import CategoriasModal from './components/registrar-cierre/CategoriasModal';
 
-// Helpers para "Ajuste de caja chica"
 const isAjusteCajaChica = (name) =>
   (name || '').toString().trim().toLowerCase() === 'ajuste de caja chica';
 
@@ -71,12 +71,12 @@ export default function RegistrarCierre() {
   const navigate = useNavigate();
   const [sp] = useSearchParams();
   const editId = sp.get('id') || null;
-  const mode = (sp.get('mode') || '').toLowerCase(); // 'edit' | 'view' | ''
+  const mode = (sp.get('mode') || '').toLowerCase();
   const isViewing = mode === 'view';
   const isEditingExisting = !!editId && mode === 'edit';
   const [originalDoc, setOriginalDoc] = useState(null);
 
-  // ===== Perfil usuario (rol + sucursal asignada si viewer) =====
+  // Perfil usuario
   const [me, setMe] = useState({ loaded: false, role: 'viewer', sucursalId: null });
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -101,9 +101,10 @@ export default function RegistrarCierre() {
   }, []);
   const isAdmin = me.role === 'admin';
 
-  // Sucursales
+  // Sucursales desde hook (puede que no traiga extras)
   const sucursales = useSucursales();
-  // Sucursales visibles según rol
+
+  // Filtrar sucursales visibles
   const sucursalesVisibles = useMemo(() => {
     if (!me.loaded) return [];
     return isAdmin ? sucursales : sucursales.filter((s) => s.id === me.sucursalId);
@@ -111,12 +112,34 @@ export default function RegistrarCierre() {
 
   const [activeSucursalId, setActiveSucursalId] = useState(null);
 
-  // Al cargar rol/sucursales, fijar sucursal activa para viewer
+  // Doc real de la sucursal activa (para extras)
+  const [activeSucursalDoc, setActiveSucursalDoc] = useState(null);
+
+  // Al cargar, fijar sucursal activa
   useEffect(() => {
     if (!me.loaded || !sucursalesVisibles.length) return;
-    // Si ya hay activa, mantener; si no, fijar primera visible (o la asignada del viewer)
     setActiveSucursalId((prev) => prev || sucursalesVisibles[0]?.id || null);
   }, [me.loaded, sucursalesVisibles]);
+
+  // Cuando cambia la sucursal activa, leer SIEMPRE el doc real de Firestore
+  useEffect(() => {
+    (async () => {
+      if (!activeSucursalId) { setActiveSucursalDoc(null); return; }
+      try {
+        const sSnap = await getDoc(doc(db, 'sucursales', activeSucursalId));
+        setActiveSucursalDoc(sSnap.exists() ? { id: sSnap.id, ...sSnap.data() } : null);
+      } catch (e) {
+        console.error('No se pudo leer la sucursal activa:', e);
+        setActiveSucursalDoc(null);
+      }
+    })();
+  }, [activeSucursalId]);
+
+  // American Express (detalle por sabores)
+  const [showAmex, setShowAmex] = useState(false);
+  const [amexItems, setAmexItems] = useState({});   // { sabor: cantidad }
+  const [amexTotal, setAmexTotal] = useState(0);
+
 
   // Fecha
   const [fecha, setFecha] = useState(todayISO);
@@ -132,7 +155,6 @@ export default function RegistrarCierre() {
       cantidad: '',
       ref: '',
       locked: false,
-      // adjunto (solo memoria local; NO se sube ni guarda)
       fileUrl: '',
       fileBlob: null,
       filePreview: '',
@@ -144,6 +166,10 @@ export default function RegistrarCierre() {
   const [cajaChicaUsada, setCajaChicaUsada] = useState(0);
   const [faltantePagado, setFaltantePagado] = useState(0);
 
+  // Pedidos Ya
+  const [pedidosYaCantidad, setPedidosYaCantidad] = useState(0);
+
+  // Cargar documento existente si aplica
   useEffect(() => {
     if (!editId) return;
     (async () => {
@@ -156,25 +182,29 @@ export default function RegistrarCierre() {
         setActiveSucursalId(d.sucursalId || null);
         setFecha(d.fecha || todayISO);
 
-        setArqueo(
-          Array.isArray(d.arqueo) && d.arqueo.length
-            ? d.arqueo
-            : [emptyArqueoCaja(), emptyArqueoCaja(), emptyArqueoCaja()]
-        );
-        setCierre(
-          Array.isArray(d.cierre) && d.cierre.length
-            ? d.cierre
-            : [emptyCierreCaja(), emptyCierreCaja(), emptyCierreCaja()]
-        );
+        setArqueo(Array.isArray(d.arqueo) && d.arqueo.length ? d.arqueo : [emptyArqueoCaja(), emptyArqueoCaja(), emptyArqueoCaja()]);
+        setCierre(Array.isArray(d.cierre) && d.cierre.length ? d.cierre : [emptyCierreCaja(), emptyCierreCaja(), emptyCierreCaja()]);
 
         setGastos(Array.isArray(d.gastos) ? d.gastos : []);
-        setCategorias(
-          Array.isArray(d.categorias) && d.categorias.length ? d.categorias : INIT_GASTO_CATEGORIAS
-        );
+        setCategorias(Array.isArray(d.categorias) && d.categorias.length ? d.categorias : INIT_GASTO_CATEGORIAS);
 
         setComentario(d.comentario || '');
         setCajaChicaUsada(n(d.cajaChicaUsada));
         setFaltantePagado(n(d.faltantePagado));
+
+        const py = (d.extras && d.extras.pedidosYaCantidad != null)
+          ? d.extras.pedidosYaCantidad
+          : (d.pedidosYaCantidad != null ? d.pedidosYaCantidad : 0);
+        setPedidosYaCantidad(n(py));
+
+        // extras american express (si existiera)
+        const ax = d.extras?.americanExpress;
+        if (ax && typeof ax === 'object') {
+          setAmexItems(ax.items || {});
+          setAmexTotal(ax.total || 0);
+        }
+
+
       } catch (e) {
         console.error(e);
       }
@@ -187,12 +217,53 @@ export default function RegistrarCierre() {
   const [showCatModal, setShowCatModal] = useState(false);
   const [showCajaChica, setShowCajaChica] = useState(false);
 
-  // Sucursal activa + caja chica
-  const activeSucursal = useMemo(
+  // Sucursal activa según hook (solo para nombre y fallback de caja chica)
+  const activeFromHook = useMemo(
     () => sucursales.find((s) => s.id === activeSucursalId) || null,
     [sucursales, activeSucursalId]
   );
-  const cajaChicaDisponible = activeSucursal?.cajaChica || 0;
+
+  // Preferimos el doc real para caja chica y extras; caemos al hook si no llegó
+  const cajaChicaDisponible = (activeSucursalDoc?.cajaChica ?? activeFromHook?.cajaChica) || 0;
+
+  // === EXTRAS seguros (si el hook no trae extras, los leemos del doc real) ===
+  // === EXTRAS seguros y tolerantes a variantes ===
+const truthy = (v) => v === true || v === 1 || v === '1' || (typeof v === 'string' && v.toLowerCase() === 'true');
+
+// Saca flags intentando varias rutas/alias y normaliza a boolean
+const resolveExtras = (srcA, srcB) => {
+  const a = srcA || {};
+  const b = srcB || {};
+  const ax = a.extras || {};
+  const bx = b.extras || {};
+
+  const pedidosYa =
+    truthy(ax.pedidosYa ?? a.pedidosYa ?? bx.pedidosYa ?? b.pedidosYa ?? ax.py ?? bx.py ?? ax.pedidos_y ?? bx.pedidos_y ?? false);
+
+  const americanExpress =
+    truthy(
+      ax.americanExpress ??
+      a.americanExpress ??
+      bx.americanExpress ??
+      b.americanExpress ??
+      ax.amex ??
+      bx.amex ??
+      ax.american_express ??
+      bx.american_express ??
+      ax.ae ??
+      bx.ae ??
+      false
+    );
+
+  return { pedidosYa, americanExpress };
+};
+
+// Preferimos el doc real; b es el hook como respaldo
+const { pedidosYa: _py, americanExpress: _amex } = resolveExtras(activeSucursalDoc, activeFromHook);
+
+const showPedidosYaBtn = _py;
+const showAmexBtn = _amex;
+
 
   // Totales
   const { totals, flags } = useRegistrarCierreTotals({
@@ -202,10 +273,9 @@ export default function RegistrarCierre() {
     cajaChicaUsada,
     faltantePagado,
   });
-
   const { faltanteEfectivo, faltantePorGastos } = totals;
 
-  // Handlers de edición
+  // Handlers
   const setArq = (idx, field, value) => {
     if (isViewing) return;
     setArqueo((prev) => {
@@ -224,7 +294,6 @@ export default function RegistrarCierre() {
     });
   };
 
-  // Bloqueo + alta de nuevo gasto
   const addGasto = () => {
     if (isViewing) return;
     setGastos((g) => {
@@ -259,32 +328,20 @@ export default function RegistrarCierre() {
     setGastos((prev) => prev.filter((_, idx) => idx !== i));
   };
 
-  // Categorías modal callback
   const handleChangeCategorias = (nextCategorias, oldName, newName) => {
     if (isViewing) return;
     setCategorias(nextCategorias);
     if (oldName && newName) {
-      setGastos((prev) =>
-        prev.map((g) => (g.categoria === oldName ? { ...g, categoria: newName } : g))
-      );
+      setGastos((prev) => prev.map((g) => (g.categoria === oldName ? { ...g, categoria: newName } : g)));
     } else if (oldName && !newName) {
       const fallback = nextCategorias[0] || '';
-      setGastos((prev) =>
-        prev.map((g) => (g.categoria === oldName ? { ...g, categoria: fallback } : g))
-      );
+      setGastos((prev) => prev.map((g) => (g.categoria === oldName ? { ...g, categoria: fallback } : g)));
     }
   };
 
-  // Pagar faltante (solo admin)
   const handlePagarFaltante = async () => {
-    if (!isAdmin) {
-      Swal.fire('Solo administradores', 'No puedes pagar faltante.', 'info');
-      return;
-    }
-    if (isViewing) {
-      Swal.fire('Solo lectura', 'No puedes pagar faltante en modo ver.', 'info');
-      return;
-    }
+    if (!isAdmin) return Swal.fire('Solo administradores', 'No puedes pagar faltante.', 'info');
+    if (isViewing) return Swal.fire('Solo lectura', 'No puedes pagar faltante en modo ver.', 'info');
     if (faltanteEfectivo <= 0) return;
     const confirmar = await Swal.fire({
       title: 'Pagar faltante',
@@ -296,27 +353,52 @@ export default function RegistrarCierre() {
     });
     if (confirmar.isConfirmed) {
       setFaltantePagado(faltanteEfectivo);
-      await Swal.fire({
-        icon: 'success',
-        title: 'Faltante pagado',
-        text: `Se agregó Q ${faltanteEfectivo.toFixed(2)} al total a depositar.`,
-        timer: 1400,
-        showConfirmButton: false,
-      });
+      await Swal.fire({ icon: 'success', title: 'Faltante pagado', text: `Se agregó Q ${faltanteEfectivo.toFixed(2)} al total a depositar.`, timer: 1400, showConfirmButton: false });
     }
   };
 
-  // Navegación
+  const handlePedidosYa = async () => {
+    if (isViewing) return;
+    const { isConfirmed, value } = await Swal.fire({
+      title: 'Ingresar cantidad vendida en Pedidos Ya',
+      input: 'number',
+      inputValue: (Number.isFinite(pedidosYaCantidad) && pedidosYaCantidad >= 0) ? pedidosYaCantidad : '',
+      inputAttributes: { min: '0', step: '1', inputmode: 'numeric' },
+      showCancelButton: true,
+      confirmButtonText: 'Guardar',
+      cancelButtonText: 'Cancelar',
+      allowOutsideClick: false,
+      allowEscapeKey: true,
+      inputValidator: (val) => {
+        if (val === '' || val === null) return 'Ingresa un número entero';
+        if (!/^\d+$/.test(String(val))) return 'Solo enteros (0, 1, 2, …)';
+        return undefined;
+      },
+    });
+    if (isConfirmed) {
+      setPedidosYaCantidad(parseInt(value, 10));
+      await Swal.fire({ icon: 'success', title: 'Guardado', timer: 900, showConfirmButton: false });
+    }
+  };
+
+  const handleAmericanExpress = () => {
+  if (isViewing) return;
+  setShowAmex(true);
+  };
+
+
   const onBack = () => navigate('/home/Ventas');
 
-  // Guardar
+  // Validaciones
   const validate = () => {
-    if (!activeSucursal?.id) {
+    const activeNombre = activeSucursalDoc?.nombre ?? activeFromHook?.nombre;
+    const activeId = activeSucursalDoc?.id ?? activeFromHook?.id;
+
+    if (!activeId) {
       Swal.fire('Sucursal', 'Selecciona una sucursal en las pestañas.', 'warning');
       return false;
     }
-    // Viewer solo puede su sucursal asignada
-    if (!isAdmin && me.loaded && me.sucursalId && activeSucursal.id !== me.sucursalId) {
+    if (!isAdmin && me.loaded && me.sucursalId && activeId !== me.sucursalId) {
       Swal.fire('Permisos', 'Solo puedes registrar en tu sucursal asignada.', 'warning');
       return false;
     }
@@ -325,11 +407,7 @@ export default function RegistrarCierre() {
       return false;
     }
     if (n(cajaChicaUsada) > n(cajaChicaDisponible)) {
-      Swal.fire(
-        'Caja chica',
-        `No puedes usar más de lo disponible (Q ${Number(cajaChicaDisponible).toFixed(2)}).`,
-        'warning'
-      );
+      Swal.fire('Caja chica', `No puedes usar más de lo disponible (Q ${Number(cajaChicaDisponible).toFixed(2)}).`, 'warning');
       return false;
     }
     return true;
@@ -343,35 +421,27 @@ export default function RegistrarCierre() {
     try {
       const cierresRef = collection(db, 'cierres');
 
-      // Si estás creando, valida duplicado (sucursal+fecha)
+      const sucId = activeSucursalDoc?.id ?? activeFromHook?.id;
+      const sucNombre = activeSucursalDoc?.nombre ?? activeFromHook?.nombre;
+
       if (!isEditingExisting) {
         const fechaQ = query(cierresRef, where('fecha', '==', fecha));
         const snap = await getDocs(fechaQ);
-        const existe = snap.docs.some((d) => (d.data()?.sucursalId || '') === activeSucursal.id);
+        const existe = snap.docs.some((d) => (d.data()?.sucursalId || '') === sucId);
         if (existe) {
-          await Swal.fire({
-            icon: 'warning',
-            title: 'Ya existe un cuadre',
-            text: `Ya hay un cuadre registrado para "${activeSucursal.nombre}" en la fecha ${fecha}.`,
-          });
+          await Swal.fire({ icon: 'warning', title: 'Ya existe un cuadre', text: `Ya hay un cuadre registrado para "${sucNombre}" en la fecha ${fecha}.` });
           return;
         }
       }
 
-      // SIN STORAGE: no subimos archivos; omitimos blobs/local preview
       const gastosListos = (gastos || []).map((g) => {
         const { fileBlob, filePreview, ...rest } = g;
-        return {
-          ...rest,
-          fileUrl: '',
-          fileName: '',
-          fileMime: '',
-        };
-      });
+        return { ...rest, fileUrl: '', fileName: '', fileMime: '' };
+        });
 
       const payloadBase = {
         fecha,
-        sucursalId: activeSucursal.id,
+        sucursalId: sucId,
         arqueo,
         cierre,
         gastos: gastosListos,
@@ -379,56 +449,39 @@ export default function RegistrarCierre() {
         categorias,
         cajaChicaUsada,
         faltantePagado,
-        totales: { ...totals },
+        extras: {
+        pedidosYaCantidad: Number.isFinite(pedidosYaCantidad) ? parseInt(pedidosYaCantidad, 10) : 0,
+        americanExpress: {
+          items: amexItems,   // { sabor: cantidad }
+          total: amexTotal,   // número
+        },
+      },
+      totales: { ...totals },
       };
 
       if (isEditingExisting) {
-        // === Actualizar existente (preservar createdAt) ===
-        await updateDoc(doc(db, 'cierres', editId), {
-          ...payloadBase,
-          updatedAt: serverTimestamp(),
-        });
+        await updateDoc(doc(db, 'cierres', editId), { ...payloadBase, updatedAt: serverTimestamp() });
 
-        // Ajuste de caja chica: aplicar diferencia vs documento original
         const oldAjuste = getTotalAjusteCajaChica(originalDoc?.gastos || []);
         const newAjuste = getTotalAjusteCajaChica(gastos);
         const oldUsada = n(originalDoc?.cajaChicaUsada);
         const newUsada = n(cajaChicaUsada);
         const deltaCaja = -(newUsada - oldUsada) + (newAjuste - oldAjuste);
         if (deltaCaja !== 0) {
-          const sucRef = doc(db, 'sucursales', activeSucursal.id);
-          await updateDoc(sucRef, { cajaChica: increment(deltaCaja) });
+          await updateDoc(doc(db, 'sucursales', sucId), { cajaChica: increment(deltaCaja) });
         }
 
-        await Swal.fire({
-          icon: 'success',
-          title: 'Actualizado',
-          text: 'El cuadre se actualizó correctamente.',
-          timer: 1600,
-          showConfirmButton: false,
-        });
+        await Swal.fire({ icon: 'success', title: 'Actualizado', text: 'El cuadre se actualizó correctamente.', timer: 1600, showConfirmButton: false });
       } else {
-        // === Crear nuevo ===
-        await addDoc(cierresRef, {
-          ...payloadBase,
-          createdAt: serverTimestamp(),
-        });
+        await addDoc(cierresRef, { ...payloadBase, createdAt: serverTimestamp() });
 
-        // Actualizamos caja chica (como ya lo hacías)
         const ajustePositivo = getTotalAjusteCajaChica(gastos);
         const delta = -n(cajaChicaUsada) + n(ajustePositivo);
         if (delta !== 0) {
-          const sucRef = doc(db, 'sucursales', activeSucursal.id);
-          await updateDoc(sucRef, { cajaChica: increment(delta) });
+          await updateDoc(doc(db, 'sucursales', sucId), { cajaChica: increment(delta) });
         }
 
-        await Swal.fire({
-          icon: 'success',
-          title: 'Guardado',
-          text: 'El cuadre se guardó correctamente.',
-          timer: 1600,
-          showConfirmButton: false,
-        });
+        await Swal.fire({ icon: 'success', title: 'Guardado', text: 'El cuadre se guardó correctamente.', timer: 1600, showConfirmButton: false });
       }
       navigate('/home/Ventas');
     } catch (err) {
@@ -439,7 +492,6 @@ export default function RegistrarCierre() {
     }
   };
 
-  // ===== Esperar perfil/sucursales =====
   if (!me.loaded) {
     return (
       <div className="rc-shell">
@@ -449,9 +501,6 @@ export default function RegistrarCierre() {
     );
   }
 
-  // ===== CSS de ocultación para viewer (sin tocar componentes) =====
-  // - Oculta el botón "Categorías" en Gastos (es el último botón del header de Gastos).
-  // - Oculta el botón "Pagar faltante" dentro del Resumen.
   const hideAdminButtonsCss = !isAdmin ? `
     .hide-cats .rc-card-hd > .rc-btn.rc-btn-outline:last-child { display: none !important; }
     .hide-pay  .rc-res-item .rc-btn.rc-btn-primary { display: none !important; }
@@ -459,64 +508,54 @@ export default function RegistrarCierre() {
 
   return (
     <div className="rc-shell">
-      {/* estilos condicionales para ocultar botones si viewer */}
       {hideAdminButtonsCss && <style>{hideAdminButtonsCss}</style>}
 
-      {/* HEADER (izquierda: título + fecha; derecha: regresar) */}
       <div className="rc-header">
         <div className="rc-header-left">
-          <h1>
-            Registrar cuadre {isEditingExisting ? '(editando)' : isViewing ? '(viendo)' : ''}
-          </h1>
+          <h1>Registrar cuadre {isEditingExisting ? '(editando)' : isViewing ? '(viendo)' : ''}</h1>
           <div className="rc-date">
             <label htmlFor="rc-fecha">Fecha</label>
-            <input
-              id="rc-fecha"
-              type="date"
-              value={fecha}
-              onChange={(e) => setFecha(e.target.value)}
-              disabled={isViewing}
-              readOnly={isViewing}
-            />
-            <div className="rc-tabs-actions">
+            <input id="rc-fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} disabled={isViewing} readOnly={isViewing} />
+            <div className="rc-tabs-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {!isViewing && (
-                <button
-                  type="button"
-                  className="rc-btn rc-btn-accent"
-                  onClick={onSave}
-                  disabled={busy}
-                  title={isEditingExisting ? 'Actualizar cuadre' : 'Guardar cuadre'}
-                >
-                  {busy ? 'Guardando…' : isEditingExisting ? 'Actualizar' : 'Guardar'}
-                </button>
+                <>
+                  <button type="button" className="rc-btn rc-btn-accent" onClick={onSave} disabled={busy} title={isEditingExisting ? 'Actualizar cuadre' : 'Guardar cuadre'}>
+                    {busy ? 'Guardando…' : isEditingExisting ? 'Actualizar' : 'Guardar'}
+                  </button>
+
+                  {showPedidosYaBtn && (
+                    <button type="button" className="rc-btn rc-btn-outline" onClick={handlePedidosYa} disabled={busy} title="Ingresar cantidad vendida en Pedidos Ya">
+                      Pedidos Ya
+                    </button>
+                  )}
+
+                  {showAmexBtn && (
+                    <button type="button" className="rc-btn rc-btn-outline" onClick={handleAmericanExpress} disabled={busy} title="American Express">
+                      American Express
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>
         </div>
 
         <div className="rc-actions">
-          <button
-            type="button"
-            className="rc-btn rc-btn-primary"
-            onClick={onBack}
-            disabled={busy}
-            title="Regresar a Ventas"
-          >
+          <button type="button" className="rc-btn rc-btn-primary" onClick={onBack} disabled={busy} title="Regresar a Ventas">
             Regresar a Ventas
           </button>
         </div>
       </div>
 
-      {/* SUCURSALES (tabs pegadas) */}
+      {/* SUCURSALES */}
       <div className="rc-tabs-row rc-tabs-attached">
         <div className="rc-tabs rc-tabs-browser" role="tablist" aria-label="Sucursales">
           {sucursalesVisibles.map((s) => (
             <button
               key={s.id}
-              className={`rc-tab ${activeSucursal?.id === s.id ? 'active' : ''}`}
+              className={`rc-tab ${(activeSucursalDoc?.id ?? activeFromHook?.id) === s.id ? 'active' : ''}`}
               onClick={() => {
                 if (isViewing) return;
-                // Si viewer, no permitir cambiar a otra distinta (por si hubiera 2 visibles por algún motivo)
                 if (!isAdmin && me.sucursalId && s.id !== me.sucursalId) return;
                 setActiveSucursalId(s.id);
                 setCajaChicaUsada(0);
@@ -524,7 +563,7 @@ export default function RegistrarCierre() {
               }}
               type="button"
               role="tab"
-              aria-selected={activeSucursal?.id === s.id}
+              aria-selected={(activeSucursalDoc?.id ?? activeFromHook?.id) === s.id}
               aria-controls={`panel-${s.id}`}
               id={`tab-${s.id}`}
               disabled={isViewing || (!isAdmin && me.sucursalId && s.id !== me.sucursalId)}
@@ -543,60 +582,55 @@ export default function RegistrarCierre() {
           setArq={setArq}
           cajaChicaDisponible={cajaChicaDisponible}
           readOnly={isViewing}
+          extras={{
+            showPedidosYaBtn,
+            showAmexBtn,
+            onPedidosYa: handlePedidosYa,
+            onAmex: handleAmericanExpress,
+            disabled: busy || isViewing,
+          }}
         />
 
-        {/* Cierre de Sistema: solo admin */}
-        {isAdmin && (
-          <CierreGrid cierre={cierre} setCier={setCier} readOnly={isViewing} />
-        )}
+        {isAdmin && <CierreGrid cierre={cierre} setCier={setCier} readOnly={isViewing} />}
       </div>
 
       {/* GASTOS + RESUMEN */}
       <div className="rc-grid rc-grid-bottom">
-          <GastosList
-            gastos={gastos}
-            categorias={categorias}
-            setGasto={setGasto}
-            addGasto={addGasto}
-            removeGasto={removeGasto}
-            showCategoriasBtn={isAdmin && !isViewing}
-            onOpenCategorias={() => setShowCatModal(true)}
-            onUseCajaChica={() => setShowCajaChica(true)}
-            activeSucursalNombre={activeSucursal?.nombre}
-            cajaChicaDisponible={cajaChicaDisponible}
-            faltantePorGastos={faltantePorGastos}
-            readOnly={isViewing}
-          />
-        </div>
+        <GastosList
+          gastos={gastos}
+          categorias={categorias}
+          setGasto={setGasto}
+          addGasto={addGasto}
+          removeGasto={removeGasto}
+          showCategoriasBtn={isAdmin && !isViewing}
+          onOpenCategorias={() => setShowCatModal(true)}
+          onUseCajaChica={() => setShowCajaChica(true)}
+          activeSucursalNombre={activeSucursalDoc?.nombre ?? activeFromHook?.nombre}
+          cajaChicaDisponible={cajaChicaDisponible}
+          faltantePorGastos={faltantePorGastos}
+          readOnly={isViewing}
+        />
+      </div>
 
-        {/* envolvemos Resumen con clase para ocultar 'Pagar faltante' si viewer */}
-        <div className={isAdmin ? '' : 'hide-pay'}>
-          <ResumenPanel
-            totals={totals}
-            flags={flags}
-            cajaChicaUsada={cajaChicaUsada}
-            onPagarFaltante={handlePagarFaltante} // si viewer, el botón no se ve por CSS
-            faltantePagado={faltantePagado}
-          />
-        </div>
+      <div className={isAdmin ? '' : 'hide-pay'}>
+        <ResumenPanel
+          totals={totals}
+          flags={flags}
+          cajaChicaUsada={cajaChicaUsada}
+          onPagarFaltante={handlePagarFaltante}
+          faltantePagado={faltantePagado}
+        />
+      </div>
 
-        {isAdmin && (
-          <section className="rc-card">
-            <h3>Comentario</h3>
-            <div className="rc-comentario">
-              <textarea
-                id="rc-comentario"
-                value={comentario}
-                onChange={(e) => setComentario(e.target.value)}
-                placeholder="Agrega un comentario"
-                rows={3}
-                disabled={isViewing}
-                readOnly={isViewing}
-              />
-            </div>
-          </section>
-        )}
-        {/* MODAL Categorías */}
+      {isAdmin && (
+        <section className="rc-card">
+          <h3>Comentario</h3>
+          <div className="rc-comentario">
+            <textarea id="rc-comentario" value={comentario} onChange={(e) => setComentario(e.target.value)} placeholder="Agrega un comentario" rows={3} disabled={isViewing} readOnly={isViewing} />
+          </div>
+        </section>
+      )}
+
       <CategoriasModal
         open={showCatModal}
         onClose={() => setShowCatModal(false)}
@@ -604,21 +638,26 @@ export default function RegistrarCierre() {
         onChangeCategorias={handleChangeCategorias}
       />
 
-      {/* MODAL Caja chica */}
       <CajaChicaModal
         open={showCajaChica}
         onClose={() => setShowCajaChica(false)}
         cajaChicaDisponible={cajaChicaDisponible}
-        // ya incluye faltantePagado en el cálculo:
         faltantePorGastos={faltantePorGastos}
-        onApply={(monto) => {
-          if (isViewing) return;
-          setCajaChicaUsada((prev) => prev + monto);
-        }}
+        onApply={(monto) => { if (isViewing) return; setCajaChicaUsada((prev) => prev + monto); }}
       />
-        
-      </div>
-  )
 
-      
+      <AmexModal
+      open={showAmex}
+      onClose={() => setShowAmex(false)}
+      initialItems={amexItems}
+      readOnly={isViewing}
+      onSave={({ items, total }) => {
+        setAmexItems(items);
+        setAmexTotal(total);
+        setShowAmex(false);
+      }}
+    />
+
+    </div>
+  );
 }
