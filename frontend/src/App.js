@@ -8,7 +8,8 @@ import RegistrarCierre from './RegistrarCierre';
 import Ventas from './Ventas';
 import Sucursales from './Sucursales';
 import Usuarios from './Usuarios';
-import Login from './auth/Login'; 
+import Login from './auth/Login';
+import { RequireAdmin } from './router/guards';  // <-- con esto basta
 
 function App() {
   return (
@@ -16,7 +17,7 @@ function App() {
       <Routes>
         {/* públicas */}
         <Route path="/" element={<Login />} />
-        <Route path="/login" element={<Login />} /> 
+        <Route path="/login" element={<Login />} />
 
         {/* protegidas */}
         <Route
@@ -31,7 +32,16 @@ function App() {
           <Route path="RegistrarCierre" element={<RegistrarCierre />} />
           <Route path="Ventas" element={<Ventas />} />
           <Route path="Sucursales" element={<Sucursales />} />
-          <Route path="Usuarios" element={<Usuarios />} />
+
+          {/* 👇 solo ADMIN puede entrar */}
+          <Route
+            path="Usuarios"
+            element={
+              <RequireAdmin>
+                <Usuarios />
+              </RequireAdmin>
+            }
+          />
         </Route>
 
         {/* fallback */}

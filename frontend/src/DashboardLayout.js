@@ -3,17 +3,22 @@ import { Outlet, useNavigate, NavLink } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import './DashboardLayout.css';
 
-function DashboardLayout({ userEmail }) {
+function DashboardLayout({ userEmail, userRole }) {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // drawer solo en móvil
 
   const email = userEmail || localStorage.getItem('email') || 'user@example.com';
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    navigate('/login');
-  };
+  // === Rol: 'admin' o 'viewer' ===
+  const role = (userRole || localStorage.getItem('role') || 'viewer').toLowerCase();
+  const isAdmin = role === 'admin';
 
+ const handleLogout = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('role');
+  localStorage.removeItem('email');
+  navigate('/login');
+};
   return (
     <div className="admin-container">
       <Helmet>
@@ -64,12 +69,15 @@ function DashboardLayout({ userEmail }) {
               </NavLink>
             </li>
 
-            <li className="menu-item">
-              <NavLink to="Usuarios" className={({isActive}) => `menu-link ${isActive ? 'active' : ''}`}>
-                <img src="/agregaru.png" alt="" />
-                <span>Usuarios</span>
-              </NavLink>
-            </li>
+            {/* 👇 Solo administradores ven "Usuarios" */}
+            {isAdmin && (
+              <li className="menu-item">
+                <NavLink to="Usuarios" className={({isActive}) => `menu-link ${isActive ? 'active' : ''}`}>
+                  <img src="/agregaru.png" alt="" />
+                  <span>Usuarios</span>
+                </NavLink>
+              </li>
+            )}
           </ul>
         </nav>
 

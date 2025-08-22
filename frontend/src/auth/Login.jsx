@@ -19,6 +19,12 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [remember, setRemember] = useState(() => !!localStorage.getItem('remember_email'));
 
+  // Fallback simple: correos que serán admin si el backend no manda rol
+  const ADMIN_EMAILS = [
+    // <-- agrega tus correos admin aquí
+    'admin@example.com'
+  ];
+
   useEffect(() => {
     (async () => {
       setErr(''); setInfo('');
@@ -34,15 +40,49 @@ export default function Login() {
     })();
   }, []);
 
+  // Extrae rol desde el resultado o desde un JWT (si viene)
+  const extractRole = (loginRes, selectedEmail) => {
+    try {
+      if (loginRes && typeof loginRes === 'object') {
+        if (loginRes.role) return String(loginRes.role).toLowerCase();
+        if (loginRes.token && typeof loginRes.token === 'string') {
+          const payload = JSON.parse(atob(loginRes.token.split('.')[1] || ''));
+          return String(
+            payload.role || payload.rol || payload['https://example.com/role'] || ''
+          ).toLowerCase();
+        }
+      }
+      if (typeof loginRes === 'string') {
+        const payload = JSON.parse(atob(loginRes.split('.')[1] || ''));
+        return String(payload.role || payload.rol || '').toLowerCase();
+      }
+    } catch (_) { /* noop */ }
+
+    // Fallback por correo si no vino rol
+    if (selectedEmail && ADMIN_EMAILS.includes(selectedEmail.toLowerCase())) return 'admin';
+    return 'viewer';
+  };
+
   const onSubmit = async (e) => {
     e.preventDefault();
     setErr(''); setInfo('');
     if (!email || !pwd) return setErr('Completa todos los campos.');
     try {
       setBusy(true);
+
       if (remember) localStorage.setItem('remember_email', email);
       else localStorage.removeItem('remember_email');
-      await loginAndGetBackendToken(email.trim(), pwd.trim());
+
+      // Puede devolver { token, role } o un token string.
+      const loginRes = await loginAndGetBackendToken(email.trim(), pwd.trim());
+
+      // Guarda email (útil para el header/sidebar)
+      localStorage.setItem('email', email.trim());
+
+      // Determina y guarda el rol
+      const role = extractRole(loginRes, email.trim());
+      localStorage.setItem('role', role); // 'admin' o 'viewer'
+
       navigate(from, { replace: true });
     } catch (e) {
       const code = e?.code;
@@ -81,7 +121,8 @@ export default function Login() {
         <aside className="hero">
           <div className="hero-inner">
             <div className="hero-badge">
-              <img src="/Logosinfondo.png" alt="Brand" class="brand-logo"/> 
+              {/* fix: class -> className */}
+              <img src="/Logosinfondo.png" alt="Brand" className="brand-logo"/> 
             </div>
             <div className="hero-brand">American Pizza By Vipizza</div>
             <h1 className="hero-title">Sistema<br/>Finanzas</h1>
