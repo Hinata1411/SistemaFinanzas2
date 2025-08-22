@@ -39,6 +39,7 @@ export default function ArqueoGrid({
   arqueo,
   setArq,
   cajaChicaDisponible = 0,
+  totalNeto,
   readOnly = false,
   extras = {},
 }) {
@@ -67,6 +68,7 @@ export default function ArqueoGrid({
 
   return (
     <section className="rc-card">
+      {/* Encabezado general */}
       <div className="rc-card-hd" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
         <h3 style={{ margin: 0 }}>Arqueo Físico</h3>
 
@@ -78,20 +80,53 @@ export default function ArqueoGrid({
             </span>
             <b>{toMoney(cajaChicaDisponible)}</b>
           </div>
-
-         
         </div>
       </div>
 
+      {/* 3 columnas de cajas */}
       <div className="rc-sheet rc-sheet-3cols">
         {[0, 1, 2].map((i) => {
           const c = arqueo[i] || {};
-          const totalCaja = totalEfectivoCaja(c);
+          const apertura = n(c.apertura ?? 1000);              
+          const totalBruto = totalEfectivoCaja(c);             
+          const totalNeto  = totalBruto - apertura;            
 
           return (
             <div className="rc-col" key={`arq-${i}`}>
-              <div className="rc-col-hd">Caja {i + 1}</div>
+              {/* Cabecera de la caja + Apertura (arriba-derecha) */}
+              <div
+                className="rc-col-hd"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width:'115%' }}
+              >
+                <span>Caja {i + 1}</span>
 
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 8,
+                  marginLeft: 'auto'
+                  }}>
+                  <span className="rc-cell-label" style={{ 
+                    color: '#6b7280'
+                    
+                     }}>Apertura</span>
+                  <input
+                    className="rc-input"
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    value={c.apertura ?? 1000}
+                    onChange={(e) => setArq(i, 'apertura', e.target.value)}
+                    placeholder="0.00"
+                    disabled={inputsDisabled}
+                    style={{ width: 180, textAlign: 'right' }}
+                    aria-label={`Apertura caja ${i + 1}`}
+                  />
+                </div>
+              </div>
+
+              {/* Encabezados de la tabla de denominaciones */}
               <div className="rc-row" style={{ fontWeight: 600, opacity: 0.9 }}>
                 <span className="rc-cell-label rc-bill-ico" style={{ flex: '0 0 60px', display: 'inline-flex', alignItems: 'left', justifyContent: 'left', marginLeft: '16px' }} title="Denominaciones">
                   <IcoBill />
@@ -129,9 +164,10 @@ export default function ArqueoGrid({
                 );
               })}
 
+              {/* Total de caja (NETO = bruto - apertura). Mantenemos el MISMO nombre. */}
               <div className="rc-row rc-total-caja" style={{ marginTop: 6 }}>
                 <span className="rc-cell-label strong">Total de caja</span>
-                <b>{toMoney(totalCaja)}</b>
+                <b>{toMoney(totalNeto)}</b>
               </div>
 
               <div className="rc-row rc-row-sep" />

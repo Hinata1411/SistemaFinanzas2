@@ -19,7 +19,6 @@ import 'sweetalert2/dist/sweetalert2.min.css';
 import './components/registrar-cierre/RegistrarCierre.css';
 import AmexModal from './components/registrar-cierre/AmexModal';
 
-
 import { todayISO } from './utils/dates';
 import { n } from './utils/numbers';
 import { useSucursales } from './hooks/useSucursales';
@@ -49,6 +48,7 @@ const INIT_GASTO_CATEGORIAS = [
   'Ajuste de caja chica',
 ];
 
+/** 👇 Ahora cada caja lleva `apertura: 1000` por defecto */
 const emptyArqueoCaja = () => ({
   q200: '',
   q100: '',
@@ -57,6 +57,7 @@ const emptyArqueoCaja = () => ({
   q10: '',
   q5: '',
   q1: '',
+  apertura: 1000,   // <— default
   tarjeta: '',
   motorista: '',
 });
@@ -66,6 +67,21 @@ const emptyCierreCaja = () => ({
   tarjeta: '',
   motorista: '',
 });
+
+/** Normaliza un arreglo de arqueo a 3 cajas y asegura apertura=1000 si falta */
+const normalizeArqueo = (arr) => {
+  const base = [emptyArqueoCaja(), emptyArqueoCaja(), emptyArqueoCaja()];
+  const src = Array.isArray(arr) ? arr : [];
+  return base.map((b, i) => {
+    const fromDoc = src[i] || {};
+    // si el doc no trae apertura, usamos 1000
+    const apertura =
+      fromDoc.apertura === 0 || Number.isFinite(+fromDoc.apertura)
+        ? fromDoc.apertura
+        : 1000;
+    return { ...b, ...fromDoc, apertura };
+  });
+};
 
 export default function RegistrarCierre() {
   const navigate = useNavigate();
@@ -140,9 +156,8 @@ export default function RegistrarCierre() {
   const [amexItems, setAmexItems] = useState({});   // { sabor: cantidad }
   const [amexTotal, setAmexTotal] = useState(0);
 
-
   // Fecha
-  const [fecha, setFecha] = useState(todayISO);
+  const [fecha, setFecha] = useState(todayISO());
 
   // Estados principales
   const [arqueo, setArqueo] = useState([emptyArqueoCaja(), emptyArqueoCaja(), emptyArqueoCaja()]);
@@ -182,7 +197,10 @@ export default function RegistrarCierre() {
         setActiveSucursalId(d.sucursalId || null);
         setFecha(d.fecha || todayISO);
 
-        setArqueo(Array.isArray(d.arqueo) && d.arqueo.length ? d.arqueo : [emptyArqueoCaja(), emptyArqueoCaja(), emptyArqueoCaja()]);
+        // 👇 Normalizamos arqueo a 3 cajas y forzamos apertura si no existe
+        const arqNorm = normalizeArqueo(d.arqueo);
+        setArqueo(arqNorm);
+
         setCierre(Array.isArray(d.cierre) && d.cierre.length ? d.cierre : [emptyCierreCaja(), emptyCierreCaja(), emptyCierreCaja()]);
 
         setGastos(Array.isArray(d.gastos) ? d.gastos : []);
@@ -203,8 +221,6 @@ export default function RegistrarCierre() {
           setAmexItems(ax.items || {});
           setAmexTotal(ax.total || 0);
         }
-
-
       } catch (e) {
         console.error(e);
       }
@@ -226,44 +242,47 @@ export default function RegistrarCierre() {
   // Preferimos el doc real para caja chica y extras; caemos al hook si no llegó
   const cajaChicaDisponible = (activeSucursalDoc?.cajaChica ?? activeFromHook?.cajaChica) || 0;
 
-  // === EXTRAS seguros (si el hook no trae extras, los leemos del doc real) ===
+  
+  const totalAperturas = (arqueo || []).reduce((s, c) => s + (Number.isFinite(+c?.apertura) ? +c.apertura : 1000), 0);
+
+
   // === EXTRAS seguros y tolerantes a variantes ===
-const truthy = (v) => v === true || v === 1 || v === '1' || (typeof v === 'string' && v.toLowerCase() === 'true');
+  const truthy = (v) =>
+    v === true || v === 1 || v === '1' || (typeof v === 'string' && v.toLowerCase() === 'true');
 
-// Saca flags intentando varias rutas/alias y normaliza a boolean
-const resolveExtras = (srcA, srcB) => {
-  const a = srcA || {};
-  const b = srcB || {};
-  const ax = a.extras || {};
-  const bx = b.extras || {};
+  // Saca flags intentando varias rutas/alias y normaliza a boolean
+  const resolveExtras = (srcA, srcB) => {
+    const a = srcA || {};
+    const b = srcB || {};
+    const ax = a.extras || {};
+    const bx = b.extras || {};
 
-  const pedidosYa =
-    truthy(ax.pedidosYa ?? a.pedidosYa ?? bx.pedidosYa ?? b.pedidosYa ?? ax.py ?? bx.py ?? ax.pedidos_y ?? bx.pedidos_y ?? false);
+    const pedidosYa =
+      truthy(ax.pedidosYa ?? a.pedidosYa ?? bx.pedidosYa ?? b.pedidosYa ?? ax.py ?? bx.py ?? ax.pedidos_y ?? bx.pedidos_y ?? false);
 
-  const americanExpress =
-    truthy(
-      ax.americanExpress ??
-      a.americanExpress ??
-      bx.americanExpress ??
-      b.americanExpress ??
-      ax.amex ??
-      bx.amex ??
-      ax.american_express ??
-      bx.american_express ??
-      ax.ae ??
-      bx.ae ??
-      false
-    );
+    const americanExpress =
+      truthy(
+        ax.americanExpress ??
+          a.americanExpress ??
+          bx.americanExpress ??
+          b.americanExpress ??
+          ax.amex ??
+          bx.amex ??
+          ax.american_express ??
+          bx.american_express ??
+          ax.ae ??
+          bx.ae ??
+          false
+      );
 
-  return { pedidosYa, americanExpress };
-};
+    return { pedidosYa, americanExpress };
+  };
 
-// Preferimos el doc real; b es el hook como respaldo
-const { pedidosYa: _py, americanExpress: _amex } = resolveExtras(activeSucursalDoc, activeFromHook);
+  // Preferimos el doc real; b es el hook como respaldo
+  const { pedidosYa: _py, americanExpress: _amex } = resolveExtras(activeSucursalDoc, activeFromHook);
 
-const showPedidosYaBtn = _py;
-const showAmexBtn = _amex;
-
+  const showPedidosYaBtn = _py;
+  const showAmexBtn = _amex;
 
   // Totales
   const { totals, flags } = useRegistrarCierreTotals({
@@ -382,10 +401,9 @@ const showAmexBtn = _amex;
   };
 
   const handleAmericanExpress = () => {
-  if (isViewing) return;
-  setShowAmex(true);
+    if (isViewing) return;
+    setShowAmex(true);
   };
-
 
   const onBack = () => navigate('/home/Ventas');
 
@@ -437,12 +455,12 @@ const showAmexBtn = _amex;
       const gastosListos = (gastos || []).map((g) => {
         const { fileBlob, filePreview, ...rest } = g;
         return { ...rest, fileUrl: '', fileName: '', fileMime: '' };
-        });
+      });
 
       const payloadBase = {
         fecha,
         sucursalId: sucId,
-        arqueo,
+        arqueo, // ya trae apertura por caja
         cierre,
         gastos: gastosListos,
         comentario,
@@ -450,13 +468,13 @@ const showAmexBtn = _amex;
         cajaChicaUsada,
         faltantePagado,
         extras: {
-        pedidosYaCantidad: Number.isFinite(pedidosYaCantidad) ? parseInt(pedidosYaCantidad, 10) : 0,
-        americanExpress: {
-          items: amexItems,   // { sabor: cantidad }
-          total: amexTotal,   // número
+          pedidosYaCantidad: Number.isFinite(pedidosYaCantidad) ? parseInt(pedidosYaCantidad, 10) : 0,
+          americanExpress: {
+            items: amexItems,   // { sabor: cantidad }
+            total: amexTotal,   // número
+          },
         },
-      },
-      totales: { ...totals },
+        totales: { ...totals },
       };
 
       if (isEditingExisting) {
@@ -613,16 +631,19 @@ const showAmexBtn = _amex;
       </div>
 
       <div className={isAdmin ? '' : 'hide-pay'}>
+
+
         <ResumenPanel
-          totals={totals}
-          flags={flags}
+          totals={totals || {}}    
+          flags={flags || {}} 
           cajaChicaUsada={cajaChicaUsada}
           onPagarFaltante={handlePagarFaltante}
           faltantePagado={faltantePagado}
           pedidosYaCantidad={pedidosYaCantidad}
           amexTotal={amexTotal}
-          showPedidosYa={showPedidosYaBtn}   
-          showAmex={showAmexBtn} 
+          showPedidosYa={showPedidosYaBtn}
+          showAmex={showAmexBtn}
+          totalAperturas={totalAperturas}  
         />
       </div>
 
@@ -651,17 +672,16 @@ const showAmexBtn = _amex;
       />
 
       <AmexModal
-      open={showAmex}
-      onClose={() => setShowAmex(false)}
-      initialItems={amexItems}
-      readOnly={isViewing}
-      onSave={({ items, total }) => {
-        setAmexItems(items);
-        setAmexTotal(total);
-        setShowAmex(false);
-      }}
-    />
-
+        open={showAmex}
+        onClose={() => setShowAmex(false)}
+        initialItems={amexItems}
+        readOnly={isViewing}
+        onSave={({ items, total }) => {
+          setAmexItems(items);
+          setAmexTotal(total);
+          setShowAmex(false);
+        }}
+      />
     </div>
   );
 }

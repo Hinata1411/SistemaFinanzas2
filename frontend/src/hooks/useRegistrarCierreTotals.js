@@ -6,32 +6,44 @@ const isAjusteCajaChica = (name) =>
   (name || '').toString().trim().toLowerCase() === 'ajuste de caja chica';
 
 export function useRegistrarCierreTotals({
-  arqueo,
-  cierre,
-  gastos,
-  cajaChicaUsada,
-  faltantePagado,
+  arqueo = [],
+  cierre = [],
+  gastos = [],
+  cajaChicaUsada = 0,
+  faltantePagado = 0,
 }) {
-  // Mapeo de denominaciones => valor facial
   const DENOMS = [
     ['q200', 200],
     ['q100', 100],
-    ['q50',   50],
-    ['q20',   20],
-    ['q10',   10],
-    ['q5',     5],
-    ['q1',     1],
+    ['q50',  50],
+    ['q20',  20],
+    ['q10',  10],
+    ['q5',    5],
+    ['q1',    1],
   ];
 
-  // Cantidad * valor por cada denominación
-  const totalEfectivoCaja = (c = {}) =>
+  const efectivoBrutoCaja = (c = {}) =>
     DENOMS.reduce((acc, [field, valor]) => acc + (n(c[field]) * valor), 0);
 
-  // ---- ARQUEO (ADMIN) => ahora basado en cantidad × valor
-  const totalArqueoEfectivo = useMemo(
-    () => (arqueo || []).reduce((acc, c) => acc + totalEfectivoCaja(c), 0),
+  const aperturaCaja = (c = {}) => {
+    const ap = c?.apertura;
+    return Number.isFinite(+ap) ? +ap : 1000; // default 1000
+  };
+
+  // Arqueo (bruto / aperturas / neto)
+  const totalArqueoEfectivoBruto = useMemo(
+    () => (arqueo || []).reduce((acc, c) => acc + efectivoBrutoCaja(c), 0),
     [arqueo]
   );
+  const totalAperturas = useMemo(
+    () => (arqueo || []).reduce((s, c) => s + aperturaCaja(c), 0),
+    [arqueo]
+  );
+   const totalArqueoEfectivoNeto = useMemo(
+   () => (totalArqueoEfectivoBruto - totalAperturas),
+   [totalArqueoEfectivoBruto, totalAperturas]
+ );
+
   const totalArqueoTarjeta = useMemo(
     () => (arqueo || []).reduce((s, c) => s + n(c.tarjeta), 0),
     [arqueo]
@@ -41,7 +53,7 @@ export function useRegistrarCierreTotals({
     [arqueo]
   );
 
-  // ---- CIERRE (SISTEMA)
+  // Cierre (sistema)
   const totalCierreEfectivo = useMemo(
     () => (cierre || []).reduce((s, c) => s + n(c.efectivo), 0),
     [cierre]
@@ -55,43 +67,40 @@ export function useRegistrarCierreTotals({
     [cierre]
   );
 
-  // ---- GASTOS
+  // Gastos
   const totalGastos = useMemo(
     () => (gastos || []).reduce((s, g) => s + n(g.cantidad), 0),
     [gastos]
   );
-
-  // Ajuste de caja chica (si lo usas como referencia)
   const totalAjusteCajaChica = useMemo(
-    () =>
-      (gastos || []).reduce(
-        (s, g) => s + (isAjusteCajaChica(g.categoria) ? n(g.cantidad) : 0),
-        0
-      ),
+    () => (gastos || []).reduce(
+      (s, g) => s + (isAjusteCajaChica(g.categoria) ? n(g.cantidad) : 0),
+      0
+    ),
     [gastos]
   );
 
-  // ---- DIFERENCIAS (usando DIRECTAMENTE el efectivo de arqueo)
+  // Diferencias (con efectivo NETO)
   const diferenciaEfectivo = useMemo(
-    () => totalArqueoEfectivo - totalCierreEfectivo,
-    [totalArqueoEfectivo, totalCierreEfectivo]
+    () => totalArqueoEfectivoNeto - totalCierreEfectivo,
+    [totalArqueoEfectivoNeto, totalCierreEfectivo]
   );
   const faltanteEfectivo = useMemo(
     () => Math.max(0, -diferenciaEfectivo),
     [diferenciaEfectivo]
   );
 
-  // Para cubrir gastos considerando caja chica y faltante pagado
+  // Faltante por gastos (con neto)
   const faltantePorGastos = useMemo(() => {
-    const diff = totalGastos - totalArqueoEfectivo - n(cajaChicaUsada) - n(faltantePagado);
+    const diff =
+      totalGastos - totalArqueoEfectivoNeto - n(cajaChicaUsada) - n(faltantePagado);
     return diff > 0 ? diff : 0;
-  }, [totalGastos, totalArqueoEfectivo, cajaChicaUsada, faltantePagado]);
+  }, [totalGastos, totalArqueoEfectivoNeto, cajaChicaUsada, faltantePagado]);
 
-  // ---- TOTAL A DEPOSITAR
-  // efectivo de arqueo − gastos + cajaChicaUsada + faltantePagado
+  // Total a depositar (con neto)
   const totalGeneral = useMemo(
-    () => totalArqueoEfectivo - totalGastos + n(cajaChicaUsada) + n(faltantePagado),
-    [totalArqueoEfectivo, totalGastos, cajaChicaUsada, faltantePagado]
+    () => totalArqueoEfectivoNeto - totalGastos + n(cajaChicaUsada) + n(faltantePagado),
+    [totalArqueoEfectivoNeto, totalGastos, cajaChicaUsada, faltantePagado]
   );
 
   const flags = useMemo(
@@ -106,26 +115,24 @@ export function useRegistrarCierreTotals({
 
   return {
     totals: {
-      // Arqueo (basado en cantidad × valor)
-      totalArqueoEfectivo,
+      totalAperturas,
+      totalArqueoEfectivo: totalArqueoEfectivoBruto, // compat
+      totalArqueoEfectivoBruto,
+      totalArqueoEfectivoNeto,
       totalArqueoTarjeta,
       totalArqueoMotorista,
 
-      // Cierre
       totalCierreEfectivo,
       totalCierreTarjeta,
       totalCierreMotorista,
 
-      // Gastos / ajustes
       totalGastos,
       totalAjusteCajaChica,
 
-      // Diferencias
       diferenciaEfectivo,
       faltanteEfectivo,
       faltantePorGastos,
 
-      // Depósito
       totalGeneral,
     },
     flags,

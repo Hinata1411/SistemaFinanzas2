@@ -1,36 +1,48 @@
 import React from 'react';
 import { toMoney } from '../../utils/numbers';
 
-export default function ResumenPanel({
-  totals,
-  flags,
-  cajaChicaUsada,
-  onPagarFaltante,
-  faltantePagado,
 
-  // Extras
-  pedidosYaCantidad = 0,   // cantidad (und)
-  amexTotal = 0,           // monto (Q)
-  showPedidosYa = false,   // 👈 por sucursal
-  showAmex = false,        // 👈 por sucursal
+export default function ResumenPanel({
+  totals = {},          // 👈 default para evitar crash
+  flags = {},           // 👈 default para evitar crash
+  cajaChicaUsada = 0,
+  onPagarFaltante,
+  faltantePagado = 0,
+
+  pedidosYaCantidad = 0,
+  amexTotal = 0,
+  showPedidosYa = false,
+  showAmex = false,
+
+  totalAperturas = 0,
 }) {
   const {
-    totalArqueoEfectivo,
-    totalArqueoTarjeta,
-    totalArqueoMotorista,
+    totalArqueoEfectivoNeto = 0,
+    totalArqueoTarjeta = 0,
+    totalArqueoMotorista = 0,
 
-    totalCierreEfectivo,
-    totalCierreTarjeta,
-    totalCierreMotorista,
+    totalCierreEfectivo = 0,
+    totalCierreTarjeta = 0,
+    totalCierreMotorista = 0,
 
-    totalGastos,
-    diferenciaEfectivo,
-    faltanteEfectivo,
+    totalGastos = 0,
+    diferenciaEfectivo = 0,
+    faltanteEfectivo = 0,
 
-    totalGeneral,
+    totalGeneral = 0,
+    totalArqueoEfectivo = 0, // compat si hiciera falta
   } = totals;
 
-  const { diffEsPositivo, diffLabel, diffAbs, isDepositNegative } = flags;
+  const {
+    diffEsPositivo = true,
+    diffLabel = 'Sobrante',
+    diffAbs = 0,
+    isDepositNegative = false,
+  } = flags;
+
+  const efectivoAdmin = Number.isFinite(totalArqueoEfectivoNeto)
+    ? totalArqueoEfectivoNeto
+    : Math.max(0, (totalArqueoEfectivo || 0) - (totalAperturas || 0));
 
   return (
     <section className="rc-card">
@@ -65,7 +77,11 @@ export default function ResumenPanel({
 
           {faltanteEfectivo > 0 && faltantePagado === 0 && (
             <div className="rc-res-item">
-              <button type="button" className="rc-btn rc-btn-primary" onClick={onPagarFaltante}>
+              <button
+                type="button"
+                className="rc-btn rc-btn-primary"
+                onClick={onPagarFaltante}
+              >
                 Pagar faltante ({toMoney(faltanteEfectivo)})
               </button>
             </div>
@@ -85,7 +101,7 @@ export default function ResumenPanel({
 
           <div className="rc-res-item">
             <span>Efectivo</span>
-            <b>{toMoney(totalArqueoEfectivo)}</b>
+            <b>{toMoney(efectivoAdmin)}</b> {/* 👈 NETO */}
           </div>
           <div className="rc-res-item">
             <span>Tarjeta</span>
@@ -116,7 +132,7 @@ export default function ResumenPanel({
         </div>
       </div>
 
-      {/* Total a depositar */}
+      {/* Total a depositar (ya viene calculado en el hook con NETO) */}
       <div className={`rc-total-deposit ${isDepositNegative ? 'bad' : ''}`}>
         <span className="money">
           <svg viewBox="0 0 24 24" aria-hidden="true">
