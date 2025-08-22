@@ -239,8 +239,17 @@ export default function RegistrarCierre() {
     [sucursales, activeSucursalId]
   );
 
-  // Preferimos el doc real para caja chica y extras; caemos al hook si no llegó
-  const cajaChicaDisponible = (activeSucursalDoc?.cajaChica ?? activeFromHook?.cajaChica) || 0;
+  // Lo que tiene hoy la sucursal
+const cajaChicaActual =
+  (activeSucursalDoc?.cajaChica ?? activeFromHook?.cajaChica) || 0;
+
+// Si estoy viendo un cierre (view), intento usar el snapshot guardado en ese cierre;
+// si no existe (cierres viejos), caigo al valor actual.
+const cajaChicaDisponibleUI = isViewing
+  ? (originalDoc?.cajaChicaDisponibleAtSave ??
+     originalDoc?.cajaChicaDisponible ?? // por si en algún momento lo guardaste con otro nombre
+     cajaChicaActual)
+  : cajaChicaActual;
 
   
   const totalAperturas = (arqueo || []).reduce((s, c) => s + (Number.isFinite(+c?.apertura) ? +c.apertura : 1000), 0);
@@ -424,8 +433,8 @@ export default function RegistrarCierre() {
       Swal.fire('Fecha', 'Selecciona una fecha válida.', 'warning');
       return false;
     }
-    if (n(cajaChicaUsada) > n(cajaChicaDisponible)) {
-      Swal.fire('Caja chica', `No puedes usar más de lo disponible (Q ${Number(cajaChicaDisponible).toFixed(2)}).`, 'warning');
+    if (n(cajaChicaUsada) > n(cajaChicaDisponibleUI)) {
+      Swal.fire('Caja chica', `No puedes usar más de lo disponible (Q ${Number(cajaChicaDisponibleUI).toFixed(2)}).`, 'warning');
       return false;
     }
     return true;
@@ -460,18 +469,19 @@ export default function RegistrarCierre() {
       const payloadBase = {
         fecha,
         sucursalId: sucId,
-        arqueo, // ya trae apertura por caja
+        arqueo, 
         cierre,
         gastos: gastosListos,
         comentario,
         categorias,
         cajaChicaUsada,
         faltantePagado,
+        cajaChicaDisponibleAtSave: originalDoc?.cajaChicaDisponibleAtSave ?? cajaChicaActual,
         extras: {
           pedidosYaCantidad: Number.isFinite(pedidosYaCantidad) ? parseInt(pedidosYaCantidad, 10) : 0,
           americanExpress: {
-            items: amexItems,   // { sabor: cantidad }
-            total: amexTotal,   // número
+            items: amexItems,   
+            total: amexTotal,   
           },
         },
         totales: { ...totals },
@@ -598,7 +608,7 @@ export default function RegistrarCierre() {
         <ArqueoGrid
           arqueo={arqueo}
           setArq={setArq}
-          cajaChicaDisponible={cajaChicaDisponible}
+          cajaChicaDisponible={cajaChicaDisponibleUI}
           readOnly={isViewing}
           extras={{
             showPedidosYaBtn,
@@ -624,7 +634,7 @@ export default function RegistrarCierre() {
           onOpenCategorias={() => setShowCatModal(true)}
           onUseCajaChica={() => setShowCajaChica(true)}
           activeSucursalNombre={activeSucursalDoc?.nombre ?? activeFromHook?.nombre}
-          cajaChicaDisponible={cajaChicaDisponible}
+          cajaChicaDisponible={cajaChicaDisponibleUI}
           faltantePorGastos={faltantePorGastos}
           readOnly={isViewing}
         />
@@ -666,7 +676,7 @@ export default function RegistrarCierre() {
       <CajaChicaModal
         open={showCajaChica}
         onClose={() => setShowCajaChica(false)}
-        cajaChicaDisponible={cajaChicaDisponible}
+        cajaChicaDisponible={cajaChicaDisponibleUI}
         faltantePorGastos={faltantePorGastos}
         onApply={(monto) => { if (isViewing) return; setCajaChicaUsada((prev) => prev + monto); }}
       />
