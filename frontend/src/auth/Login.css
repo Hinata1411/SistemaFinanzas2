@@ -50,7 +50,7 @@ body { margin: 0; background: var(--cream); }
    ============================ */
 .hero{
   position: relative;
-  background:linear-gradient(180deg, var(--dark-2), var(--cream-2));
+  background:linear-gradient(180deg, var(--dark-2), var(--dark));
   color: #fff;
   display: grid;
   place-items: center;                    

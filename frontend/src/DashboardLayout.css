@@ -8,9 +8,11 @@
 
 /* Tema oscuro mapea superficie */
 .alt-theme{ 
-  --surface:#111d17; 
+  --surface:#0d291b; 
+    --surface-2:#0d291b; 
   --cream: #FFF4E8;
-  background: linear-gradient(180deg, var(--cream), var(--surface));
+   --dark-2:#1b5a46;  
+  background: linear-gradient(180deg, var(--surface), var(--dark-2));
 }
 
 *{ box-sizing:border-box; }
@@ -18,7 +20,7 @@ html, body, #root{ height:100%; }
 
 /* Fondo global: degradado verde */
 html{
-  background: linear-gradient(180deg, var(--dark), var(--dark-2));
+  background: linear-gradient(180deg, var(--dark), var(--dark-3));
 }
 
 /* Sin scroll global: el scroll vive en .admin-content */
@@ -99,7 +101,7 @@ body{
   color:#EAF7F1;
   text-decoration:none;
   transition:transform .08s ease, background .25s, color .25s, box-shadow .25s;
-  font-size:.98rem; font-weight:600;
+  font-size:1.3rem; font-weight:600;
   min-height:54px; will-change: transform, width, margin-right;
 }
 .menu-link:hover{
@@ -242,7 +244,7 @@ body{
 
 /* ===== Tema oscuro ===== */
 .alt-theme .content-card{
-  background: var(--surface);
+  background: #03180e;
   color: #e6f4ef;
   border-color: rgba(255,255,255,.06);
 }
@@ -253,7 +255,7 @@ body{
   opacity:1; color: white;
 }
 .alt-theme .menu-link.active{
-  background: var(--surface);
+  background:  #03180e;
   color:#e6f4ef;
 }
 .alt-theme .menu-link.active img{
