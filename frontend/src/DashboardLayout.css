@@ -1,165 +1,317 @@
 :root{
   --primary:#14B866;
-  --dark:#0F3D2E;
+  --dark:#155E4B;         /* verde profundo */
+  --dark-2:#0F493A;       /* verde más oscuro (degradado) */
   --accent:#FF7A00;
-  --cream:#FFF7ED;
+  --cream:#FFF4E8;
   --slate:#1F2937;
 
-  --sb-open: 17.5rem;   /* ancho fijo desktop */
-  --radius: 14px;
-  --shadow: 0 20px 60px rgba(0,0,0,.08);
+  --sb-open: 40rem;
+  --radius: 22px;
+  --shadow: 0 20px 60px rgba(0,0,0,.10);
+  --inner-shadow: 0 1px 0 rgba(255,255,255,.15) inset;
 
-  --item-icon: 30px;    /* tamaño de iconos en menú */
-  --item-gap: 12px;     /* separación entre ítems */
+  --item-icon: 28px;
+  --item-gap: 10px;
+
+  /* Superficie del contenido (también usada por el pill activo) */
+  --surface:#ffffff;
 }
+
+/* Tema oscuro mapea superficie */
+.alt-theme{ --surface:#0e1713; }
 
 *{ box-sizing:border-box; }
 html, body, #root{ height:100%; }
-body{ 
-  margin:0; 
-  background:var(--cream); 
-  font-family:'Poppins',system-ui,sans-serif; color:var(--slate); 
+
+/* Fondo global: degradado verde */
+html{
+  background: linear-gradient(180deg, var(--dark), var(--dark-2));
 }
 
-.admin-container{ min-height:100dvh; }
+/* Sin scroll global: el scroll vive en .admin-content */
+body{
+  margin:0;
+  background: transparent;
+  font-family:'Poppins',system-ui,sans-serif;
+  color:var(--slate);
+  overflow: hidden;
+}
 
+/* Bloqueo de scroll cuando el drawer está abierto */
+.drawer-open body{ overflow: hidden; }
+
+/* ===== Layout contenedor ===== */
+.admin-container{
+  height: 100dvh;
+  background: transparent;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "sidebar content"
+    "sidebar content";
+  gap: 10px;
+  padding: 10px;
+}
+
+/* ===== Sidebar (sin scroll, footer visible) ===== */
 .sidebar{
-  position:fixed; inset:0 auto 0 0;
-  width:var(--sb-open);
-  background:#fff;
-  border-right:1px solid #ede9e2;
-  box-shadow:var(--shadow);
+  grid-area: sidebar;
+  position: sticky;             /* fija dentro del flujo */
+  top: 10px;
+  height: calc(100dvh - 20px);  /* ajusta al padd/gap del grid */
+  width: var(--sb-open);
+  background: linear-gradient(180deg, var(--dark), var(--dark-2));
+  color:#EAF7F1;
   display:flex; flex-direction:column;
-  z-index:10;
-  overflow-x:hidden; /* sin barra horizontal */
+  overflow: hidden;             /* sin scroll en la barra */
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(255,255,255,.12);
+  z-index: 2;
 }
 
-/* Header */
-.sb-header{ 
-  position:relative; 
-  padding:.8rem .75rem .6rem; 
+.sb-header{ position:relative; padding:14px 12px 8px; }
+.brand{
+  display:grid; place-items:center; height:120px;
+  border-bottom:1px solid rgba(255,255,255,.15);
 }
+.brand img{ max-width:14rem; height:auto; }
 
-.brand{ display:grid;
-   place-items:center; 
-   height:70px; }
-
-.brand img{ 
-  max-width:14rem; 
-  height:auto; 
-}
-
-/* Botón cerrar (solo móvil/drawer) */
 .menu-btn{
   display:none;
   position:absolute; top:.6rem; right:.6rem;
-  width:2.2rem; height:2.2rem;
-  border-radius:50%; border:1px solid #ede9e2;
-  background:#fff; box-shadow:0 6px 18px rgba(0,0,0,.08);
+  width:2.2rem; height:2.2rem; border-radius:50%;
+  border:1px solid rgba(255,255,255,.22);
+  background:rgba(255,255,255,.12); box-shadow:0 6px 18px rgba(0,0,0,.18);
+  color:#fff; font-size:18px;
 }
 
-/* Menú */
+/* ===== Menú ===== */
 .menu-container{
-  flex:1;
-  overflow-y:auto; overflow-x:hidden;
-  padding: 3rem .8rem .9rem;   
+  flex:1 0 auto;               /* ocupa el espacio disponible */
+  padding: 20px 12px;
+  overflow: hidden;            /* NO scrollea (como pediste) */
 }
-
 .menu{
-  list-style:none; margin:0;
-  padding:0;
-  display:flex; flex-direction:column;
-  gap: var(--item-gap);        
+  list-style:none; margin:0; padding:0;
+  display:flex; flex-direction:column; gap: var(--item-gap);
 }
 
-
-/* Ítems simétricos (misma altura/padding) */
+/* Ítems tipo pill (limpio, sin “mordida”) */
 .menu-link{
   position:relative;
   display:flex; align-items:center; gap:.9rem;
-  width:100%;
-  padding: 1rem 1rem 1rem 3.25rem;  
-  border-radius: var(--radius);
-  color:var(--slate);
+
+  width: 100%;                 /* no sobresale */
+  margin-right: 0;
+
+  padding:12px 14px 12px 52px;
+  border-radius:16px;
+  color:#EAF7F1;
   text-decoration:none;
-  transition:background .2s, color .2s, border-color .2s;
-  font-size: 1rem;
-  font-weight:600;
-  cursor:pointer;
-  min-height: 56px;                  
+  transition:transform .08s ease, background .25s, color .25s, box-shadow .25s;
+  font-size:.98rem; font-weight:600;
+  min-height:54px; will-change: transform;
+}
+.menu-link:hover{
+  background: rgba(255,255,255,.08);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
 }
 .menu-link img{
-  position:absolute; left:1rem;
+  position:absolute; left:12px;
   width: var(--item-icon); height: var(--item-icon);
+  padding:6px; border-radius:12px;
+  background: rgba(255,255,255,.14);
+  box-shadow: var(--inner-shadow);
+  object-fit:contain;
 }
-.menu-link:hover{ background: var(--dark);
-  color: #ffffff;
- }
+
+/* Activo (tema claro por defecto) */
 .menu-link.active{
-  background: #306151;
-  color: #ffffff;
-  border:1px solid rgba(73, 49, 13, 0.25);
+  background: var(--surface);
+  color: var(--dark);
+  box-shadow: 0 10px 30px rgba(0,0,0,.10);
+  z-index: 1;
 }
+.menu-link.active img{
+  background:#F3FAF6;
+  box-shadow: inset 0 0 0 1px rgba(21,94,75,.08);
+}
+/* sin mordida/círculo */
+.menu-link.active::after,
+.menu-link.active::before{ content:none; }
 
-/* Footer usuario */
+/* ===== Footer del sidebar: siempre visible ===== */
 .sb-footer{
-  padding:.7rem .8rem .9rem; border-top:1px solid #ede9e2;
-  overflow-x:hidden;
+  margin-top: auto;            /* empuja al fondo */
+  border-top:1px solid rgba(255,255,255,.15);
+  padding:10px 12px 14px;
+  background: transparent;
 }
-.user{
-  display:flex; align-items:center; gap:.7rem; width:100%;
-  min-width:0; overflow:hidden;
+.footer-actions{
+  display:flex; gap:10px;
+  flex-direction:column;
 }
-.user-img img{ width:38px; height:38px; border-radius:50%; object-fit:cover; }
-.user-data{ min-width:0; display:flex; flex-direction:column; }
-.user-data .name{ font-weight:700; font-size:.9rem; color:var(--dark); text-transform:lowercase; }
-.user-data .email{ font-size:.78rem; color:#6b7280; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.theme-button,
 .logout-button{
-  margin-left:auto; width:38px; height:38px; flex-shrink:0;
-  display:grid; place-items:center;
-  background:#fff; border:1px solid #ede9e2; border-radius:12px;
-  cursor:pointer;
+  flex:1;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  height:42px; border-radius:14px;
+  border:1px solid rgba(255,255,255,.22);
+  background:rgba(255,255,255,.12);
+  color:#fff; cursor:pointer;
+  font-weight:600;
 }
-.logout-button:hover{ border-color:var(--accent); box-shadow:0 0 0 .15rem rgba(255,122,0,.15); }
+.theme-button i, .logout-button i{ font-size:1.2rem; }
+.theme-button:hover, .logout-button:hover{
+  background:#fff; color:var(--dark); border-color:#fff;
+}
 
-/* =========================
-   CONTENIDO (margen fijo)
-   ========================= */
+/* ===== Área de contenido (con scroll propio) ===== */
 .admin-content{
-  min-height:100dvh;
-  background:var(--cream);
-  padding:24px clamp(16px,3vw,40px);
-  margin-left:var(--sb-open);   
-  overflow-x:hidden;
+  grid-area: content;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: auto;               /* <— aquí vive el scroll */
+  -webkit-overflow-scrolling: touch;
 }
 
-/* =========================
-   MÓVIL (drawer sin overlay)
-   ========================= */
+/* Userbar fijo en el tope del área scrolleable */
+.userbar{
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display:flex; align-items:center; justify-content:space-between;
+  background: rgba(255,255,255,.14);
+  border:1px solid rgba(255,255,255,.25);
+  backdrop-filter: blur(6px);
+  color:#fff;
+  padding:10px 14px;
+  border-radius: 16px;
+}
+.userbar .user-chip{ display:flex; align-items:center; gap:10px; }
+.userbar .user-chip img{
+  width:38px; height:38px; border-radius:50%; object-fit:cover;
+  box-shadow:0 4px 10px rgba(0,0,0,.18);
+}
+.userbar .meta{ display:flex; flex-direction:column; line-height:1.1; }
+.userbar .meta strong{ font-size:.95rem; }
+.userbar .meta small{ opacity:.9; color:#EAF7F1; }
+.userbar .actions .icon-btn{
+  width:40px; height:40px; border-radius:12px;
+  border:1px solid rgba(255,255,255,.25);
+  background:rgba(255,255,255,.12);
+  color:#fff; cursor:pointer;
+}
+
+/* Tarjeta blanca que contiene el <Outlet /> */
+.content-card{
+  background: var(--surface);
+  color: var(--slate);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 24px clamp(16px,3vw,40px);
+  min-height: calc(100dvh - 120px);
+  overflow-x: hidden;
+  border: 1px solid rgba(0,0,0,.04);
+}
+
+/* ===== Tema oscuro ===== */
+.alt-theme .content-card{
+  background: var(--surface);
+  color: #e6f4ef;
+  border-color: rgba(255,255,255,.06);
+}
+.alt-theme .userbar{
+  background: rgba(0,0,0,.28);
+  border-color: rgba(255,255,255,.18);
+}
+.alt-theme .menu-link.active{
+  background: var(--surface);
+  color:#e6f4ef;
+  box-shadow: 0 12px 28px rgba(0,0,0,.35);
+}
+.alt-theme .menu-link.active img{
+  background: rgba(255,255,255,.08);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+}
+
+/* ===== Backdrop (drawer móvil) ===== */
+.backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease;
+  z-index: 3;
+}
+.backdrop.show{
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ===== Botón hamburguesa ===== */
 .mobile-trigger{
-  position:fixed; left:14px; top:14px;
+  position: fixed;
+  left: 16px; top: 16px;
   width:42px; height:42px; border-radius:50%;
-  border:1px solid #ede9e2; background:#fff;
+  border:1px solid rgba(255,255,255,.35); background:rgba(255,255,255,.16);
   display:none; align-items:center; justify-content:center;
-  box-shadow:0 8px 24px rgba(0,0,0,.12);
-  z-index:8; cursor:pointer;
+  box-shadow:0 8px 24px rgba(0,0,0,.22);
+  z-index: 4; cursor:pointer;
+  color:#fff; font-size:22px;
+  backdrop-filter: blur(6px);
 }
 
-@media (max-width: 900px){
-  .admin-content{ margin-left:0; }
-  .mobile-trigger{ display:flex; }
-  .menu-btn{ display:grid; }
-
-  
-  .sidebar{
-    width:var(--sb-open);
-    transform:translateX(-100%);
-    transition:transform .3s ease;
+/* ===== Responsive / Drawer behavior ===== */
+@media (max-width: 1100px){
+  .admin-container{
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "content"
+      "content";
   }
-  .sidebar.open{ transform:translateX(0); }
-}
 
-.menu-container::-webkit-scrollbar,
-.sidebar::-webkit-scrollbar{ width:8px; height:0; }
-.menu-container::-webkit-scrollbar-thumb,
-.sidebar::-webkit-scrollbar-thumb{ background:rgba(0,0,0,.15); border-radius:8px; }
+  /* Sidebar como off-canvas, sin scroll propio */
+  .sidebar{
+    position: fixed;
+    top: 0; bottom: 0; left: 0;
+    height: 100dvh;
+    width: min(90vw, var(--sb-open));
+    max-width: var(--sb-open);
+    transform: translateX(-100%);
+    transition: transform .28s ease;
+    border-radius: 0 20px 20px 0;
+    overflow: hidden;          /* sin scroll en la barra móvil */
+  }
+  .sidebar.open{ transform: translateX(0); }
+
+  /* Botón hamburguesa visible */
+  .mobile-trigger{ display:flex; }
+
+  /* El contenido mantiene el scroll */
+  .admin-content{
+    grid-area: content;
+    padding-top: 74px;         /* despeje del botón si lo usas */
+    overflow: auto;
+  }
+}
+@media (max-width: 720px){
+  .userbar{
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .userbar .actions{
+    display:flex; justify-content:flex-end;
+  }
+  .content-card{
+    min-height: auto;
+  }
+}

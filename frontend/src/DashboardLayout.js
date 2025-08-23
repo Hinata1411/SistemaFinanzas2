@@ -1,4 +1,3 @@
-// src/DashboardLayout.jsx
 import React, { useEffect, useState } from 'react';
 import { Outlet, useNavigate, NavLink } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
@@ -8,28 +7,33 @@ function DashboardLayout({ userEmail, userRole }) {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Email mostrado en el footer del sidebar
+  // Email mostrado
   const email = userEmail || localStorage.getItem('email') || 'user@example.com';
 
-  // Helper para leer/normalizar rol
+  // Rol
   const getRole = () =>
     String(userRole || localStorage.getItem('role') || 'viewer').toLowerCase();
-
-  // Rol sincronizado con localStorage y prop
   const [role, setRole] = useState(getRole());
   const isAdmin = role === 'admin';
 
+  // Tema
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+
   useEffect(() => {
-    // Al montar o si cambia userRole: refresca rol
     setRole(getRole());
 
-    // Si cambia en otra pestaña
     const onStorage = (e) => {
       if (e.key === 'role') setRole(String(e.newValue || 'viewer').toLowerCase());
+      if (e.key === 'theme') {
+        const val = e.newValue || 'light';
+        setTheme(val);
+        document.documentElement.classList.toggle('alt-theme', val === 'dark');
+      }
     };
-
-    // Al volver a la pestaña (por si el rol se guardó justo antes de navegar)
     const onFocus = () => setRole(getRole());
+
+    // aplicar tema al cargar
+    document.documentElement.classList.toggle('alt-theme', theme === 'dark');
 
     window.addEventListener('storage', onStorage);
     window.addEventListener('focus', onFocus);
@@ -39,6 +43,18 @@ function DashboardLayout({ userEmail, userRole }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userRole]);
+
+  // Bloqueo de scroll cuando el drawer móvil está abierto
+  useEffect(() => {
+    document.documentElement.classList.toggle('drawer-open', isSidebarOpen);
+  }, [isSidebarOpen]);
+
+  const toggleTheme = () => {
+    const next = theme === 'light' ? 'dark' : 'light';
+    setTheme(next);
+    localStorage.setItem('theme', next);
+    document.documentElement.classList.toggle('alt-theme', next === 'dark');
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -57,17 +73,17 @@ function DashboardLayout({ userEmail, userRole }) {
         />
       </Helmet>
 
-      {/* Sidebar fija en desktop / drawer en móvil */}
+      {/* Sidebar */}
       <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
         <div className="sb-header">
-          {/* Cerrar drawer (solo móvil) */}
+          {/* Cerrar drawer en móvil */}
           <button
             type="button"
             className="menu-btn"
             onClick={() => setIsSidebarOpen(false)}
             aria-label="Cerrar menú"
           >
-            <img src="/flechaizq.png" alt="" width="20" height="20" />
+            <i className="bx bx-chevron-left"></i>
           </button>
 
           <div className="brand">
@@ -78,7 +94,6 @@ function DashboardLayout({ userEmail, userRole }) {
         <nav id="sidebar-menu" className="menu-container">
           <ul className="menu">
             <li className="menu-item">
-              {/* end => activo SOLO en /home exacto */}
               <NavLink
                 to="/home"
                 end
@@ -89,7 +104,6 @@ function DashboardLayout({ userEmail, userRole }) {
               </NavLink>
             </li>
 
-            {/* Ventas */}
             <li className="menu-item">
               <NavLink
                 to="Ventas"
@@ -100,7 +114,6 @@ function DashboardLayout({ userEmail, userRole }) {
               </NavLink>
             </li>
 
-            {/* Sucursales */}
             <li className="menu-item">
               <NavLink
                 to="Sucursales"
@@ -111,7 +124,6 @@ function DashboardLayout({ userEmail, userRole }) {
               </NavLink>
             </li>
 
-            {/* Solo administradores ven "Usuarios" */}
             {isAdmin && (
               <li className="menu-item">
                 <NavLink
@@ -126,28 +138,35 @@ function DashboardLayout({ userEmail, userRole }) {
           </ul>
         </nav>
 
+        {/* Footer del sidebar: cambiar tema + cerrar sesión */}
         <div className="sb-footer">
-          <div className="user">
-            <div className="user-img">
-              <img src="/perfilusuario.png" alt="" width="38" height="38" />
-            </div>
-            <div className="user-data">
-              <span className="name">{email.split('@')[0] || 'Usuario'}</span>
-              <span className="email">{email}</span>
-            </div>
+          <div className="footer-actions">
+            <button type="button" className="theme-button" onClick={toggleTheme} title="Cambiar tema">
+              <i className={`bx ${theme === 'dark' ? 'bx-sun' : 'bx-moon'}`} />
+              <span>{theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}</span>
+            </button>
+
             <button
               onClick={handleLogout}
               className="logout-button"
               type="button"
               title="Cerrar sesión"
             >
-              <img src="/cerrarsesion.png" alt="" width="22" height="22" />
+              <i className="bx bx-log-out" />
+              <span>Salir</span>
             </button>
           </div>
         </div>
       </aside>
 
-      {/* Botón para abrir drawer en móvil */}
+      {/* Backdrop para cerrar tocando fuera (solo en móvil) */}
+      <div
+        className={`backdrop ${isSidebarOpen ? 'show' : ''}`}
+        onClick={() => setIsSidebarOpen(false)}
+        aria-hidden="true"
+      />
+
+      {/* Botón hamburguesa (solo móvil) */}
       <button
         type="button"
         className="mobile-trigger"
@@ -157,9 +176,27 @@ function DashboardLayout({ userEmail, userRole }) {
         <i className="bx bx-menu"></i>
       </button>
 
-      {/* Contenido central */}
+      {/* Contenido */}
       <main className="admin-content">
-        <Outlet />
+        {/* Barra de usuario arriba */}
+        <header className="userbar">
+          <div className="user-chip">
+            <img src="/perfilusuario.png" alt="" />
+            <div className="meta">
+              <strong>{email.split('@')[0] || 'Usuario'}</strong>
+              <small>{email}</small>
+            </div>
+          </div>
+          <div className="actions">
+            <button className="icon-btn" title="Notificaciones">
+              <i className="bx bx-bell"></i>
+            </button>
+          </div>
+        </header>
+
+        <div className="content-card">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

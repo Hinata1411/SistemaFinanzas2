@@ -1,21 +1,34 @@
 /* Paleta (misma del login/dashboard) */
 :root{
-  --primary:#14B866;
-  --dark:#0F3D2E;
-  --accent:#FF7A00;
-  --cream:#FFF7ED;
+   --primary:#14B866;
+  --dark:#155E4B;            /* verde profundo sidebar */
+  --dark-2:#0F493A;          /* degradado debajo */
+  --accent:#FF7A00;          /* acento cálido */
+  --cream:#FFF4E8;           /* fondo general del mockup */
   --slate:#1F2937;
 
-  --radius: 16px;
-  --shadow: 0 20px 60px rgba(0,0,0,.08);
+  --sb-open: 17.5rem;        /* ancho sidebar */
+  --radius: 22px;
+  --shadow: 0 20px 60px rgba(0,0,0,.10);
+  --inner-shadow: 0 1px 0 rgba(255,255,255,.15) inset;
+
+  --item-icon: 28px;
+  --item-gap: 10px;
+}
+
+html, body, #root {
+  height: 100%;
+  background:linear-gradient(180deg, var(--dark), var(--dark-2));
+
 }
 
 /* Contenedor del Home (no tocamos .admin-content) */
 .home-shell{
+  margin-right: 0%;
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
 }
 
 /* Título centrado */
@@ -27,6 +40,7 @@
   letter-spacing: .3px;
   font-size: clamp(22px, 3.6vw, 44px);
   animation: fadeInUp .6s ease both;
+
 }
 
 /* Tarjeta que envuelve el calendario */
@@ -36,7 +50,7 @@
   background: #fff;
   border: 1px solid #ede9e2;
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  
   padding: clamp(10px, 2vw, 16px);
   overflow: visible;                 /* evita scrollbars internas */
 }
