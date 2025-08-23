@@ -141,11 +141,7 @@ function DashboardLayout({ userEmail, userRole }) {
         {/* Footer del sidebar: cambiar tema + cerrar sesión */}
         <div className="sb-footer">
           <div className="footer-actions">
-            <button type="button" className="theme-button" onClick={toggleTheme} title="Cambiar tema">
-              <i className={`bx ${theme === 'dark' ? 'bx-sun' : 'bx-moon'}`} />
-              <span>{theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}</span>
-            </button>
-
+           
             <button
               onClick={handleLogout}
               className="logout-button"
@@ -180,18 +176,26 @@ function DashboardLayout({ userEmail, userRole }) {
       <main className="admin-content">
         {/* Barra de usuario arriba */}
         <header className="userbar">
-          <div className="user-chip">
-            <img src="/perfilusuario.png" alt="" />
-            <div className="meta">
-              <strong>{email.split('@')[0] || 'Usuario'}</strong>
-              <small>{email}</small>
-            </div>
+
+          <div className="theme">
+             <button type="button" className="theme-button" onClick={toggleTheme} title="Cambiar tema">
+              <i className={`bx ${theme === 'dark' ? 'bx-sun' : 'bx-moon'}`} />
+              <span>{theme === 'dark' ? ' ' : ' '}</span>
+            </button>
           </div>
           <div className="actions">
             <button className="icon-btn" title="Notificaciones">
               <i className="bx bx-bell"></i>
             </button>
           </div>
+          <div className="user-chip">
+            <img src="/perfilusuario.png" alt="perfil-usuario" />
+            <div className="meta">
+              <strong>{email.split('@')[0] || 'Usuario'}</strong>
+              <small>{email}</small>
+            </div>
+          </div>
+          
         </header>
 
         <div className="content-card">

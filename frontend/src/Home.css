@@ -2,7 +2,7 @@
 :root{
    --primary:#14B866;
   --dark:#155E4B;            /* verde profundo sidebar */
-  --dark-2:#0F493A;          /* degradado debajo */
+  --dark-2:#0F3D2E;          /* degradado debajo */
   --accent:#FF7A00;          /* acento cálido */
   --cream:#FFF4E8;           /* fondo general del mockup */
   --slate:#1F2937;
@@ -18,8 +18,7 @@
 
 html, body, #root {
   height: 100%;
-  background:linear-gradient(180deg, var(--dark), var(--dark-2));
-
+  background: linear-gradient(180deg, var(--surface), var(--dark-2));
 }
 
 /* Contenedor del Home (no tocamos .admin-content) */
