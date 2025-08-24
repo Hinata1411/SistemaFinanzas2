@@ -7,7 +7,7 @@ import Home from './Home';
 import RegistrarCierre from './RegistrarCierre';
 import Ventas from './Ventas';
 import Sucursales from './Sucursales';
-import Usuarios from './Usuarios';
+import Usuarios from './utils/Usuarios.js';
 import Login from './auth/Login';
 import { RequireAdmin } from './router/guards';
 
