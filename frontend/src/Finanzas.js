@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
 import MyCalendar from './MyCalendar';
-import './Home.css';
+import './Finanzas.css';
 
 export default function Home() {
   const [ready, setReady] = useState(false);

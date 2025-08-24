@@ -3,7 +3,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import PrivateRoute from './PrivateRoute';
 import DashboardLayout from './DashboardLayout';
-import Home from './Home';
+import Finanzas from './Finanzas.js';
 import RegistrarCierre from './RegistrarCierre';
 import Ventas from './Ventas';
 import Sucursales from './Sucursales';
@@ -21,14 +21,14 @@ function App() {
 
         {/* protegidas */}
         <Route
-          path="/home"
+          path="/Finanzas"
           element={
             <PrivateRoute>
               <DashboardLayout />
             </PrivateRoute>
           }
         >
-          <Route index element={<Home />} />
+          <Route index element={<Finanzas />} />
           <Route path="RegistrarCierre" element={<RegistrarCierre />} />
           <Route path="Ventas" element={<Ventas />} />
           <Route path="Sucursales" element={<Sucursales />} />
