@@ -2,7 +2,8 @@
 :root{
    --primary:#14B866;
   --dark:#155E4B;            /* verde profundo sidebar */
-  --dark-2:#0F3D2E;          /* degradado debajo */
+  --dark-2:#0F3D2E;   
+  --dark-3:#041d15;           /* degradado debajo */
   --accent:#FF7A00;          /* acento cálido */
   --cream:#FFF4E8;           /* fondo general del mockup */
   --slate:#1F2937;
@@ -40,6 +41,10 @@ html, body, #root {
   font-size: clamp(22px, 3.6vw, 44px);
   animation: fadeInUp .6s ease both;
 
+}
+
+.alt-theme h1{
+  color: white;
 }
 
 /* Tarjeta que envuelve el calendario */

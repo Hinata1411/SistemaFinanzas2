@@ -20,6 +20,9 @@
   gap: 16px;
 }
 
+.alt-theme h1{
+  color: white;
+}
 /* Header (izquierda: título + fecha; derecha: acciones) */
 .rc-header{
   display:flex; 

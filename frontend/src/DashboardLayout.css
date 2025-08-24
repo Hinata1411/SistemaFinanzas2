@@ -245,7 +245,7 @@ body{
 /* ===== Tema oscuro ===== */
 .alt-theme .content-card{
   background: #03180e;
-  color: #e6f4ef;
+  color: #05251a;
   border-color: rgba(255,255,255,.06);
 }
 .alt-theme .userbar{
@@ -275,6 +275,10 @@ body{
 
 .alt-theme .theme-button:hover, .logout-button:hover, .actions .icon-btn:hover{
   background:var(--dark-2); color:white; border-color:#fff;
+}
+
+.alt-theme .h1{
+  color: white;
 }
 
 
