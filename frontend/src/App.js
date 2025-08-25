@@ -10,6 +10,7 @@ import Sucursales from './Sucursales';
 import Usuarios from './utils/Usuarios.js';
 import Login from './auth/Login';
 import { RequireAdmin } from './router/guards';
+import RegistrarPagos from './RegistrarPagos.jsx';
 
 function App() {
   return (
@@ -33,6 +34,14 @@ function App() {
           <Route path="Ventas" element={<Ventas />} />
 
           {/* solo ADMIN puede entrar */}
+          <Route
+            path="RegistrarPagos"
+            element={
+              <RequireAdmin>
+                <RegistrarPagos/>
+              </RequireAdmin>
+            }
+          />
           <Route
             path="Sucursales"
             element={

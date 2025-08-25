@@ -11,7 +11,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyBL8onIxodd41sUUc8r9JLQg4lLwGPSmzc",
   authDomain: "grafica-ventas.firebaseapp.com",
   projectId: "grafica-ventas",
-  storageBucket: "grafica-ventas.appspot.com",
+  storageBucket: "grafica-ventas.firebasestorage.app",
   messagingSenderId: "841964521076",
   appId: "1:841964521076:web:67d2d9d155924e92eeb321",
   measurementId: "G-QE8FMBLSL0"

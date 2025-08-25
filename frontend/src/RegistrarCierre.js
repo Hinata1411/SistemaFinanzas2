@@ -18,6 +18,7 @@ import { db, auth } from './firebase';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import './components/registrar-cierre/RegistrarCierre.css';
+import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 import { todayISO } from './utils/dates';
 import { n } from './utils/numbers';
@@ -48,7 +49,6 @@ const INIT_GASTO_CATEGORIAS = [
   'Ajuste de caja chica',
 ];
 
-/** 👇 Cada caja con apertura por defecto */
 const emptyArqueoCaja = () => ({
   q200: '',
   q100: '',
@@ -68,7 +68,6 @@ const emptyCierreCaja = () => ({
   motorista: '',
 });
 
-/** Normaliza arqueo a 3 cajas */
 const normalizeArqueo = (arr) => {
   const base = [emptyArqueoCaja(), emptyArqueoCaja(), emptyArqueoCaja()];
   const src = Array.isArray(arr) ? arr : [];
@@ -82,7 +81,6 @@ const normalizeArqueo = (arr) => {
   });
 };
 
-/** Píls de sección */
 const TABS = {
   ARQUEO: 'arqueo',
   CIERRE: 'cierre',
@@ -92,7 +90,6 @@ const TABS = {
   RESUMEN: 'resumen',
 };
 
-/** Catálogo AMEX (como en tu modal) */
 const AMEX_FLAVORS = [
   'Pepperoni', 'Jamón', 'Only Cheese', 'Hawaiana', 'Magnífica', 'Dúo dinámico',
   'No meat', '4 estaciones', 'Cheese fingers',
@@ -100,20 +97,14 @@ const AMEX_FLAVORS = [
   'Border champiñones', 'Americana', 'Italiana',
 ];
 
-/** Precios AMEX:
- *  - Pepperoni y Jamón: 65
- *  - Cheese fingers: 40
- *  - Resto: 85
- */
 const AMEX_PRICES_DEFAULT = AMEX_FLAVORS.reduce((acc, name) => {
-  acc[name] = 85; // base
+  acc[name] = 85;
   return acc;
 }, {});
 AMEX_PRICES_DEFAULT['Pepperoni'] = 65;
 AMEX_PRICES_DEFAULT['Jamón'] = 65;
 AMEX_PRICES_DEFAULT['Cheese fingers'] = 40;
 
-/** Helpers para inputs sin spinner/rueda/flechas */
 const blockWheel = (e) => e.currentTarget.blur();
 const blockArrows = (e) => {
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault();
@@ -129,11 +120,11 @@ export default function RegistrarCierre() {
   const [originalDoc, setOriginalDoc] = useState(null);
 
   // Perfil usuario
-  const [me, setMe] = useState({ loaded: false, role: 'viewer', sucursalId: null });
+  const [me, setMe] = useState({ loaded: false, role: 'viewer', sucursalId: null, username: '' });
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        setMe({ loaded: true, role: 'viewer', sucursalId: null });
+        setMe({ loaded: true, role: 'viewer', sucursalId: null, username: '' });
         return;
       }
       try {
@@ -143,20 +134,20 @@ export default function RegistrarCierre() {
           loaded: true,
           role: data.role || 'viewer',
           sucursalId: data.sucursalId || null,
+          username: data.username || '',
         });
       } catch (e) {
         console.error(e);
-        setMe({ loaded: true, role: 'viewer', sucursalId: null });
+        setMe({ loaded: true, role: 'viewer', sucursalId: null, username: '' });
       }
     });
     return () => unsub();
   }, []);
   const isAdmin = me.role === 'admin';
 
-  // Sucursales desde hook
+  // Sucursales
   const sucursales = useSucursales();
 
-  // Filtrar sucursales visibles
   const sucursalesVisibles = useMemo(() => {
     if (!me.loaded) return [];
     return isAdmin ? sucursales : sucursales.filter((s) => s.id === me.sucursalId);
@@ -165,13 +156,11 @@ export default function RegistrarCierre() {
   const [activeSucursalId, setActiveSucursalId] = useState(null);
   const [activeSucursalDoc, setActiveSucursalDoc] = useState(null);
 
-  // Al cargar, fijar sucursal activa
   useEffect(() => {
     if (!me.loaded || !sucursalesVisibles.length) return;
     setActiveSucursalId((prev) => prev || sucursalesVisibles[0]?.id || null);
   }, [me.loaded, sucursalesVisibles]);
 
-  // Leer doc real de la sucursal activa
   useEffect(() => {
     (async () => {
       if (!activeSucursalId) { setActiveSucursalDoc(null); return; }
@@ -185,14 +174,10 @@ export default function RegistrarCierre() {
     })();
   }, [activeSucursalId]);
 
-  // American Express (detalle por sabores)
-  const [amexItems, setAmexItems] = useState({});   // { sabor: cantidad }
+  const [amexItems, setAmexItems] = useState({});
   const [amexTotal, setAmexTotal] = useState(0);
-
-  // Fecha
   const [fecha, setFecha] = useState(todayISO());
 
-  // Estados principales
   const [arqueo, setArqueo] = useState([emptyArqueoCaja(), emptyArqueoCaja(), emptyArqueoCaja()]);
   const [cierre, setCierre] = useState([emptyCierreCaja(), emptyCierreCaja(), emptyCierreCaja()]);
   const [categorias, setCategorias] = useState(INIT_GASTO_CATEGORIAS);
@@ -214,10 +199,8 @@ export default function RegistrarCierre() {
   const [cajaChicaUsada, setCajaChicaUsada] = useState(0);
   const [faltantePagado, setFaltantePagado] = useState(0);
 
-  // Pedidos Ya (inline)
   const [pedidosYaCantidad, setPedidosYaCantidad] = useState(0);
 
-  // Cargar documento existente si aplica
   useEffect(() => {
     if (!editId) return;
     (async () => {
@@ -260,17 +243,14 @@ export default function RegistrarCierre() {
 
   const [busy, setBusy] = useState(false);
 
-  // Modales
   const [showCatModal, setShowCatModal] = useState(false);
   const [showCajaChica, setShowCajaChica] = useState(false);
 
-  // Sucursal activa desde hook (fallback)
   const activeFromHook = useMemo(
     () => sucursales.find((s) => s.id === activeSucursalId) || null,
     [sucursales, activeSucursalId]
   );
 
-  // Caja chica disponible (UI)
   const cajaChicaActual =
     (activeSucursalDoc?.cajaChica ?? activeFromHook?.cajaChica) || 0;
 
@@ -282,7 +262,6 @@ export default function RegistrarCierre() {
 
   const totalAperturas = (arqueo || []).reduce((s, c) => s + (Number.isFinite(+c?.apertura) ? +c.apertura : 1000), 0);
 
-  // === EXTRAS (flags sucursal) ===
   const truthy = (v) =>
     v === true || v === 1 || v === '1' || (typeof v === 'string' && v.toLowerCase() === 'true');
 
@@ -314,7 +293,6 @@ export default function RegistrarCierre() {
   const showPedidosYaBtn = _py;
   const showAmexBtn = _amex;
 
-  /** 🔢 Precios AMEX (merge sucursal → defaults) */
   const amexPrices = useMemo(() => {
     const exA = activeSucursalDoc?.extras || {};
     const exB = activeFromHook?.extras || {};
@@ -329,7 +307,6 @@ export default function RegistrarCierre() {
     return { ...AMEX_PRICES_DEFAULT, ...(fromDb || {}) };
   }, [activeSucursalDoc, activeFromHook]);
 
-  /** Recalcular total AMEX por sabor (cantidad × precio) */
   useEffect(() => {
     const total = AMEX_FLAVORS.reduce((sum, name) => {
       const qty = n(amexItems?.[name]);
@@ -339,7 +316,6 @@ export default function RegistrarCierre() {
     setAmexTotal(total);
   }, [amexItems, amexPrices]);
 
-  // Totales
   const { totals, flags } = useRegistrarCierreTotals({
     arqueo,
     cierre,
@@ -349,7 +325,6 @@ export default function RegistrarCierre() {
   });
   const { faltanteEfectivo, faltantePorGastos } = totals;
 
-  // Handlers principales
   const setArq = (idx, field, value) => {
     if (isViewing) return;
     setArqueo((prev) => {
@@ -431,9 +406,6 @@ export default function RegistrarCierre() {
     }
   };
 
-  const onBack = () => navigate('/Finanzas/Ventas');
-
-  // Validaciones
   const validate = () => {
     const activeId = activeSucursalDoc?.id ?? activeFromHook?.id;
 
@@ -477,10 +449,45 @@ export default function RegistrarCierre() {
         }
       }
 
-      const gastosListos = (gastos || []).map((g) => {
-        const { fileBlob, filePreview, ...rest } = g;
-        return { ...rest, fileUrl: '', fileName: '', fileMime: '' };
-      });
+      // === Subir adjuntos de gastos (si hay) ===
+      const storage = getStorage(); // usa la app por defecto
+      const folder = `comprobantes/${sucId}/${fecha}`;
+
+      const gastosListos = await Promise.all(
+        (gastos || []).map(async (g, i) => {
+          const { fileBlob, filePreview, ...rest } = g;
+          if (fileBlob) {
+            // nombre seguro (evita caracteres que rompen rutas)
+            const safeName = (g.fileName || fileBlob.name || `gasto_${i}`)
+              .replace(/[^\w.\-]+/g, '_'); // <- OJO al rango
+            const path = `${folder}/${Date.now()}_${i}_${safeName}`;
+            const fileRef = sRef(storage, path);
+            await uploadBytes(fileRef, fileBlob, {
+              contentType: g.fileMime || fileBlob.type || 'application/octet-stream',
+            });
+            const url = await getDownloadURL(fileRef);
+            return {
+              ...rest,
+              fileUrl: url,
+              fileName: safeName,
+              fileMime: g.fileMime || fileBlob.type || '',
+            };
+          }
+          // si no hay blob nuevo (edición), conserva lo existente
+          return {
+            ...rest,
+            fileUrl: g.fileUrl || '',
+            fileName: g.fileName || '',
+            fileMime: g.fileMime || '',
+          };
+        })
+      );
+
+      const actor = {
+        uid: auth.currentUser?.uid || null,
+        username: me.username || '',
+        email: auth.currentUser?.email || '',
+      };
 
       const payloadBase = {
         fecha,
@@ -517,7 +524,12 @@ export default function RegistrarCierre() {
 
         await Swal.fire({ icon: 'success', title: 'Actualizado', text: 'El cuadre se actualizó correctamente.', timer: 1600, showConfirmButton: false });
       } else {
-        await addDoc(cierresRef, { ...payloadBase, createdAt: serverTimestamp() });
+        await addDoc(cierresRef, {
+          ...payloadBase,
+          createdAt: serverTimestamp(),
+          username: actor.username,
+          createdBy: actor,
+        });
 
         const ajustePositivo = getTotalAjusteCajaChica(gastos);
         const delta = -n(cajaChicaUsada) + n(ajustePositivo);
@@ -536,7 +548,6 @@ export default function RegistrarCierre() {
     }
   };
 
-  /** ESTADO DE PESTAÑA ACTIVA */
   const [activeTab, setActiveTab] = useState(TABS.ARQUEO);
 
   const hideAdminButtonsCss = !isAdmin ? `
@@ -553,7 +564,6 @@ export default function RegistrarCierre() {
     );
   }
 
-  // Cambiar cantidad AMEX por sabor
   const setAmexQty = (name, raw) => {
     if (isViewing) return;
     const v = Math.max(0, parseInt(raw ?? '0', 10) || 0);
@@ -569,7 +579,6 @@ export default function RegistrarCierre() {
           <h1>Registrar cuadre {isEditingExisting ? '(editando)' : isViewing ? '(viendo)' : ''}</h1>
 
           <div className="rc-date" style={{ display: 'grid', gap: 8, gridTemplateColumns: '1fr 1fr', alignItems: 'end' }}>
-            {/* FECHA */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <label htmlFor="rc-fecha">Fecha</label>
               <input
@@ -582,7 +591,6 @@ export default function RegistrarCierre() {
               />
             </div>
 
-            {/* SELECT DE SUCURSAL */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <label htmlFor="rc-sucursal">Sucursal</label>
               <select
@@ -605,7 +613,6 @@ export default function RegistrarCierre() {
               </select>
             </div>
 
-            {/* ACCIONES */}
             <div className="rc-tabs-actions" style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
               {!isViewing && (
                 <button
@@ -623,77 +630,26 @@ export default function RegistrarCierre() {
         </div>
       </div>
 
-      {/* PÍLS DE SECCIONES */}
       <div className="rc-tabs-row rc-tabs-attached">
         <div className="rc-tabs rc-tabs-browser" role="tablist" aria-label="Secciones">
-          <button
-            className={`rc-tab ${activeTab === TABS.ARQUEO ? 'active' : ''}`}
-            onClick={() => setActiveTab(TABS.ARQUEO)}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === TABS.ARQUEO}
-          >
-            Arqueo físico
-          </button>
+          <button className={`rc-tab ${activeTab === TABS.ARQUEO ? 'active' : ''}`} onClick={() => setActiveTab(TABS.ARQUEO)} type="button" role="tab" aria-selected={activeTab === TABS.ARQUEO}>Arqueo físico</button>
 
-          <button
-            className={`rc-tab ${activeTab === TABS.CIERRE ? 'active' : ''}`}
-            onClick={() => setActiveTab(TABS.CIERRE)}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === TABS.CIERRE}
-            disabled={!isAdmin}
-          >
-            Cierre de sistema
-          </button>
+          <button className={`rc-tab ${activeTab === TABS.CIERRE ? 'active' : ''}`} onClick={() => setActiveTab(TABS.CIERRE)} type="button" role="tab" aria-selected={activeTab === TABS.CIERRE} disabled={!isAdmin}>Cierre de sistema</button>
 
-          <button
-            className={`rc-tab ${activeTab === TABS.GASTOS ? 'active' : ''}`}
-            onClick={() => setActiveTab(TABS.GASTOS)}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === TABS.GASTOS}
-          >
-            Gastos
-          </button>
+          <button className={`rc-tab ${activeTab === TABS.GASTOS ? 'active' : ''}`} onClick={() => setActiveTab(TABS.GASTOS)} type="button" role="tab" aria-selected={activeTab === TABS.GASTOS}>Gastos</button>
 
           {showPedidosYaBtn && (
-            <button
-              className={`rc-tab ${activeTab === TABS.PY ? 'active' : ''}`}
-              onClick={() => setActiveTab(TABS.PY)}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === TABS.PY}
-            >
-              Pedidos Ya
-            </button>
+            <button className={`rc-tab ${activeTab === TABS.PY ? 'active' : ''}`} onClick={() => setActiveTab(TABS.PY)} type="button" role="tab" aria-selected={activeTab === TABS.PY}>Pedidos Ya</button>
           )}
 
           {showAmexBtn && (
-            <button
-              className={`rc-tab ${activeTab === TABS.AMEX ? 'active' : ''}`}
-              onClick={() => setActiveTab(TABS.AMEX)}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === TABS.AMEX}
-            >
-              American Express
-            </button>
+            <button className={`rc-tab ${activeTab === TABS.AMEX ? 'active' : ''}`} onClick={() => setActiveTab(TABS.AMEX)} type="button" role="tab" aria-selected={activeTab === TABS.AMEX}>American Express</button>
           )}
 
-          <button
-            className={`rc-tab ${activeTab === TABS.RESUMEN ? 'active' : ''}`}
-            onClick={() => setActiveTab(TABS.RESUMEN)}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === TABS.RESUMEN}
-          >
-            Resumen
-          </button>
+          <button className={`rc-tab ${activeTab === TABS.RESUMEN ? 'active' : ''}`} onClick={() => setActiveTab(TABS.RESUMEN)} type="button" role="tab" aria-selected={activeTab === TABS.RESUMEN}>Resumen</button>
         </div>
       </div>
 
-      {/* CONTENIDO POR SECCIÓN */}
       {activeTab === TABS.ARQUEO && (
         <div className="rc-grid">
           <ArqueoGrid
@@ -734,7 +690,6 @@ export default function RegistrarCierre() {
         </div>
       )}
 
-      {/* ===== Pedidos Ya (inline, sin botón propio de guardar) ===== */}
       {activeTab === TABS.PY && showPedidosYaBtn && (
         <section className="rc-card">
           <div className="rc-card-hd">
@@ -759,33 +714,15 @@ export default function RegistrarCierre() {
         </section>
       )}
 
-      {/* ===== American Express (inline, sin modal) ===== */}
       {activeTab === TABS.AMEX && showAmexBtn && (
         <section className="rc-card">
           <div className="rc-card-hd">
             <h3>Venta American Express</h3>
           </div>
 
-          {/* Grid de dos columnas como el modal */}
-          <div
-            className="amex-grid"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: 14,
-            }}
-          >
+          <div className="amex-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             {AMEX_FLAVORS.map((name) => (
-              <div
-                key={name}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  padding: '4px 6px',
-                }}
-              >
+              <div key={name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '4px 6px' }}>
                 <span style={{ fontWeight: 700, color: 'var(--slate)' }}>{name}</span>
 
                 <input
@@ -799,21 +736,13 @@ export default function RegistrarCierre() {
                   onWheel={blockWheel}
                   onKeyDown={blockArrows}
                   disabled={isViewing}
-                  style={{
-                    width: 68,
-                    textAlign: 'center',
-                    background: '#cfeee0',
-                    border: '1px solid #cfe8db',
-                    borderRadius: 12,
-                    fontWeight: 800,
-                  }}
+                  style={{ width: 68, textAlign: 'center', background: '#cfeee0', border: '1px solid #cfe8db', borderRadius: 12, fontWeight: 800 }}
                   aria-label={`Cantidad ${name}`}
                 />
               </div>
             ))}
           </div>
 
-          {/* Total */}
           <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
             <b style={{ fontSize: 16 }}>Total</b>
             <span style={{ fontWeight: 800 }}>Q {Number(amexTotal || 0).toFixed(2)}</span>
@@ -858,7 +787,6 @@ export default function RegistrarCierre() {
         </>
       )}
 
-      {/* MODALES que permanecen */}
       <CategoriasModal
         open={showCatModal}
         onClose={() => setShowCatModal(false)}

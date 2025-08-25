@@ -96,6 +96,14 @@ export default function GastosList({
     setGasto(i, 'fileUrl', '');
   };
 
+  const clearFile = (i) => {
+    setGasto(i, 'fileBlob', null);
+    setGasto(i, 'filePreview', '');
+    setGasto(i, 'fileMime', '');
+    setGasto(i, 'fileName', '');
+    setGasto(i, 'fileUrl', '');
+  };
+
   // ⬇️ Total de gastos (se recalcula en render)
   const totalGastos = (gastos || []).reduce((sum, g) => sum + n(g.cantidad), 0);
 
@@ -130,26 +138,37 @@ export default function GastosList({
       {/* ===== Tabla de gastos ===== */}
       <table className="rc-table rc-gastos-table">
         {/* prettier-ignore */}
-        <colgroup><col style={{width:'220px'}}/><col style={{width:'auto'}}/><col style={{width:'140px'}}/><col style={{width:'140px'}}/><col style={{width:'120px'}}/></colgroup>
+        <colgroup>
+          <col style={{width:'200px'}}/>
+          <col style={{width:'auto'}}/>
+          <col style={{width:'120px'}}/>
+          <col style={{width:'120px'}}/>
+          <col style={{width:'180px'}}/>{/* Comprobante */}
+          <col style={{width:'120px'}}/>{/* Acciones */}
+        </colgroup>
         <thead>
           <tr>
             <th style={{ textAlign: 'center' }}>Categoría</th>
             <th style={{ textAlign: 'center' }}>Descripción</th>
             <th style={{ textAlign: 'center' }}>Ref</th>
             <th style={{ textAlign: 'center' }}>Cantidad</th>
+            <th style={{ textAlign: 'center' }}>Comprobante</th>
             <th style={{ textAlign: 'center' }}>Acciones</th>
           </tr>
         </thead>
         <tbody>
           {gastos.length === 0 && (
             <tr>
-              <td colSpan={5} className="rc-empty">Sin gastos aún.</td>
+              <td colSpan={6} className="rc-empty">Sin gastos aún.</td>
             </tr>
           )}
 
           {gastos.map((g, i) => {
             const locked = !!g.locked;
             const disabled = readOnly || locked;
+
+            const hasFile = !!(g.filePreview || g.fileUrl);
+            const isPdf = (g.fileMime || '').includes('pdf');
 
             return (
               <tr key={i}>
@@ -207,7 +226,6 @@ export default function GastosList({
                     value={g.cantidad ?? ''}
                     onChange={(e) => setGasto(i, 'cantidad', e.target.value)}
                     onKeyDown={(e) => {
-                      // Bloquea incrementos por teclado y permite Enter para confirmar
                       if (
                         e.key === 'ArrowUp' ||
                         e.key === 'ArrowDown' ||
@@ -219,14 +237,67 @@ export default function GastosList({
                       }
                       handleEnterConfirm(i, e);
                     }}
-                    onWheel={(e) => {
-                      // Evita cambios con la rueda del mouse cuando está enfocado
-                      e.currentTarget.blur();
-                    }}
+                    onWheel={(e) => { e.currentTarget.blur(); }}
                     disabled={disabled}
                     aria-label="Cantidad"
                     style={{ width: '100%', textAlign: 'center' }}
                   />
+                </td>
+
+                {/* Comprobante */}
+                <td style={{ textAlign: 'center' }}>
+                  <div style={{ display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {hasFile ? (
+                      <>
+                        <button
+                          type="button"
+                          className="rc-btn rc-btn-outline"
+                          onClick={() => openViewer(g.filePreview || g.fileUrl, g.fileMime, g.fileName)}
+                          title="Ver comprobante"
+                        >
+                          {isPdf ? <IcoPdf /> : <IcoPhoto />}
+                        </button>
+                        {!disabled && (
+                          <button
+                            type="button"
+                            className="rc-btn rc-btn-outline"
+                            onClick={() => handlePickFile(i)}
+                          >
+                            Cambiar
+                          </button>
+                        )}
+                        {!disabled && (
+                          <button
+                            type="button"
+                            className="rc-btn rc-btn-ghost"
+                            onClick={() => clearFile(i)}
+                            title="Quitar archivo"
+                          >
+                            Quitar
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      !disabled && (
+                        <button
+                          type="button"
+                          className="rc-btn rc-btn-outline"
+                          onClick={() => handlePickFile(i)}
+                        >
+                          Adjuntar
+                        </button>
+                      )
+                    )}
+
+                    {/* Input oculto */}
+                    <input
+                      id={`gasto-file-${i}`}
+                      type="file"
+                      accept="image/png,image/jpeg,application/pdf"
+                      onChange={(e) => handleFileChange(i, e)}
+                      style={{ display: 'none' }}
+                    />
+                  </div>
                 </td>
 
                 {/* Acciones */}
@@ -261,7 +332,7 @@ export default function GastosList({
         {/* Total de gastos */}
         <tfoot>
           <tr className="rc-gastos-total">
-            <td colSpan={3} style={{ textAlign: 'right', fontWeight: 800, color: 'var(--dark)' }}>
+            <td colSpan={4} style={{ textAlign: 'right', fontWeight: 800, color: 'var(--dark)' }}>
               Total de gastos
             </td>
             <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--dark)' }}>

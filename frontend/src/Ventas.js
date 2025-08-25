@@ -202,6 +202,7 @@ export default function Ventas() {
         // Flags para ocultar acciones cuando es viewer:
         canManage={canManage}
         canDownload={canDownload}
+        isAdmin={isAdmin}
       />
 
       {/* Modal descargas agrupadas solo admin */}

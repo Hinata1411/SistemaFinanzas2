@@ -124,6 +124,19 @@ function DashboardLayout({ userEmail, userRole }) {
               </NavLink>
             </li>
 
+
+            {isAdmin && (
+            <li className="menu-item">
+              <NavLink
+                to="RegistrarPagos"
+                className={({ isActive }) => `menu-link ${isActive ? 'active' : ''}`}
+              >
+                <img src="/pizza3.png" alt="" />
+                <span>Registrar Pagos</span>
+              </NavLink>
+            </li>
+            )}
+
              {isAdmin && (
             <li className="menu-item">
               <NavLink
