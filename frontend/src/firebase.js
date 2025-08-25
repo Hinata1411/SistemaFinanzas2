@@ -25,8 +25,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// ✅ OJO: getMessaging puede requerir https/localhost y service worker.
-// Si no lo usas aún, no lo invoques en sitios críticos de carga.
+
 let messaging;
 try {
   messaging = getMessaging(app);

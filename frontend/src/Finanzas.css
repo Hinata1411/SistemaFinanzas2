@@ -1,14 +1,14 @@
 /* Paleta (misma del login/dashboard) */
 :root{
-   --primary:#14B866;
-  --dark:#155E4B;            /* verde profundo sidebar */
-  --dark-2:#0F3D2E;   
-  --dark-3:#041d15;           /* degradado debajo */
-  --accent:#FF7A00;          /* acento cálido */
-  --cream:#FFF4E8;           /* fondo general del mockup */
+  --primary:#14B866;
+  --dark:#155E4B;
+  --dark-2:#0F3D2E;
+  --dark-3:#041d15;
+  --accent:#FF7A00;
+  --cream:#FFF4E8;
   --slate:#1F2937;
 
-  --sb-open: 17.5rem;        /* ancho sidebar */
+  --sb-open: 17.5rem;
   --radius: 22px;
   --shadow: 0 20px 60px rgba(0,0,0,.10);
   --inner-shadow: 0 1px 0 rgba(255,255,255,.15) inset;
@@ -22,58 +22,127 @@ html, body, #root {
   background: linear-gradient(180deg, var(--surface), var(--dark-2));
 }
 
-/* Contenedor del Home (no tocamos .admin-content) */
+/* ===== Shell general ===== */
 .home-shell{
-  margin-right: 0%;
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
-/* Título centrado */
+/* ===== Topbar: título izq + botón der ===== */
+.topbar{
+  width: min(1100px, 100%);
+  margin: 0 auto 8px auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+
+.home-header{
+  margin: 0;
+}
 .home-header h1{
-  margin: 4px 0 8px;
-  text-align: center;
+  margin: 6px 0;
   color: var(--dark);
   font-weight: 800;
   letter-spacing: .3px;
-  font-size: clamp(22px, 3.6vw, 44px);
+  font-size: clamp(28px, 4vw, 48px);
   animation: fadeInUp .6s ease both;
-
+  width: 100%;
 }
 
-.alt-theme h1{
-  color: white;
+/* Botón agregar (a la derecha en la topbar) */
+.add-task-btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 18px;
+  min-width: 190px;
+  height: 48px;
+  border: none;
+  border-radius: 12px;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: var(--shadow);
+}
+.add-task-btn:hover{ filter: brightness(0.95); }
+.add-task-btn:active{ transform: translateY(1px); }
+
+/* Fila de contenido: KPI columna izq + calendario der */
+.content-row{
+  width: min(1000px, 100%);
+  margin: 0 auto 10px auto;
+  display: grid;
+  grid-template-columns: 200px 1fr;  /* izq KPIs | der calendario */
+  gap: 14px;
+  align-items: start;
 }
 
-/* Tarjeta que envuelve el calendario */
-.home-calendar-card{
-  width: min(1100px, 100%);
-  margin: 0 auto;                   /* centrado */
+/* Columna izquierda: KPIs en columna */
+.kpi-left{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* KPI compactas (bajitas y largas dentro de la columna) */
+.kpi-card{
   background: #fff;
   border: 1px solid #ede9e2;
-  border-radius: var(--radius);
-  
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 8px 14px;
+  min-height: 110px;
+  max-height: 80px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.kpi-title{ 
+  font-size: .85rem; 
+  color: var(--dark-2); 
+  font-weight:600; 
+  margin-bottom:0px; 
+}
+
+.kpi-value{ 
+  font-size: 0.85rem; 
+  color: var(--accent); 
+  font-weight:750; 
+  line-height:1.2; 
+}
+
+
+/* Calendario a la derecha */
+.home-calendar-card{
+  background: #fff;
+  border: 1px solid #ede9e2;
+  border-radius: 16px;
   padding: clamp(10px, 2vw, 16px);
-  overflow: visible;                 /* evita scrollbars internas */
+  box-shadow: var(--shadow);
+  overflow: visible;
 }
 
 /* =========================
-   Syncfusion Schedule tweaks
+   Syncfusion / RBC tweaks
    ========================= */
 .e-schedule{
   font-family: 'Poppins', system-ui, sans-serif;
 }
 .e-schedule .e-header-cells{
-  background-color: #fef8f4;        /* crema suave */
+  background-color: #fef8f4;
   color: var(--dark);
   font-weight: 600;
   border-bottom: 1px solid #e7e2d9;
 }
-.e-schedule .e-toolbar .e-tbar-btn .e-icons{
-  color: var(--dark);
-}
+.e-schedule .e-toolbar .e-tbar-btn .e-icons{ color: var(--dark); }
 .e-schedule .e-week-number{
   background-color: rgba(20,184,102,.12);
   color: var(--dark);
@@ -87,9 +156,29 @@ html, body, #root {
 }
 .e-schedule .e-appointment:hover{ opacity: .92; }
 
-/* =========================
-   Animación del título
-   ========================= */
+/* ====== Filtro de sucursal ====== */
+.branch-filter{
+  width: min(300px, 50%);
+  margin: 0 auto 6px auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  align-items: center;
+}
+.branch-filter label{
+  font-weight: 600;
+  color: var(--dark-2);
+}
+.branch-filter select{
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  box-shadow: var(--shadow);
+  background: #fff;
+}
+
+
+/* Animación */
 @keyframes fadeInUp{
   from{ opacity:0; transform: translateY(14px); }
   to  { opacity:1; transform: translateY(0); }
@@ -99,14 +188,11 @@ html, body, #root {
    Responsive
    ========================= */
 @media (max-width: 900px){
-  .home-calendar-card{
-    width: min(1000px, 96vw);
+  .content-row{
+    grid-template-columns: 1fr;     /* apila KPI y calendario */
   }
 }
-@media (max-width: 600px){
-  .home-calendar-card{
-    width: 100%;
-    border-radius: 12px;
-    padding: 10px;
-  }
+@media (max-width: 780px){
+  .add-task-btn{ min-width: 160px; }
+  .kpi-card{ min-height: 54px; }
 }

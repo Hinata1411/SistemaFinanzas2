@@ -414,7 +414,7 @@ const cajaChicaDisponibleUI = isViewing
     setShowAmex(true);
   };
 
-  const onBack = () => navigate('/home/Ventas');
+  const onBack = () => navigate('/Finanzas/Ventas');
 
   // Validaciones
   const validate = () => {
@@ -511,7 +511,7 @@ const cajaChicaDisponibleUI = isViewing
 
         await Swal.fire({ icon: 'success', title: 'Guardado', text: 'El cuadre se guardó correctamente.', timer: 1600, showConfirmButton: false });
       }
-      navigate('/home/Ventas');
+      navigate('/Finanzas/Ventas');
     } catch (err) {
       console.error(err);
       Swal.fire('Error', err.message || 'No se pudo guardar.', 'error');
