@@ -120,10 +120,11 @@ function DashboardLayout({ userEmail, userRole }) {
                 className={({ isActive }) => `menu-link ${isActive ? 'active' : ''}`}
               >
                 <img src="/factura.png" alt="" />
-                <span>Historial</span>
+                <span>Historial de Cuadres</span>
               </NavLink>
             </li>
 
+             {isAdmin && (
             <li className="menu-item">
               <NavLink
                 to="Sucursales"
@@ -133,6 +134,7 @@ function DashboardLayout({ userEmail, userRole }) {
                 <span>Sucursales</span>
               </NavLink>
             </li>
+            )}
 
             {isAdmin && (
               <li className="menu-item">

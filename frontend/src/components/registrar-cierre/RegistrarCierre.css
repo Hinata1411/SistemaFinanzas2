@@ -638,3 +638,24 @@
   -webkit-appearance: none;
   margin: 0;
 }
+
+/* Quitar flechitas (spinners) en inputs type=number */
+.no-spin[type="number"],
+.rc-no-spin[type="number"],
+.rc-no-step[type="number"] {
+  appearance: textfield;       /* estándar */
+  -moz-appearance: textfield;  /* Firefox */
+  -webkit-appearance: none;    /* WebKit */
+}
+
+/* Oculta los botones de incremento en navegadores WebKit */
+.no-spin::-webkit-outer-spin-button,
+.no-spin::-webkit-inner-spin-button,
+.rc-no-spin::-webkit-outer-spin-button,
+.rc-no-spin::-webkit-inner-spin-button,
+.rc-no-step::-webkit-outer-spin-button,
+.rc-no-step::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+

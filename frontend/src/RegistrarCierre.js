@@ -1,3 +1,4 @@
+// src/RegistrarCierre.jsx
 import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -17,7 +18,6 @@ import { db, auth } from './firebase';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import './components/registrar-cierre/RegistrarCierre.css';
-import AmexModal from './components/registrar-cierre/AmexModal';
 
 import { todayISO } from './utils/dates';
 import { n } from './utils/numbers';
@@ -48,7 +48,7 @@ const INIT_GASTO_CATEGORIAS = [
   'Ajuste de caja chica',
 ];
 
-/** 👇 Ahora cada caja lleva `apertura: 1000` por defecto */
+/** 👇 Cada caja con apertura por defecto */
 const emptyArqueoCaja = () => ({
   q200: '',
   q100: '',
@@ -68,7 +68,7 @@ const emptyCierreCaja = () => ({
   motorista: '',
 });
 
-/** Normaliza un arreglo de arqueo a 3 cajas y asegura apertura=1000 si falta */
+/** Normaliza arqueo a 3 cajas */
 const normalizeArqueo = (arr) => {
   const base = [emptyArqueoCaja(), emptyArqueoCaja(), emptyArqueoCaja()];
   const src = Array.isArray(arr) ? arr : [];
@@ -90,6 +90,33 @@ const TABS = {
   PY: 'py',
   AMEX: 'amex',
   RESUMEN: 'resumen',
+};
+
+/** Catálogo AMEX (como en tu modal) */
+const AMEX_FLAVORS = [
+  'Pepperoni', 'Jamón', 'Only Cheese', 'Hawaiana', 'Magnífica', 'Dúo dinámico',
+  'No meat', '4 estaciones', 'Cheese fingers',
+  'Border cheese', 'Suprema', 'Full meat', 'Super chilly', 'Tejana',
+  'Border champiñones', 'Americana', 'Italiana',
+];
+
+/** Precios AMEX:
+ *  - Pepperoni y Jamón: 65
+ *  - Cheese fingers: 40
+ *  - Resto: 85
+ */
+const AMEX_PRICES_DEFAULT = AMEX_FLAVORS.reduce((acc, name) => {
+  acc[name] = 85; // base
+  return acc;
+}, {});
+AMEX_PRICES_DEFAULT['Pepperoni'] = 65;
+AMEX_PRICES_DEFAULT['Jamón'] = 65;
+AMEX_PRICES_DEFAULT['Cheese fingers'] = 40;
+
+/** Helpers para inputs sin spinner/rueda/flechas */
+const blockWheel = (e) => e.currentTarget.blur();
+const blockArrows = (e) => {
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault();
 };
 
 export default function RegistrarCierre() {
@@ -126,7 +153,7 @@ export default function RegistrarCierre() {
   }, []);
   const isAdmin = me.role === 'admin';
 
-  // Sucursales desde hook (puede que no traiga extras)
+  // Sucursales desde hook
   const sucursales = useSucursales();
 
   // Filtrar sucursales visibles
@@ -136,8 +163,6 @@ export default function RegistrarCierre() {
   }, [sucursales, me, isAdmin]);
 
   const [activeSucursalId, setActiveSucursalId] = useState(null);
-
-  // Doc real de la sucursal activa (para extras)
   const [activeSucursalDoc, setActiveSucursalDoc] = useState(null);
 
   // Al cargar, fijar sucursal activa
@@ -146,7 +171,7 @@ export default function RegistrarCierre() {
     setActiveSucursalId((prev) => prev || sucursalesVisibles[0]?.id || null);
   }, [me.loaded, sucursalesVisibles]);
 
-  // Cuando cambia la sucursal activa, leer SIEMPRE el doc real de Firestore
+  // Leer doc real de la sucursal activa
   useEffect(() => {
     (async () => {
       if (!activeSucursalId) { setActiveSucursalDoc(null); return; }
@@ -161,14 +186,13 @@ export default function RegistrarCierre() {
   }, [activeSucursalId]);
 
   // American Express (detalle por sabores)
-  const [showAmex, setShowAmex] = useState(false);
   const [amexItems, setAmexItems] = useState({});   // { sabor: cantidad }
   const [amexTotal, setAmexTotal] = useState(0);
 
   // Fecha
   const [fecha, setFecha] = useState(todayISO());
 
-  // Estados principales (persisten al cambiar de píls)
+  // Estados principales
   const [arqueo, setArqueo] = useState([emptyArqueoCaja(), emptyArqueoCaja(), emptyArqueoCaja()]);
   const [cierre, setCierre] = useState([emptyCierreCaja(), emptyCierreCaja(), emptyCierreCaja()]);
   const [categorias, setCategorias] = useState(INIT_GASTO_CATEGORIAS);
@@ -190,7 +214,7 @@ export default function RegistrarCierre() {
   const [cajaChicaUsada, setCajaChicaUsada] = useState(0);
   const [faltantePagado, setFaltantePagado] = useState(0);
 
-  // Pedidos Ya
+  // Pedidos Ya (inline)
   const [pedidosYaCantidad, setPedidosYaCantidad] = useState(0);
 
   // Cargar documento existente si aplica
@@ -226,7 +250,7 @@ export default function RegistrarCierre() {
         const ax = d.extras?.americanExpress;
         if (ax && typeof ax === 'object') {
           setAmexItems(ax.items || {});
-          setAmexTotal(ax.total || 0);
+          setAmexTotal(n(ax.total));
         }
       } catch (e) {
         console.error(e);
@@ -240,17 +264,16 @@ export default function RegistrarCierre() {
   const [showCatModal, setShowCatModal] = useState(false);
   const [showCajaChica, setShowCajaChica] = useState(false);
 
-  // Sucursal activa según hook (solo para nombre y fallback de caja chica)
+  // Sucursal activa desde hook (fallback)
   const activeFromHook = useMemo(
     () => sucursales.find((s) => s.id === activeSucursalId) || null,
     [sucursales, activeSucursalId]
   );
 
-  // Lo que tiene hoy la sucursal
+  // Caja chica disponible (UI)
   const cajaChicaActual =
     (activeSucursalDoc?.cajaChica ?? activeFromHook?.cajaChica) || 0;
 
-  // Si estoy viendo un cierre (view), intento usar el snapshot guardado en ese cierre
   const cajaChicaDisponibleUI = isViewing
     ? (originalDoc?.cajaChicaDisponibleAtSave ??
        originalDoc?.cajaChicaDisponible ??
@@ -259,7 +282,7 @@ export default function RegistrarCierre() {
 
   const totalAperturas = (arqueo || []).reduce((s, c) => s + (Number.isFinite(+c?.apertura) ? +c.apertura : 1000), 0);
 
-  // === EXTRAS (flags seguros) ===
+  // === EXTRAS (flags sucursal) ===
   const truthy = (v) =>
     v === true || v === 1 || v === '1' || (typeof v === 'string' && v.toLowerCase() === 'true');
 
@@ -278,13 +301,9 @@ export default function RegistrarCierre() {
           a.americanExpress ??
           bx.americanExpress ??
           b.americanExpress ??
-          ax.amex ??
-          bx.amex ??
-          ax.american_express ??
-          bx.american_express ??
-          ax.ae ??
-          bx.ae ??
-          false
+          ax.amex ?? bx.amex ??
+          ax.american_express ?? bx.american_express ??
+          ax.ae ?? bx.ae ?? false
       );
 
     return { pedidosYa, americanExpress };
@@ -294,6 +313,31 @@ export default function RegistrarCierre() {
 
   const showPedidosYaBtn = _py;
   const showAmexBtn = _amex;
+
+  /** 🔢 Precios AMEX (merge sucursal → defaults) */
+  const amexPrices = useMemo(() => {
+    const exA = activeSucursalDoc?.extras || {};
+    const exB = activeFromHook?.extras || {};
+    const fromDb =
+      exA.americanExpressPrices ||
+      activeSucursalDoc?.americanExpressPrices ||
+      exA.amexPrices ||
+      exB.americanExpressPrices ||
+      activeFromHook?.americanExpressPrices ||
+      exB.amexPrices ||
+      null;
+    return { ...AMEX_PRICES_DEFAULT, ...(fromDb || {}) };
+  }, [activeSucursalDoc, activeFromHook]);
+
+  /** Recalcular total AMEX por sabor (cantidad × precio) */
+  useEffect(() => {
+    const total = AMEX_FLAVORS.reduce((sum, name) => {
+      const qty = n(amexItems?.[name]);
+      const price = amexPrices[name] ?? 0;
+      return sum + qty * price;
+    }, 0);
+    setAmexTotal(total);
+  }, [amexItems, amexPrices]);
 
   // Totales
   const { totals, flags } = useRegistrarCierreTotals({
@@ -305,7 +349,7 @@ export default function RegistrarCierre() {
   });
   const { faltanteEfectivo, faltantePorGastos } = totals;
 
-  // Handlers
+  // Handlers principales
   const setArq = (idx, field, value) => {
     if (isViewing) return;
     setArqueo((prev) => {
@@ -387,40 +431,10 @@ export default function RegistrarCierre() {
     }
   };
 
-  const handlePedidosYa = async () => {
-    if (isViewing) return;
-    const { isConfirmed, value } = await Swal.fire({
-      title: 'Ingresar cantidad vendida en Pedidos Ya',
-      input: 'number',
-      inputValue: (Number.isFinite(pedidosYaCantidad) && pedidosYaCantidad >= 0) ? pedidosYaCantidad : '',
-      inputAttributes: { min: '0', step: '1', inputmode: 'numeric' },
-      showCancelButton: true,
-      confirmButtonText: 'Guardar',
-      cancelButtonText: 'Cancelar',
-      allowOutsideClick: false,
-      allowEscapeKey: true,
-      inputValidator: (val) => {
-        if (val === '' || val === null) return 'Ingresa un número entero';
-        if (!/^\d+$/.test(String(val))) return 'Solo enteros (0, 1, 2, …)';
-        return undefined;
-      },
-    });
-    if (isConfirmed) {
-      setPedidosYaCantidad(parseInt(value, 10));
-      await Swal.fire({ icon: 'success', title: 'Guardado', timer: 900, showConfirmButton: false });
-    }
-  };
-
-  const handleAmericanExpress = () => {
-    if (isViewing) return;
-    setShowAmex(true);
-  };
-
   const onBack = () => navigate('/Finanzas/Ventas');
 
   // Validaciones
   const validate = () => {
-    const activeNombre = activeSucursalDoc?.nombre ?? activeFromHook?.nombre;
     const activeId = activeSucursalDoc?.id ?? activeFromHook?.id;
 
     if (!activeId) {
@@ -522,7 +536,7 @@ export default function RegistrarCierre() {
     }
   };
 
-  /** ESTADO DE PESTAÑA ACTIVA (píls de secciones) */
+  /** ESTADO DE PESTAÑA ACTIVA */
   const [activeTab, setActiveTab] = useState(TABS.ARQUEO);
 
   const hideAdminButtonsCss = !isAdmin ? `
@@ -530,7 +544,6 @@ export default function RegistrarCierre() {
     .hide-pay  .rc-res-item .rc-btn.rc-btn-primary { display: none !important; }
   ` : '';
 
-  // ⬇️ El return temprano va DESPUÉS de todos los hooks declarados arriba
   if (!me.loaded) {
     return (
       <div className="rc-shell">
@@ -539,6 +552,13 @@ export default function RegistrarCierre() {
       </div>
     );
   }
+
+  // Cambiar cantidad AMEX por sabor
+  const setAmexQty = (name, raw) => {
+    if (isViewing) return;
+    const v = Math.max(0, parseInt(raw ?? '0', 10) || 0);
+    setAmexItems((prev) => ({ ...prev, [name]: v }));
+  };
 
   return (
     <div className="rc-shell">
@@ -588,17 +608,15 @@ export default function RegistrarCierre() {
             {/* ACCIONES */}
             <div className="rc-tabs-actions" style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
               {!isViewing && (
-                <>
-                  <button
-                    type="button"
-                    className="rc-btn rc-btn-accent"
-                    onClick={onSave}
-                    disabled={busy}
-                    title={isEditingExisting ? 'Actualizar cuadre' : 'Guardar cuadre'}
-                  >
-                    {busy ? 'Guardando…' : isEditingExisting ? 'Actualizar' : 'Guardar'}
-                  </button>
-                </>
+                <button
+                  type="button"
+                  className="rc-btn rc-btn-accent"
+                  onClick={onSave}
+                  disabled={busy}
+                  title={isEditingExisting ? 'Actualizar cuadre' : 'Guardar cuadre'}
+                >
+                  {busy ? 'Guardando…' : isEditingExisting ? 'Actualizar' : 'Guardar'}
+                </button>
               )}
             </div>
           </div>
@@ -689,13 +707,6 @@ export default function RegistrarCierre() {
             setArq={setArq}
             cajaChicaDisponible={cajaChicaDisponibleUI}
             readOnly={isViewing}
-            extras={{
-              showPedidosYaBtn,
-              showAmexBtn,
-              onPedidosYa: handlePedidosYa,
-              onAmex: handleAmericanExpress,
-              disabled: busy || isViewing,
-            }}
           />
         </div>
       )}
@@ -729,46 +740,89 @@ export default function RegistrarCierre() {
         </div>
       )}
 
+      {/* ===== Pedidos Ya (inline, sin botón propio de guardar) ===== */}
       {activeTab === TABS.PY && showPedidosYaBtn && (
         <section className="rc-card">
           <div className="rc-card-hd">
             <h3>Pedidos Ya</h3>
-            {!isViewing && (
-              <button
-                type="button"
-                className="rc-btn rc-btn-outline"
-                onClick={handlePedidosYa}
-                disabled={busy}
-                title="Ingresar cantidad vendida en Pedidos Ya"
-              >
-                Editar cantidad
-              </button>
-            )}
           </div>
-          <div className="rc-card-bd">
-            <p>Cantidad vendida: <strong>{Number(pedidosYaCantidad || 0)}</strong></p>
+          <div className="rc-card-bd" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <label className="rc-cell-label strong">Cantidad vendida</label>
+            <input
+              className="rc-input rc-no-spin rc-no-step"
+              type="number"
+              min="0"
+              step="1"
+              inputMode="numeric"
+              value={Number.isFinite(pedidosYaCantidad) ? pedidosYaCantidad : 0}
+              onChange={(e) => setPedidosYaCantidad(Math.max(0, parseInt(e.target.value || '0', 10) || 0))}
+              onWheel={blockWheel}
+              onKeyDown={blockArrows}
+              disabled={isViewing}
+              style={{ width: 140, textAlign: 'center' }}
+            />
           </div>
         </section>
       )}
 
+      {/* ===== American Express (inline, sin modal) ===== */}
       {activeTab === TABS.AMEX && showAmexBtn && (
         <section className="rc-card">
           <div className="rc-card-hd">
-            <h3>American Express</h3>
-            {!isViewing && (
-              <button
-                type="button"
-                className="rc-btn rc-btn-outline"
-                onClick={handleAmericanExpress}
-                disabled={busy}
-                title="Detalle American Express"
-              >
-                Gestionar detalle
-              </button>
-            )}
+            <h3>Venta American Express</h3>
           </div>
-          <div className="rc-card-bd">
-            <p>Total AMEX: <strong>Q {Number(amexTotal || 0).toFixed(2)}</strong></p>
+
+          {/* Grid de dos columnas como el modal */}
+          <div
+            className="amex-grid"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: 14,
+            }}
+          >
+            {AMEX_FLAVORS.map((name) => (
+              <div
+                key={name}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  padding: '4px 6px',
+                }}
+              >
+                <span style={{ fontWeight: 700, color: 'var(--slate)' }}>{name}</span>
+
+                <input
+                  className="rc-input rc-no-spin rc-no-step"
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputMode="numeric"
+                  value={n(amexItems?.[name]) || 0}
+                  onChange={(e) => setAmexQty(name, e.target.value)}
+                  onWheel={blockWheel}
+                  onKeyDown={blockArrows}
+                  disabled={isViewing}
+                  style={{
+                    width: 68,
+                    textAlign: 'center',
+                    background: '#cfeee0',
+                    border: '1px solid #cfe8db',
+                    borderRadius: 12,
+                    fontWeight: 800,
+                  }}
+                  aria-label={`Cantidad ${name}`}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Total */}
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <b style={{ fontSize: 16 }}>Total</b>
+            <span style={{ fontWeight: 800 }}>Q {Number(amexTotal || 0).toFixed(2)}</span>
           </div>
         </section>
       )}
@@ -787,6 +841,7 @@ export default function RegistrarCierre() {
               showPedidosYa={showPedidosYaBtn}
               showAmex={showAmexBtn}
               totalAperturas={totalAperturas}
+              isAdmin={isAdmin}
             />
           </div>
 
@@ -809,7 +864,7 @@ export default function RegistrarCierre() {
         </>
       )}
 
-      {/* MODALES */}
+      {/* MODALES que permanecen */}
       <CategoriasModal
         open={showCatModal}
         onClose={() => setShowCatModal(false)}
@@ -823,18 +878,6 @@ export default function RegistrarCierre() {
         cajaChicaDisponible={cajaChicaDisponibleUI}
         faltantePorGastos={faltantePorGastos}
         onApply={(monto) => { if (isViewing) return; setCajaChicaUsada((prev) => prev + monto); }}
-      />
-
-      <AmexModal
-        open={showAmex}
-        onClose={() => setShowAmex(false)}
-        initialItems={amexItems}
-        readOnly={isViewing}
-        onSave={({ items, total }) => {
-          setAmexItems(items);
-          setAmexTotal(total);
-          setShowAmex(false);
-        }}
       />
     </div>
   );

@@ -31,9 +31,16 @@ function App() {
           <Route index element={<Finanzas />} />
           <Route path="RegistrarCierre" element={<RegistrarCierre />} />
           <Route path="Ventas" element={<Ventas />} />
-          <Route path="Sucursales" element={<Sucursales />} />
 
           {/* solo ADMIN puede entrar */}
+          <Route
+            path="Sucursales"
+            element={
+              <RequireAdmin>
+                <Sucursales />
+              </RequireAdmin>
+            }
+          />
           <Route
             path="Usuarios"
             element={

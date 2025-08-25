@@ -1,6 +1,7 @@
+// src/components/registrar-cierre/GastosList.jsx
 import React, { useState } from 'react';
 import Swal from 'sweetalert2';
-import { toMoney } from '../../utils/numbers';
+import { n, toMoney } from '../../utils/numbers';
 import AttachmentViewerModal from './AttachmentViewerModal';
 
 /* Ícono cámara/foto */
@@ -94,6 +95,9 @@ export default function GastosList({
     setGasto(i, 'fileName', file.name);
     setGasto(i, 'fileUrl', '');
   };
+
+  // ⬇️ Total de gastos (se recalcula en render)
+  const totalGastos = (gastos || []).reduce((sum, g) => sum + n(g.cantidad), 0);
 
   return (
     <section className="rc-card">
@@ -192,15 +196,33 @@ export default function GastosList({
                   />
                 </td>
 
-                {/* Cantidad */}
+                {/* Cantidad (sin flechas/rueda) */}
                 <td>
                   <input
-                    className="rc-input rc-qty"
-                    placeholder="Cantidad"
-                    inputMode="numeric"
-                    value={g.cantidad}
+                    className="rc-input rc-qty no-spin"
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    value={g.cantidad ?? ''}
                     onChange={(e) => setGasto(i, 'cantidad', e.target.value)}
-                    onKeyDown={(e) => handleEnterConfirm(i, e)}
+                    onKeyDown={(e) => {
+                      // Bloquea incrementos por teclado y permite Enter para confirmar
+                      if (
+                        e.key === 'ArrowUp' ||
+                        e.key === 'ArrowDown' ||
+                        e.key === 'PageUp' ||
+                        e.key === 'PageDown'
+                      ) {
+                        e.preventDefault();
+                        return;
+                      }
+                      handleEnterConfirm(i, e);
+                    }}
+                    onWheel={(e) => {
+                      // Evita cambios con la rueda del mouse cuando está enfocado
+                      e.currentTarget.blur();
+                    }}
                     disabled={disabled}
                     aria-label="Cantidad"
                     style={{ width: '100%', textAlign: 'center' }}
@@ -235,9 +257,22 @@ export default function GastosList({
             );
           })}
         </tbody>
+
+        {/* Total de gastos */}
+        <tfoot>
+          <tr className="rc-gastos-total">
+            <td colSpan={3} style={{ textAlign: 'right', fontWeight: 800, color: 'var(--dark)' }}>
+              Total de gastos
+            </td>
+            <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--dark)' }}>
+              {toMoney(totalGastos)}
+            </td>
+            <td />
+          </tr>
+        </tfoot>
       </table>
 
-      {/* Acciones de lista: un solo botón visible siempre */}
+      {/* Acciones de lista */}
       {!readOnly && (
         <div className="rc-gastos-actions" style={{ marginTop: 10 }}>
           <button
