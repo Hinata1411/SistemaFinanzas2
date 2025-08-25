@@ -32,7 +32,7 @@ html, body, #root {
 
 /* ===== Topbar: título izq + botón der ===== */
 .topbar{
-  width: min(1100px, 100%);
+  width: min(1200px, 100%);
   margin: 0 auto 8px auto;
   display: flex;
   justify-content: space-between;
@@ -75,7 +75,7 @@ html, body, #root {
 
 /* Fila de contenido: KPI columna izq + calendario der */
 .content-row{
-  width: min(1000px, 100%);
+  width: min(1400px, 100%);
   margin: 0 auto 10px auto;
   display: grid;
   grid-template-columns: 200px 1fr;  /* izq KPIs | der calendario */

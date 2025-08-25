@@ -87,9 +87,9 @@ export default function ArqueoGrid({
       <div className="rc-sheet rc-sheet-3cols">
         {[0, 1, 2].map((i) => {
           const c = arqueo[i] || {};
-          const apertura = n(c.apertura ?? 1000);              
-          const totalBruto = totalEfectivoCaja(c);             
-          const totalNeto  = totalBruto - apertura;            
+          const apertura = n(c.apertura ?? 1000);
+          const totalBruto = totalEfectivoCaja(c);
+          const totalNeto  = totalBruto - apertura;
 
           return (
             <div className="rc-col" key={`arq-${i}`}>
@@ -100,24 +100,38 @@ export default function ArqueoGrid({
               >
                 <span>Caja {i + 1}</span>
 
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
                   gap: 8,
                   marginLeft: 'auto'
-                  }}>
-                  <span className="rc-cell-label" style={{ 
-                    color: '#6b7280'
-                    
-                     }}>Apertura</span>
+                }}>
+                  <span className="rc-cell-label" style={{ color: '#6b7280' }}>Apertura</span>
+
+                  {/* ⬇️ Apertura sin spinners ni incremento con flechas */}
                   <input
-                    className="rc-input"
+                    className="rc-input no-spin"
                     type="number"
                     inputMode="decimal"
                     step="0.01"
                     min="0"
                     value={c.apertura ?? 1000}
                     onChange={(e) => setArq(i, 'apertura', e.target.value)}
+                    onKeyDown={(e) => {
+                      // Bloquea incrementos por teclado
+                      if (
+                        e.key === 'ArrowUp' ||
+                        e.key === 'ArrowDown' ||
+                        e.key === 'PageUp' ||
+                        e.key === 'PageDown'
+                      ) {
+                        e.preventDefault();
+                      }
+                    }}
+                    onWheel={(e) => {
+                      // Evita cambiar el valor con la rueda del mouse
+                      e.currentTarget.blur();
+                    }}
                     placeholder="0.00"
                     disabled={inputsDisabled}
                     style={{ width: 180, textAlign: 'right' }}
@@ -146,13 +160,27 @@ export default function ArqueoGrid({
                     </span>
 
                     <input
-                      className="rc-input"
-                      inputMode="numeric"
+                      className="rc-input no-spin"
                       type="number"
+                      inputMode="numeric"
                       min="0"
                       step="1"
                       value={c[field] ?? ''}
                       onChange={(e) => setArq(i, field, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (
+                          e.key === 'ArrowUp' ||
+                          e.key === 'ArrowDown' ||
+                          e.key === 'PageUp' ||
+                          e.key === 'PageDown'
+                        ) {
+                          e.preventDefault();
+                        }
+                      }}
+                      onWheel={(e) => {
+                        // Evita cambios con la rueda del mouse cuando está enfocado
+                        e.currentTarget.blur();
+                      }}
                       placeholder="0"
                       style={{ flex: '1 1 auto' }}
                       aria-label={`Cantidad de Q${valor}`}
@@ -164,7 +192,7 @@ export default function ArqueoGrid({
                 );
               })}
 
-              {/* Total de caja (NETO = bruto - apertura). Mantenemos el MISMO nombre. */}
+              {/* Total de caja (NETO = bruto - apertura) */}
               <div className="rc-row rc-total-caja" style={{ marginTop: 6 }}>
                 <span className="rc-cell-label strong">Total de caja</span>
                 <b>{toMoney(totalNeto)}</b>

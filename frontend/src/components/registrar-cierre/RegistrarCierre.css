@@ -624,3 +624,17 @@
   -webkit-appearance: none;
   -moz-appearance: none;
 }
+
+/* Quitar flechitas (spinners) en inputs type=number, con propiedad estándar */
+.no-spin[type="number"] {
+  appearance: textfield;         /* estándar */
+  -moz-appearance: textfield;    /* Firefox */
+  -webkit-appearance: none;      /* WebKit (por si acaso) */
+}
+
+/* Oculta los botones de incremento en navegadores WebKit */
+.no-spin::-webkit-outer-spin-button,
+.no-spin::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
