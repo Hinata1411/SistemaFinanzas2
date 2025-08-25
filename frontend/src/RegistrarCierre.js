@@ -621,12 +621,6 @@ export default function RegistrarCierre() {
             </div>
           </div>
         </div>
-
-        <div className="rc-actions">
-          <button type="button" className="rc-btn rc-btn-primary" onClick={onBack} disabled={busy} title="Regresar a Ventas">
-            Regresar a Ventas
-          </button>
-        </div>
       </div>
 
       {/* PÍLS DE SECCIONES */}
