@@ -57,7 +57,7 @@ const emptyArqueoCaja = () => ({
   q10: '',
   q5: '',
   q1: '',
-  apertura: 1000,   // <— default
+  apertura: 1000,
   tarjeta: '',
   motorista: '',
 });
@@ -74,13 +74,22 @@ const normalizeArqueo = (arr) => {
   const src = Array.isArray(arr) ? arr : [];
   return base.map((b, i) => {
     const fromDoc = src[i] || {};
-    // si el doc no trae apertura, usamos 1000
     const apertura =
       fromDoc.apertura === 0 || Number.isFinite(+fromDoc.apertura)
         ? fromDoc.apertura
         : 1000;
     return { ...b, ...fromDoc, apertura };
   });
+};
+
+/** Píls de sección */
+const TABS = {
+  ARQUEO: 'arqueo',
+  CIERRE: 'cierre',
+  GASTOS: 'gastos',
+  PY: 'py',
+  AMEX: 'amex',
+  RESUMEN: 'resumen',
 };
 
 export default function RegistrarCierre() {
@@ -159,7 +168,7 @@ export default function RegistrarCierre() {
   // Fecha
   const [fecha, setFecha] = useState(todayISO());
 
-  // Estados principales
+  // Estados principales (persisten al cambiar de píls)
   const [arqueo, setArqueo] = useState([emptyArqueoCaja(), emptyArqueoCaja(), emptyArqueoCaja()]);
   const [cierre, setCierre] = useState([emptyCierreCaja(), emptyCierreCaja(), emptyCierreCaja()]);
   const [categorias, setCategorias] = useState(INIT_GASTO_CATEGORIAS);
@@ -197,7 +206,6 @@ export default function RegistrarCierre() {
         setActiveSucursalId(d.sucursalId || null);
         setFecha(d.fecha || todayISO);
 
-        // 👇 Normalizamos arqueo a 3 cajas y forzamos apertura si no existe
         const arqNorm = normalizeArqueo(d.arqueo);
         setArqueo(arqNorm);
 
@@ -215,7 +223,6 @@ export default function RegistrarCierre() {
           : (d.pedidosYaCantidad != null ? d.pedidosYaCantidad : 0);
         setPedidosYaCantidad(n(py));
 
-        // extras american express (si existiera)
         const ax = d.extras?.americanExpress;
         if (ax && typeof ax === 'object') {
           setAmexItems(ax.items || {});
@@ -240,26 +247,22 @@ export default function RegistrarCierre() {
   );
 
   // Lo que tiene hoy la sucursal
-const cajaChicaActual =
-  (activeSucursalDoc?.cajaChica ?? activeFromHook?.cajaChica) || 0;
+  const cajaChicaActual =
+    (activeSucursalDoc?.cajaChica ?? activeFromHook?.cajaChica) || 0;
 
-// Si estoy viendo un cierre (view), intento usar el snapshot guardado en ese cierre;
-// si no existe (cierres viejos), caigo al valor actual.
-const cajaChicaDisponibleUI = isViewing
-  ? (originalDoc?.cajaChicaDisponibleAtSave ??
-     originalDoc?.cajaChicaDisponible ?? // por si en algún momento lo guardaste con otro nombre
-     cajaChicaActual)
-  : cajaChicaActual;
+  // Si estoy viendo un cierre (view), intento usar el snapshot guardado en ese cierre
+  const cajaChicaDisponibleUI = isViewing
+    ? (originalDoc?.cajaChicaDisponibleAtSave ??
+       originalDoc?.cajaChicaDisponible ??
+       cajaChicaActual)
+    : cajaChicaActual;
 
-  
   const totalAperturas = (arqueo || []).reduce((s, c) => s + (Number.isFinite(+c?.apertura) ? +c.apertura : 1000), 0);
 
-
-  // === EXTRAS seguros y tolerantes a variantes ===
+  // === EXTRAS (flags seguros) ===
   const truthy = (v) =>
     v === true || v === 1 || v === '1' || (typeof v === 'string' && v.toLowerCase() === 'true');
 
-  // Saca flags intentando varias rutas/alias y normaliza a boolean
   const resolveExtras = (srcA, srcB) => {
     const a = srcA || {};
     const b = srcB || {};
@@ -287,7 +290,6 @@ const cajaChicaDisponibleUI = isViewing
     return { pedidosYa, americanExpress };
   };
 
-  // Preferimos el doc real; b es el hook como respaldo
   const { pedidosYa: _py, americanExpress: _amex } = resolveExtras(activeSucursalDoc, activeFromHook);
 
   const showPedidosYaBtn = _py;
@@ -422,7 +424,7 @@ const cajaChicaDisponibleUI = isViewing
     const activeId = activeSucursalDoc?.id ?? activeFromHook?.id;
 
     if (!activeId) {
-      Swal.fire('Sucursal', 'Selecciona una sucursal en las pestañas.', 'warning');
+      Swal.fire('Sucursal', 'Selecciona una sucursal.', 'warning');
       return false;
     }
     if (!isAdmin && me.loaded && me.sucursalId && activeId !== me.sucursalId) {
@@ -469,7 +471,7 @@ const cajaChicaDisponibleUI = isViewing
       const payloadBase = {
         fecha,
         sucursalId: sucId,
-        arqueo, 
+        arqueo,
         cierre,
         gastos: gastosListos,
         comentario,
@@ -480,8 +482,8 @@ const cajaChicaDisponibleUI = isViewing
         extras: {
           pedidosYaCantidad: Number.isFinite(pedidosYaCantidad) ? parseInt(pedidosYaCantidad, 10) : 0,
           americanExpress: {
-            items: amexItems,   
-            total: amexTotal,   
+            items: amexItems,
+            total: amexTotal,
           },
         },
         totales: { ...totals },
@@ -520,6 +522,15 @@ const cajaChicaDisponibleUI = isViewing
     }
   };
 
+  /** ESTADO DE PESTAÑA ACTIVA (píls de secciones) */
+  const [activeTab, setActiveTab] = useState(TABS.ARQUEO);
+
+  const hideAdminButtonsCss = !isAdmin ? `
+    .hide-cats .rc-card-hd > .rc-btn.rc-btn-outline:last-child { display: none !important; }
+    .hide-pay  .rc-res-item .rc-btn.rc-btn-primary { display: none !important; }
+  ` : '';
+
+  // ⬇️ El return temprano va DESPUÉS de todos los hooks declarados arriba
   if (!me.loaded) {
     return (
       <div className="rc-shell">
@@ -529,11 +540,6 @@ const cajaChicaDisponibleUI = isViewing
     );
   }
 
-  const hideAdminButtonsCss = !isAdmin ? `
-    .hide-cats .rc-card-hd > .rc-btn.rc-btn-outline:last-child { display: none !important; }
-    .hide-pay  .rc-res-item .rc-btn.rc-btn-primary { display: none !important; }
-  ` : '';
-
   return (
     <div className="rc-shell">
       {hideAdminButtonsCss && <style>{hideAdminButtonsCss}</style>}
@@ -541,27 +547,57 @@ const cajaChicaDisponibleUI = isViewing
       <div className="rc-header">
         <div className="rc-header-left">
           <h1>Registrar cuadre {isEditingExisting ? '(editando)' : isViewing ? '(viendo)' : ''}</h1>
-          <div className="rc-date">
-            <label htmlFor="rc-fecha">Fecha</label>
-            <input id="rc-fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} disabled={isViewing} readOnly={isViewing} />
-            <div className="rc-tabs-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+
+          <div className="rc-date" style={{ display: 'grid', gap: 8, gridTemplateColumns: '1fr 1fr', alignItems: 'end' }}>
+            {/* FECHA */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label htmlFor="rc-fecha">Fecha</label>
+              <input
+                id="rc-fecha"
+                type="date"
+                value={fecha}
+                onChange={(e) => setFecha(e.target.value)}
+                disabled={isViewing}
+                readOnly={isViewing}
+              />
+            </div>
+
+            {/* SELECT DE SUCURSAL */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label htmlFor="rc-sucursal">Sucursal</label>
+              <select
+                id="rc-sucursal"
+                value={activeSucursalId || ''}
+                onChange={(e) => {
+                  const next = e.target.value || null;
+                  if (isViewing) return;
+                  if (!isAdmin && me.sucursalId && next !== me.sucursalId) return;
+                  setActiveSucursalId(next);
+                  setCajaChicaUsada(0);
+                  setFaltantePagado(0);
+                }}
+                disabled={isViewing || !sucursalesVisibles.length}
+              >
+                {!sucursalesVisibles.length && <option value="">(Sin sucursales)</option>}
+                {sucursalesVisibles.map((s) => (
+                  <option key={s.id} value={s.id}>{s.nombre}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* ACCIONES */}
+            <div className="rc-tabs-actions" style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
               {!isViewing && (
                 <>
-                  <button type="button" className="rc-btn rc-btn-accent" onClick={onSave} disabled={busy} title={isEditingExisting ? 'Actualizar cuadre' : 'Guardar cuadre'}>
+                  <button
+                    type="button"
+                    className="rc-btn rc-btn-accent"
+                    onClick={onSave}
+                    disabled={busy}
+                    title={isEditingExisting ? 'Actualizar cuadre' : 'Guardar cuadre'}
+                  >
                     {busy ? 'Guardando…' : isEditingExisting ? 'Actualizar' : 'Guardar'}
                   </button>
-
-                  {showPedidosYaBtn && (
-                    <button type="button" className="rc-btn rc-btn-outline" onClick={handlePedidosYa} disabled={busy} title="Ingresar cantidad vendida en Pedidos Ya">
-                      Pedidos Ya
-                    </button>
-                  )}
-
-                  {showAmexBtn && (
-                    <button type="button" className="rc-btn rc-btn-outline" onClick={handleAmericanExpress} disabled={busy} title="American Express">
-                      American Express
-                    </button>
-                  )}
                 </>
               )}
             </div>
@@ -575,97 +611,205 @@ const cajaChicaDisponibleUI = isViewing
         </div>
       </div>
 
-      {/* SUCURSALES */}
+      {/* PÍLS DE SECCIONES */}
       <div className="rc-tabs-row rc-tabs-attached">
-        <div className="rc-tabs rc-tabs-browser" role="tablist" aria-label="Sucursales">
-          {sucursalesVisibles.map((s) => (
+        <div className="rc-tabs rc-tabs-browser" role="tablist" aria-label="Secciones">
+          <button
+            className={`rc-tab ${activeTab === TABS.ARQUEO ? 'active' : ''}`}
+            onClick={() => setActiveTab(TABS.ARQUEO)}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === TABS.ARQUEO}
+          >
+            Arqueo físico
+          </button>
+
+          <button
+            className={`rc-tab ${activeTab === TABS.CIERRE ? 'active' : ''}`}
+            onClick={() => setActiveTab(TABS.CIERRE)}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === TABS.CIERRE}
+            disabled={!isAdmin}
+          >
+            Cierre de sistema
+          </button>
+
+          <button
+            className={`rc-tab ${activeTab === TABS.GASTOS ? 'active' : ''}`}
+            onClick={() => setActiveTab(TABS.GASTOS)}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === TABS.GASTOS}
+          >
+            Gastos
+          </button>
+
+          {showPedidosYaBtn && (
             <button
-              key={s.id}
-              className={`rc-tab ${(activeSucursalDoc?.id ?? activeFromHook?.id) === s.id ? 'active' : ''}`}
-              onClick={() => {
-                if (isViewing) return;
-                if (!isAdmin && me.sucursalId && s.id !== me.sucursalId) return;
-                setActiveSucursalId(s.id);
-                setCajaChicaUsada(0);
-                setFaltantePagado(0);
-              }}
+              className={`rc-tab ${activeTab === TABS.PY ? 'active' : ''}`}
+              onClick={() => setActiveTab(TABS.PY)}
               type="button"
               role="tab"
-              aria-selected={(activeSucursalDoc?.id ?? activeFromHook?.id) === s.id}
-              aria-controls={`panel-${s.id}`}
-              id={`tab-${s.id}`}
-              disabled={isViewing || (!isAdmin && me.sucursalId && s.id !== me.sucursalId)}
+              aria-selected={activeTab === TABS.PY}
             >
-              {s.nombre}
+              Pedidos Ya
             </button>
-          ))}
-          {!sucursalesVisibles.length && <div className="rc-tab-empty">No hay sucursales disponibles</div>}
+          )}
+
+          {showAmexBtn && (
+            <button
+              className={`rc-tab ${activeTab === TABS.AMEX ? 'active' : ''}`}
+              onClick={() => setActiveTab(TABS.AMEX)}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === TABS.AMEX}
+            >
+              American Express
+            </button>
+          )}
+
+          <button
+            className={`rc-tab ${activeTab === TABS.RESUMEN ? 'active' : ''}`}
+            onClick={() => setActiveTab(TABS.RESUMEN)}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === TABS.RESUMEN}
+          >
+            Resumen
+          </button>
         </div>
       </div>
 
-      {/* GRID PRINCIPAL */}
-      <div className="rc-grid">
-        <ArqueoGrid
-          arqueo={arqueo}
-          setArq={setArq}
-          cajaChicaDisponible={cajaChicaDisponibleUI}
-          readOnly={isViewing}
-          extras={{
-            showPedidosYaBtn,
-            showAmexBtn,
-            onPedidosYa: handlePedidosYa,
-            onAmex: handleAmericanExpress,
-            disabled: busy || isViewing,
-          }}
-        />
+      {/* CONTENIDO POR SECCIÓN */}
+      {activeTab === TABS.ARQUEO && (
+        <div className="rc-grid">
+          <ArqueoGrid
+            arqueo={arqueo}
+            setArq={setArq}
+            cajaChicaDisponible={cajaChicaDisponibleUI}
+            readOnly={isViewing}
+            extras={{
+              showPedidosYaBtn,
+              showAmexBtn,
+              onPedidosYa: handlePedidosYa,
+              onAmex: handleAmericanExpress,
+              disabled: busy || isViewing,
+            }}
+          />
+        </div>
+      )}
 
-        {isAdmin && <CierreGrid cierre={cierre} setCier={setCier} readOnly={isViewing} />}
-      </div>
+      {activeTab === TABS.CIERRE && (
+        <div className="rc-grid">
+          {isAdmin ? (
+            <CierreGrid cierre={cierre} setCier={setCier} readOnly={isViewing} />
+          ) : (
+            <div className="rc-tab-empty">Solo administradores</div>
+          )}
+        </div>
+      )}
 
-      {/* GASTOS + RESUMEN */}
-      <div className="rc-grid rc-grid-bottom">
-        <GastosList
-          gastos={gastos}
-          categorias={categorias}
-          setGasto={setGasto}
-          addGasto={addGasto}
-          removeGasto={removeGasto}
-          showCategoriasBtn={isAdmin && !isViewing}
-          onOpenCategorias={() => setShowCatModal(true)}
-          onUseCajaChica={() => setShowCajaChica(true)}
-          activeSucursalNombre={activeSucursalDoc?.nombre ?? activeFromHook?.nombre}
-          cajaChicaDisponible={cajaChicaDisponibleUI}
-          faltantePorGastos={faltantePorGastos}
-          readOnly={isViewing}
-        />
-      </div>
+      {activeTab === TABS.GASTOS && (
+        <div className="rc-grid rc-grid-bottom">
+          <GastosList
+            gastos={gastos}
+            categorias={categorias}
+            setGasto={setGasto}
+            addGasto={addGasto}
+            removeGasto={removeGasto}
+            showCategoriasBtn={isAdmin && !isViewing}
+            onOpenCategorias={() => setShowCatModal(true)}
+            onUseCajaChica={() => setShowCajaChica(true)}
+            activeSucursalNombre={activeSucursalDoc?.nombre ?? activeFromHook?.nombre}
+            cajaChicaDisponible={cajaChicaDisponibleUI}
+            faltantePorGastos={faltantePorGastos}
+            readOnly={isViewing}
+          />
+        </div>
+      )}
 
-      <div className={isAdmin ? '' : 'hide-pay'}>
-
-
-        <ResumenPanel
-          totals={totals || {}}    
-          flags={flags || {}} 
-          cajaChicaUsada={cajaChicaUsada}
-          onPagarFaltante={handlePagarFaltante}
-          faltantePagado={faltantePagado}
-          pedidosYaCantidad={pedidosYaCantidad}
-          amexTotal={amexTotal}
-          showPedidosYa={showPedidosYaBtn}
-          showAmex={showAmexBtn}
-          totalAperturas={totalAperturas}  
-        />
-      </div>
-
-      {isAdmin && (
+      {activeTab === TABS.PY && showPedidosYaBtn && (
         <section className="rc-card">
-          <h3>Comentario</h3>
-          <div className="rc-comentario">
-            <textarea id="rc-comentario" value={comentario} onChange={(e) => setComentario(e.target.value)} placeholder="Agrega un comentario" rows={3} disabled={isViewing} readOnly={isViewing} />
+          <div className="rc-card-hd">
+            <h3>Pedidos Ya</h3>
+            {!isViewing && (
+              <button
+                type="button"
+                className="rc-btn rc-btn-outline"
+                onClick={handlePedidosYa}
+                disabled={busy}
+                title="Ingresar cantidad vendida en Pedidos Ya"
+              >
+                Editar cantidad
+              </button>
+            )}
+          </div>
+          <div className="rc-card-bd">
+            <p>Cantidad vendida: <strong>{Number(pedidosYaCantidad || 0)}</strong></p>
           </div>
         </section>
       )}
 
+      {activeTab === TABS.AMEX && showAmexBtn && (
+        <section className="rc-card">
+          <div className="rc-card-hd">
+            <h3>American Express</h3>
+            {!isViewing && (
+              <button
+                type="button"
+                className="rc-btn rc-btn-outline"
+                onClick={handleAmericanExpress}
+                disabled={busy}
+                title="Detalle American Express"
+              >
+                Gestionar detalle
+              </button>
+            )}
+          </div>
+          <div className="rc-card-bd">
+            <p>Total AMEX: <strong>Q {Number(amexTotal || 0).toFixed(2)}</strong></p>
+          </div>
+        </section>
+      )}
+
+      {activeTab === TABS.RESUMEN && (
+        <>
+          <div className={isAdmin ? '' : 'hide-pay'}>
+            <ResumenPanel
+              totals={totals || {}}
+              flags={flags || {}}
+              cajaChicaUsada={cajaChicaUsada}
+              onPagarFaltante={handlePagarFaltante}
+              faltantePagado={faltantePagado}
+              pedidosYaCantidad={pedidosYaCantidad}
+              amexTotal={amexTotal}
+              showPedidosYa={showPedidosYaBtn}
+              showAmex={showAmexBtn}
+              totalAperturas={totalAperturas}
+            />
+          </div>
+
+          {isAdmin && (
+            <section className="rc-card">
+              <h3>Comentario</h3>
+              <div className="rc-comentario">
+                <textarea
+                  id="rc-comentario"
+                  value={comentario}
+                  onChange={(e) => setComentario(e.target.value)}
+                  placeholder="Agrega un comentario"
+                  rows={3}
+                  disabled={isViewing}
+                  readOnly={isViewing}
+                />
+              </div>
+            </section>
+          )}
+        </>
+      )}
+
+      {/* MODALES */}
       <CategoriasModal
         open={showCatModal}
         onClose={() => setShowCatModal(false)}

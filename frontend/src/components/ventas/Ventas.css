@@ -124,6 +124,9 @@
 .modal-list{ max-height:300px; overflow:auto; display:flex; flex-direction:column; gap:6px; padding:6px; background:#f9fafb; border:1px solid #eee; border-radius:12px; }
 .modal-actions{ display:flex; justify-content:flex-end; gap:8px; }
 
+
+
+
 /* Responsive */
 @media (max-width: 900px){
   .ventas-kpis{ grid-template-columns: 1fr; }
