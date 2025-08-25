@@ -95,12 +95,22 @@ function DashboardLayout({ userEmail, userRole }) {
           <ul className="menu">
             <li className="menu-item">
               <NavLink
-                to="/home"
+                to="/Finanzas"
                 end
                 className={({ isActive }) => `menu-link ${isActive ? 'active' : ''}`}
               >
                 <img src="/casa.png" alt="" />
-                <span>Home</span>
+                <span>Finanzas</span>
+              </NavLink>
+            </li>
+
+             <li className="menu-item">
+              <NavLink
+                to="RegistrarCierre"
+                className={({ isActive }) => `menu-link ${isActive ? 'active' : ''}`}
+              >
+                <img src="/factura.png" alt="" />
+                <span>Registrar Cuadre</span>
               </NavLink>
             </li>
 
@@ -110,7 +120,7 @@ function DashboardLayout({ userEmail, userRole }) {
                 className={({ isActive }) => `menu-link ${isActive ? 'active' : ''}`}
               >
                 <img src="/factura.png" alt="" />
-                <span>Ventas</span>
+                <span>Historial</span>
               </NavLink>
             </li>
 

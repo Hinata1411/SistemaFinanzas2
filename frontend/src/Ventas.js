@@ -9,7 +9,6 @@ import { db, auth } from './firebase';
 import { useCuadres } from './hooks/useCuadres';
 import { n } from './utils/numbers';
 import { getTodayLocalISO, formatDate } from './utils/dates';
-import KpiCards from './components/ventas/KpiCards';
 import VentasTable from './components/ventas/VentasTable';
 import GroupDownloadModal from './components/ventas/GroupDownloadModal';
 import { exportSingleCuadrePdf, exportGroupedPdf } from './pdf/exportadores';
@@ -89,15 +88,15 @@ export default function Ventas() {
 
   // Navegar a RegistrarCierre con modo
   const handleVer = (c) => {
-    navigate(`/home/RegistrarCierre?id=${c.id}&mode=view`);
+    navigate(`/Finanzas/RegistrarCierre?id=${c.id}&mode=view`);
   };
   const handleEditar = (c) => {
     if (!canManage) {
       Swal.fire('Solo lectura', 'No tienes permisos para editar.', 'info');
-      navigate(`/home/RegistrarCierre?id=${c.id}&mode=view`);
+      navigate(`/Finanzas/RegistrarCierre?id=${c.id}&mode=view`);
       return;
     }
-    navigate(`/home/RegistrarCierre?id=${c.id}&mode=edit`);
+    navigate(`/Finanzas/RegistrarCierre?id=${c.id}&mode=edit`);
   };
 
   const handleEliminar = async (id) => {
@@ -151,13 +150,6 @@ export default function Ventas() {
       <header className="ventas-header">
         <h1>Ventas</h1>
         <div className="ventas-actions">
-          {/* Registrar Cuadre visible para ADMIN y VIEWER */}
-          <button
-            className="btn btn-accent"
-            onClick={() => navigate('/home/RegistrarCierre')}
-          >
-            Registrar Cuadre
-          </button>
 
           {/* Descargar agrupado: solo admin */}
           {isAdmin && (
@@ -199,15 +191,6 @@ export default function Ventas() {
         </div>
       </div>
 
-      {/* KPIs solo para admin */}
-      {isAdmin && (
-        <KpiCards
-          totalVentas={totalVentas}
-          promedioVentas={promedioVentas}
-          diaMasVenta={diaMasVenta}
-          fmtQ={fmtQ}
-        />
-      )}
 
       <VentasTable
         cuadres={cuadres}

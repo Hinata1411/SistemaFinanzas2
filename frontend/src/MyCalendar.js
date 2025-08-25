@@ -1,5 +1,5 @@
 // src/MyCalendar.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
 import 'moment/locale/es';
@@ -23,18 +23,16 @@ const emptyEvent = {
   frequency:    'Nunca',
   category:     '',
   status:       'Pendiente',
-  // 👇 NUEVO
-  visibility:   'all',  // 'mine' | 'all' | 'branch'
-  branchId:     '',     // requerido si visibility === 'branch'
-  ownerEmail:   ''      // para "Solo para mi"
+  visibility:   'all',
+  branchId:     '',
+  ownerEmail:   ''
 };
 
 // Helper para capitalizar la primera letra
-const capitalize = str =>
-  str.charAt(0).toUpperCase() + str.slice(1);
+const capitalize = str => str.charAt(0).toUpperCase() + str.slice(1);
 
 // Toolbar personalizado de React Big Calendar
-function MyToolbar({ label, onNavigate, onView, openModal, canAdd }) {
+function MyToolbar({ label, onNavigate, onView, /* openModal, canAdd, */ showAddButton }) {
   const capitalizedLabel = capitalize(label);
   return (
     <div className="rbc-toolbar d-flex justify-content-between align-items-center mb-3">
@@ -49,16 +47,16 @@ function MyToolbar({ label, onNavigate, onView, openModal, canAdd }) {
         <button className="btn btn-outline-secondary btn-sm me-1" onClick={() => onView('week')}>Semana</button>
         <button className="btn btn-outline-secondary btn-sm me-1" onClick={() => onView('day')}>Día</button>
         <button className="btn btn-outline-secondary btn-sm me-3" onClick={() => onView('agenda')}>Agenda</button>
-        {/* 👇 Solo admin puede agregar */}
-        {canAdd && (
+        {/* {canAdd && showAddButton && (
           <button className="btn btn-primary btn-sm" onClick={openModal}>➕ Agregar Actividad</button>
-        )}
+        )} */}
+        {showAddButton ? null : null}
       </div>
     </div>
   );
 }
 
-const MyCalendar = () => {
+const MyCalendar = forwardRef(({ showAddButton = true }, ref) => {
   const [events, setEvents]       = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -69,13 +67,14 @@ const MyCalendar = () => {
   const role = (localStorage.getItem('role') || 'viewer').toLowerCase();
   const isAdmin = role === 'admin';
   const currentEmail = localStorage.getItem('email') || '';
-  const activeSucursalId = localStorage.getItem('activeSucursalId') || '';
+  // 👇 lee la sucursal activa que setea Finanzas (para filtrar y preseleccionar)
+  const activeSucursalId = (localStorage.getItem('activeSucursalId') || '').toLowerCase();
 
   // Sucursales para el select (opcional, desde localStorage)
   let sucursales = [];
   try {
     const raw = localStorage.getItem('sucursales');
-    if (raw) sucursales = JSON.parse(raw); // [{id,nombre}]
+    if (raw) sucursales = JSON.parse(raw);
   } catch { /* noop */ }
 
   // Para almacenar referencias a los popups abiertos
@@ -86,7 +85,6 @@ const MyCalendar = () => {
     const saved = localStorage.getItem('events');
     if (saved) {
       const parsed = JSON.parse(saved).map(evt => ({
-        // valores por defecto para compatibilidad
         visibility: 'all',
         branchId: '',
         ownerEmail: '',
@@ -125,10 +123,16 @@ const MyCalendar = () => {
     setNewEvent({
       ...emptyEvent,
       ownerEmail: currentEmail,
-      branchId: activeSucursalId || ''
+      // si el filtro está en sucursal específica, la preseleccionamos
+      branchId: (activeSucursalId && activeSucursalId !== 'all') ? activeSucursalId : ''
     });
     setModalOpen(true);
   };
+
+  // Expone el método al padre
+  useImperativeHandle(ref, () => ({
+    openAddModal
+  }));
 
   // 4) Abrir modal para editar (precarga datos)
   const openEditModal = (event, index) => {
@@ -151,37 +155,37 @@ const MyCalendar = () => {
   // 5) Guardar evento (nuevo o editado) + programar popup emergente
   const handleSave = () => {
     const {
-      title,
-      description,
-      date,
-      startTime,
-      endTime,
-      priority,
-      alert,
-      alertTime,
-      frequency,
-      category,
-      status,
-      visibility,
-      branchId
+      title, description, date, startTime, endTime, priority, alert,
+      alertTime, frequency, category, status, visibility, branchId
     } = newEvent;
 
     if (!title || !date || !startTime || !endTime) {
       return window.alert('Completa título, fecha e horas');
     }
-    if (visibility === 'branch' && !branchId) {
+    // si la visibilidad es por sucursal y NO hay sucursal en el evento y el filtro global está en "all" ⇒ pedimos sucursal
+    if (visibility === 'branch' && !branchId && (!activeSucursalId || activeSucursalId === 'all')) {
       return window.alert('Selecciona una sucursal para la visibilidad por sucursal.');
     }
 
-    // 5.1) Calcula start y end como Date
     const start = new Date(`${date}T${startTime}`);
     const end   = new Date(`${date}T${endTime}`);
-    const evt   = { ...newEvent, start, end, ownerEmail: newEvent.ownerEmail || currentEmail };
 
-    // 5.2) Actualiza lista de eventos
+    // normalizamos branchId usando el filtro actual si aplica
+    const normalizedBranchId =
+      visibility === 'branch'
+        ? (branchId || ((activeSucursalId && activeSucursalId !== 'all') ? activeSucursalId : ''))
+        : '';
+
+    const evt   = {
+      ...newEvent,
+      start,
+      end,
+      branchId: normalizedBranchId,
+      ownerEmail: newEvent.ownerEmail || currentEmail
+    };
+
     let eventoId;
     if (isEditing) {
-      // Mantenemos el ID como el índice para referencia en popupRefs
       eventoId = editIndex;
       setEvents(evts => {
         const copy = [...evts];
@@ -197,32 +201,19 @@ const MyCalendar = () => {
     }
     setModalOpen(false);
 
-    // 5.3) Programar popup emergente si alert === true
     if (alert) {
-      // Calcula fecha/hora de alerta según alertTime
       let alertDate = new Date(start);
       switch (alertTime) {
-        case '10 minutos antes':
-          alertDate.setMinutes(alertDate.getMinutes() - 10);
-          break;
-        case '1 hora antes':
-          alertDate.setHours(alertDate.getHours() - 1);
-          break;
-        case '1 día antes':
-          alertDate.setDate(alertDate.getDate() - 1);
-          break;
-        case '3 días antes':
-          alertDate.setDate(alertDate.getDate() - 3);
-          break;
-        default:
-          // 'Al momento'
-          break;
+        case '10 minutos antes': alertDate.setMinutes(alertDate.getMinutes() - 10); break;
+        case '1 hora antes':     alertDate.setHours(alertDate.getHours() - 1); break;
+        case '1 día antes':      alertDate.setDate(alertDate.getDate() - 1); break;
+        case '3 días antes':     alertDate.setDate(alertDate.getDate() - 3); break;
+        default: break;
       }
 
       const now = Date.now();
       const diffMs = alertDate.getTime() - now;
 
-      // Función para abrir o actualizar el popup
       const showPopup = () => {
         const popupName = `popup_event_${eventoId}`;
         const width = 400;
@@ -231,22 +222,14 @@ const MyCalendar = () => {
         const top = window.screenY + (window.innerHeight - height) / 3;
 
         let popup;
-        // Si ya existe un popup abierto para este evento y no está cerrado, reutilízalo
         if (popupRefs.current[eventoId] && !popupRefs.current[eventoId].closed) {
           popup = popupRefs.current[eventoId];
         } else {
-          // Abre un nuevo popup en blanco
-          popup = window.open(
-            '',
-            popupName,
-            `width=${width},height=${height},left=${left},top=${top}`
-          );
+          popup = window.open('', popupName, `width=${width},height=${height},left=${left},top=${top}`);
           popupRefs.current[eventoId] = popup;
         }
 
-        // Si la ventana se pudo abrir, escribimos el contenido
         if (popup) {
-          // Contenido HTML sencillo
           popup.document.title = `Recordatorio: ${title}`;
           popup.document.body.style.margin = '0';
           popup.document.body.style.fontFamily = 'Arial, sans-serif';
@@ -275,25 +258,18 @@ const MyCalendar = () => {
             </div>
           `;
 
-          // Botón “Cerrar” que cierra la ventana popup
           const closeBtn = popup.document.getElementById('closeBtn');
           closeBtn.onclick = () => popup.close();
-
-          // Traer la ventana popup al frente
           popup.focus();
         } else {
-          // Si no se pudo abrir (popup bloqueado), como fallback usamos un alert normal
           window.alert(`🔔 Recordatorio: ${title}\n${description || ''}`);
         }
       };
 
       if (diffMs > 0) {
         setTimeout(showPopup, diffMs);
-        console.log(
-          `Popup programado para ${alertDate.toLocaleString()} (faltan ${diffMs} ms)`
-        );
+        console.log(`Popup programado para ${alertDate.toLocaleString()} (faltan ${diffMs} ms)`);
       } else {
-        // Si el momento ya pasó, mostrar popup de inmediato
         showPopup();
       }
     }
@@ -302,36 +278,37 @@ const MyCalendar = () => {
   // 6) Eliminar evento en edición
   const handleDelete = () => {
     if (isEditing) {
-      // Si existe un popup para este evento, ciérralo
       if (popupRefs.current[editIndex] && !popupRefs.current[editIndex].closed) {
         popupRefs.current[editIndex].close();
       }
-
       setEvents(evts => evts.filter((_, i) => i !== editIndex));
       setModalOpen(false);
     }
   };
 
-  // === FILTRADO para viewer ===
-  const filteredEvents = isAdmin
-    ? events
-    : events.filter(evt => {
-        // Todos
-        if ((evt.visibility || 'all') === 'all') return true;
-        // Por sucursal (debe coincidir la sucursal activa)
-        if (evt.visibility === 'branch') {
-          return activeSucursalId && evt.branchId && evt.branchId === activeSucursalId;
-        }
-        // Solo para mi (opcional: si es el dueño, puede verlo)
-        if (evt.visibility === 'mine') {
-          return (evt.ownerEmail || '') === currentEmail;
-        }
-        return false;
-      });
+  // === FILTRADO por sucursal/usuario (sin tocar layout) ===
+  const filteredEvents = events.filter(evt => {
+    const vis = (evt.visibility || 'all');
+    const evtBranch = (evt.branchId || '').toLowerCase();
+
+    // Filtro "todas" (o vacío)
+    if (activeSucursalId === 'all' || activeSucursalId === '') {
+      if (isAdmin) return true;                 // admin ve todo
+      if (vis === 'all') return true;           // globales
+      if (vis === 'branch') return true;        // todas las sucursales cuando filtro es "todas"
+      if (vis === 'mine') return (evt.ownerEmail || '') === currentEmail;
+      return false;
+    }
+
+    // Filtro en sucursal específica
+    if (vis === 'all') return true;                         // globales
+    if (vis === 'branch') return evtBranch === activeSucursalId; // sucursal coincide
+    if (vis === 'mine') return (evt.ownerEmail || '') === currentEmail; // personales
+    return false;
+  });
 
   return (
     <div className="p-3">
-      {/* Calendario con toolbar personalizado */}
       <div className="calendar-container">
         <Calendar
           localizer={localizer}
@@ -343,11 +320,16 @@ const MyCalendar = () => {
           style={{ height: 500 }}
           components={{
             toolbar: toolbarProps => (
-              <MyToolbar {...toolbarProps} openModal={openAddModal} canAdd={isAdmin} />
+              <MyToolbar
+                {...toolbarProps}
+                /* openModal={openAddModal}
+                canAdd={isAdmin} */
+                showAddButton={showAddButton}
+              />
             )
           }}
           onSelectEvent={event => {
-            if (!isAdmin) return; // viewer no edita
+            if (!isAdmin) return;
             const idx = events.findIndex(e =>
               e.start.getTime() === event.start.getTime() &&
               e.end.getTime()   === event.end.getTime() &&
@@ -542,7 +524,7 @@ const MyCalendar = () => {
                     </select>
                   </div>
 
-                  {/* 👇 NUEVO: Visibilidad de actividad */}
+                  {/* Visibilidad */}
                   <div className="mb-3">
                     <label className="form-label d-block">Visibilidad de actividad</label>
 
@@ -589,7 +571,7 @@ const MyCalendar = () => {
                           setNewEvent(evt => ({
                             ...evt,
                             visibility: val,
-                            branchId: evt.branchId || activeSucursalId || ''
+                            branchId: evt.branchId || (activeSucursalId && activeSucursalId !== 'all' ? activeSucursalId : '')
                           }));
                         }}
                       />
@@ -657,6 +639,6 @@ const MyCalendar = () => {
       )}
     </div>
   );
-};
+});
 
 export default MyCalendar;

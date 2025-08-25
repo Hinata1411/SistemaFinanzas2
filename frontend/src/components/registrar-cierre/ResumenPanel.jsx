@@ -3,8 +3,8 @@ import { toMoney } from '../../utils/numbers';
 
 
 export default function ResumenPanel({
-  totals = {},          // 👈 default para evitar crash
-  flags = {},           // 👈 default para evitar crash
+  totals = {},          
+  flags = {},           
   cajaChicaUsada = 0,
   onPagarFaltante,
   faltantePagado = 0,
