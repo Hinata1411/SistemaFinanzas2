@@ -37,3 +37,10 @@ firebase.js
 firebaseAdmin.js
 auth.js
 config-overrides.js
+
+node_modules/
+dist/
+build/
+.env
+.env.*
+!.env.example
