@@ -32,9 +32,10 @@ export function useRegistrarCierreTotals({
 
   // Arqueo (bruto / aperturas / neto)
   const totalArqueoEfectivoBruto = useMemo(
-    () => (arqueo || []).reduce((acc, c) => acc + efectivoBrutoCaja(c), 0),
-    [arqueo]
+  () => (arqueo || []).reduce((acc, c) => acc + efectivoBrutoCaja(c), 0),
+  [arqueo, efectivoBrutoCaja]
   );
+
   const totalAperturas = useMemo(
     () => (arqueo || []).reduce((s, c) => s + aperturaCaja(c), 0),
     [arqueo]

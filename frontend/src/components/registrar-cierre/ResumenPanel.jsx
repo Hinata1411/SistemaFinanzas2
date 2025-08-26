@@ -1,3 +1,4 @@
+// src/components/registrar-cierre/ResumenPanel.jsx
 import React from 'react';
 import { toMoney } from '../../utils/numbers';
 
@@ -28,7 +29,7 @@ export default function ResumenPanel({
     totalCierreMotorista = 0,
 
     totalGastos = 0,
-    diferenciaEfectivo = 0,
+    // ❌ eliminado diferenciaEfectivo (no se usaba)
     faltanteEfectivo = 0,
 
     totalGeneral = 0,

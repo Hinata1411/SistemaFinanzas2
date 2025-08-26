@@ -4,11 +4,9 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { db } from '../firebase';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 
-
 console.log('API base =', process.env.REACT_APP_API_URL);
 
 const API = process.env.REACT_APP_API_URL || 'https://sistemafinanzas2.onrender.com/api';
-
 
 /** Lee la colección 'usuarios' y devuelve [{email, username, role?}] */
 export async function fetchUsersForSelect() {
@@ -38,10 +36,10 @@ export async function loginAndGetBackendToken(email, password) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${idToken}`,   
+      'Authorization': `Bearer ${idToken}`,
     },
     credentials: 'omit',
-    body: JSON.stringify({ idToken }),   
+    body: JSON.stringify({ idToken }),
   });
 
   if (!resp.ok) {
@@ -69,4 +67,6 @@ export async function getUserDoc(uid) {
   return snap.exists() ? snap.data() : null;
 }
 
-export default { fetchUsersForSelect, loginAndGetBackendToken, getUserDoc };
+// ✅ Export por defecto con identificador (no anónimo)
+const authService = { fetchUsersForSelect, loginAndGetBackendToken, getUserDoc };
+export default authService;

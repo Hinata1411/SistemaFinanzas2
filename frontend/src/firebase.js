@@ -2,7 +2,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { getMessaging } from 'firebase/messaging';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
@@ -20,5 +19,3 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export { signInWithEmailAndPassword, sendPasswordResetEmail };
-// messaging opcional si lo usas:
-// export const messaging = (() => { try { return getMessaging(app); } catch { return undefined; } })();

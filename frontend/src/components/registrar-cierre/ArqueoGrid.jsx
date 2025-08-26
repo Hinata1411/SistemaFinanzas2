@@ -1,3 +1,4 @@
+// src/components/registrar-cierre/ArqueoGrid.jsx
 import React from 'react';
 import { n, toMoney } from '../../utils/numbers';
 
@@ -41,16 +42,8 @@ export default function ArqueoGrid({
   cajaChicaDisponible = 0,
   totalNeto,
   readOnly = false,
-  extras = {},
+  // 👇 eliminamos props sin uso de extras
 }) {
-  const {
-    showPedidosYaBtn = false,
-    showAmexBtn = false,
-    onPedidosYa,
-    onAmex,
-    disabled: extrasDisabled = false,
-  } = extras;
-
   const DENOMS = [
     ['q200', 200],
     ['q100', 100],
@@ -93,7 +86,7 @@ export default function ArqueoGrid({
 
           return (
             <div className="rc-col" key={`arq-${i}`}>
-              {/* Cabecera de la caja + Apertura (arriba-derecha) */}
+              {/* Cabecera de la caja + Apertura */}
               <div
                 className="rc-col-hd"
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width:'115%' }}
@@ -107,8 +100,6 @@ export default function ArqueoGrid({
                   marginLeft: 'auto'
                 }}>
                   <span className="rc-cell-label" style={{ color: '#6b7280' }}>Apertura</span>
-
-                  {/* ⬇️ Apertura sin spinners ni incremento con flechas */}
                   <input
                     className="rc-input no-spin"
                     type="number"
@@ -118,7 +109,6 @@ export default function ArqueoGrid({
                     value={c.apertura ?? 1000}
                     onChange={(e) => setArq(i, 'apertura', e.target.value)}
                     onKeyDown={(e) => {
-                      // Bloquea incrementos por teclado
                       if (
                         e.key === 'ArrowUp' ||
                         e.key === 'ArrowDown' ||
@@ -128,10 +118,7 @@ export default function ArqueoGrid({
                         e.preventDefault();
                       }
                     }}
-                    onWheel={(e) => {
-                      // Evita cambiar el valor con la rueda del mouse
-                      e.currentTarget.blur();
-                    }}
+                    onWheel={(e) => e.currentTarget.blur()}
                     placeholder="0.00"
                     disabled={inputsDisabled}
                     style={{ width: 180, textAlign: 'right' }}
@@ -140,7 +127,7 @@ export default function ArqueoGrid({
                 </div>
               </div>
 
-              {/* Encabezados de la tabla de denominaciones */}
+              {/* Encabezados de denominaciones */}
               <div className="rc-row" style={{ fontWeight: 600, opacity: 0.9 }}>
                 <span className="rc-cell-label rc-bill-ico" style={{ flex: '0 0 60px', display: 'inline-flex', alignItems: 'left', justifyContent: 'left', marginLeft: '16px' }} title="Denominaciones">
                   <IcoBill />
@@ -177,10 +164,7 @@ export default function ArqueoGrid({
                           e.preventDefault();
                         }
                       }}
-                      onWheel={(e) => {
-                        // Evita cambios con la rueda del mouse cuando está enfocado
-                        e.currentTarget.blur();
-                      }}
+                      onWheel={(e) => e.currentTarget.blur()}
                       placeholder="0"
                       style={{ flex: '1 1 auto' }}
                       aria-label={`Cantidad de Q${valor}`}
@@ -192,7 +176,7 @@ export default function ArqueoGrid({
                 );
               })}
 
-              {/* Total de caja (NETO = bruto - apertura) */}
+              {/* Total de caja (NETO) */}
               <div className="rc-row rc-total-caja" style={{ marginTop: 6 }}>
                 <span className="rc-cell-label strong">Total de caja</span>
                 <b>{toMoney(totalNeto)}</b>
