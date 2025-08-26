@@ -530,15 +530,42 @@ body{
 }
 
 /* ====== OVERRIDES ====== */
-/* 1) En ESCRITORIO, el activo queda redondeado a ambos lados (píldora completa) */
-@media (min-width:1101px){
-  .menu-link.active,
-  .submenu-link.active{
-    border-radius: 999px !important;      /* bordes completamente redondeados */
-    width: 100% !important;               /* sin sobresalir */
-    margin-right: 0 !important;
+/* --- FIX 1: en móvil, deja que la página pueda crecer y scrollear --- */
+@media (max-width:1100px){
+  html, body {
+    height: auto;            /* que no se encajen a 100dvh */
+  }
+  body{
+    overflow: auto;          /* permite scroll del documento */
+  }
+
+  /* El grid puede medir más que el viewport si el contenido lo requiere */
+  .admin-container{
+    height: auto;            /* en lugar de 100dvh rígido */
+    min-height: 100dvh;      /* aún llena la pantalla mínima */
+  }
+
+  /* El área de contenido ya no necesita “forzar” alturas mínimas */
+  .content-card{
+    min-height: unset;       /* evita pelear con los 100dvh del contenedor */
   }
 }
+
+/* --- FIX 2: asegura que el contenido no quede detrás de la userbar --- */
+.userbar{
+  position: sticky;   /* ya actúa como barra superior */
+  top: 0;
+}
+
+/* --- FIX 3: evita que el overlay/backdrop tape el contenido por z-index --- */
+.admin-content{
+  position: relative;
+  z-index: 1;         /* por encima del backdrop (z:900) ya estás, pero explícitalo */
+}
+
+/* --- FIX 4: si usas drawer en móvil, solo bloquea el scroll al ABRIRLO --- */
+/* Ya tienes .drawer-open body { overflow:hidden; }  */
+
 
 /* 2) Modal SIEMPRE por encima del sidebar */
 .rc-modal-mask,
