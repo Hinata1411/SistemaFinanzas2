@@ -253,9 +253,16 @@ export default function Login() {
                   <label className="form-check-label" htmlFor="rememberMe">Recordar contraseña</label>
                 </div>
                 {/* botón accesible en lugar de <a href="#"> */}
-                <button type="button" className="small-link" onClick={onForgot}>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={onForgot}
+                  onKeyDown={(e) => e.key === 'Enter' && onForgot(e)}
+                  className="forgot-link"
+                >
                   ¿Olvidaste tu contraseña?
-                </button>
+                </span>
+
               </div>
 
               {/* Botón */}

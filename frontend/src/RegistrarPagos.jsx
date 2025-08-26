@@ -238,6 +238,22 @@ export default function RegistrarPagos() {
     })();
   }, [editId]);
 
+  // === Derivados y HOOKS antes de cualquier return temprano ===
+  const active = activeSucursalId;
+  const suc = (sucursales.find(s => s.id === active) || {});
+  const state = pagosMap[active] || { items:[], cajaChicaUsada:0 };
+  const readOnly = isViewing;
+
+  // ✅ Hook en orden estable y antes de returns
+  const totalUtilizado = useMemo(
+    () =>
+      (state.items || []).reduce(
+        (sum, it) => sum + (parseFloat(it.monto || 0) || 0),
+        0
+      ),
+    [state.items]
+  );
+
   if (!me.loaded) {
     return <div className="rc-tab-empty">Cargando permisos…</div>;
   }
@@ -245,12 +261,6 @@ export default function RegistrarPagos() {
   if (!isAdmin && !isViewing) {
     return <div className="rc-tab-empty">Solo administradores</div>;
   }
-
-  const active = activeSucursalId;
-  const suc = (sucursales.find(s => s.id === active) || {});
-  const state = pagosMap[active] || { items:[], cajaChicaUsada:0 };
-
-  const readOnly = isViewing; // bandera para bloquear inputs cuando se está viendo
 
   // Igual que en Finanzas: etiqueta por ubicación (fallback)
   const branchLabel = (s) => s?.ubicacion || s?.nombre || s?.id || '—';
@@ -291,13 +301,13 @@ export default function RegistrarPagos() {
     });
   };
 
-    const handlePickFile = (i) => {
-      if (readOnly) return;
-      const el = document.getElementById(`pago-file-${active}-${i}`);
-      if (el) el.click();
-    };
+  const handlePickFile = (i) => {
+    if (readOnly) return;
+    const el = document.getElementById(`pago-file-${active}-${i}`);
+    if (el) el.click();
+  };
 
-    const handleFileChange = (i, e) => {
+  const handleFileChange = (i, e) => {
     if (readOnly) return;
     const file = e.target?.files?.[0];
     if (!file) return;
@@ -329,8 +339,7 @@ export default function RegistrarPagos() {
     setRow(i, 'fileUrl', '');            // limpiamos URL remota si se reemplaza el archivo
   };
 
-
-    const clearFile = (i) => {
+  const clearFile = (i) => {
     const item = (pagosMap[active]?.items || [])[i];
     if (item?.filePreview) {
       try { URL.revokeObjectURL(item.filePreview); } catch {}
@@ -341,15 +350,6 @@ export default function RegistrarPagos() {
     setRow(i, 'fileName', '');
     setRow(i, 'fileUrl', '');
   };
-
-
-  const totalUtilizado = useMemo(() => {
-    return Object.values(nuevoPago?.cuadre || {}).reduce(
-      (acc, val) => acc + (val || 0),
-      0
-    );
-  }, [nuevoPago?.cuadre]);
-
 
   const kpiDepositos = Number(kpiDepositosBySuc[active] || 0);
   const cajaChicaDisponible = Number(cajaChicaBySuc[active] || 0);
@@ -573,17 +573,17 @@ export default function RegistrarPagos() {
         <table className="rc-table rc-gastos-table rc-pagos-table">
           {/* colgroup opcional (lo oculta el responsive <860px) */}
           <colgroup>
-            <col style={{width:'140px'}}/>     {/* Categoría */}
-            <col style={{width:'140px'}}/>    {/* Descripción */}
-            <col style={{width:'140px'}}/>     {/* Monto */}
-            <col style={{width:'140px'}}/>     {/* Ref */}
-            <col style={{width:'180px'}}/>     {/* Img */}
-            <col style={{width:'120px'}}/>     {/* Acciones */}
+            <col style={{width:'140px'}}/>{/* Categoría */}
+            <col style={{width:'140px'}}/>{/* Descripción */}
+            <col style={{width:'140px'}}/>{/* Monto */}
+            <col style={{width:'140px'}}/>{/* Ref */}
+            <col style={{width:'180px'}}/>{/* Img */}
+            <col style={{width:'120px'}}/>{/* Acciones */}
           </colgroup>
 
           <thead>
             <tr>
-               <th style={{textAlign:'center'}}>Categoría</th>
+              <th style={{textAlign:'center'}}>Categoría</th>
               <th style={{textAlign:'center'}}>Descripción</th>
               <th style={{textAlign:'center'}}>Cantidad</th>
               <th style={{textAlign:'center'}}>No. de ref</th>
@@ -698,7 +698,6 @@ export default function RegistrarPagos() {
                     </div>
                   </td>
 
-                  
                   {/* Acciones */}
                   <td data-label="Acciones" style={{textAlign:'center'}}>
                     <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>removeRow(i)} disabled={readOnly}>✕</button>
@@ -751,8 +750,6 @@ export default function RegistrarPagos() {
           </div>
         )}
       </section>
-
-
 
       {/* Modales */}
       <CategoriasModal

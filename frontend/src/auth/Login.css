@@ -204,6 +204,23 @@ body { margin: 0; background: var(--cream); }
   gap: 10px;
   font-size: 14px;
 }
+
+/* Link "¿Olvidaste tu contraseña?" como texto grisito */
+.forgot-link {
+  color: #6b7280;          /* gris neutro */
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.forgot-link:hover {
+  text-decoration: underline;
+  color: #374151;          /* gris un poco más oscuro al hover */
+}
+
 .small-link{
   color: var(--dark);
   text-decoration: none;
