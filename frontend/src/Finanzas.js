@@ -6,6 +6,56 @@ import { db, auth } from './firebase';
 import MyCalendar from './MyCalendar';
 import './Finanzas.css';
 
+/* ========= Helpers estables (fuera del componente) ========= */
+const nnum = (v) => (typeof v === 'number' ? v : parseFloat(v || 0)) || 0;
+
+/** Extractor robusto de “Total a depositar” (mismo criterio que Resumen y compat con alias) */
+const extractTotalADepositar = (d) => {
+  const t = d?.totales || {};
+
+  // 1) MISMO CAMPO QUE MUESTRAS EN ResumenPanel
+  const fromTotalsGeneral =
+    t?.totalGeneral ??
+    t?.total_general ??
+    null;
+
+  if (fromTotalsGeneral != null && !isNaN(fromTotalsGeneral)) {
+    const val = nnum(fromTotalsGeneral);
+    if (val !== 0) return val; // si es 0 legítimo, seguimos probando alias (por compat)
+  }
+
+  // 2) ALIAS COMUNES DE "TOTAL A DEPOSITAR"
+  const aliases =
+    d?.totalADepositar ??
+    d?.total_a_depositar ??
+    d?.totalDepositar ??
+    d?.total_depositar ??
+    t?.totalADepositar ??
+    t?.total_a_depositar ??
+    t?.totalDepositar ??
+    t?.total_depositar ??
+    t?.depositoEfectivo ??
+    t?.efectivoParaDepositos ??
+    t?.efectivo_para_depositos ??
+    t?.totalDeposito ??
+    t?.total_deposito ??
+    null;
+
+  if (aliases != null && !isNaN(aliases)) {
+    const val = nnum(aliases);
+    if (val !== 0) return val;
+  }
+
+  // 3) FALLBACK (solo si no hay nada previo): sumar EFECTIVO de cierre/arques
+  if (Array.isArray(d?.cierre) && d.cierre.length) {
+    return d.cierre.reduce((acc, c) => acc + nnum(c?.efectivo), 0);
+  }
+  if (Array.isArray(d?.arqueo) && d.arqueo.length) {
+    return d.arqueo.reduce((acc, c) => acc + nnum(c?.efectivo), 0);
+  }
+  return 0;
+};
+
 export default function Finanzas() {
   const [ready, setReady] = useState(false);
 
@@ -61,55 +111,6 @@ export default function Finanzas() {
 
   const money = (n) =>
     new Intl.NumberFormat('es-GT', { style: 'currency', currency: 'GTQ', maximumFractionDigits: 2 }).format(n || 0);
-
-  const nnum = (v) => (typeof v === 'number' ? v : parseFloat(v || 0)) || 0;
-
-  // === Extractor robusto de “Total a depositar” ===
-  const extractTotalADepositar = (d) => {
-    const t = d?.totales || {};
-
-    // 1) MISMO CAMPO QUE MUESTRAS EN ResumenPanel
-    const fromTotalsGeneral =
-      t?.totalGeneral ??
-      t?.total_general ??
-      null;
-
-    if (fromTotalsGeneral != null && !isNaN(fromTotalsGeneral)) {
-      const val = nnum(fromTotalsGeneral);
-      if (val !== 0) return val; // si es 0 legítimo, seguimos probando alias (por compat)
-    }
-
-    // 2) ALIAS COMUNES DE "TOTAL A DEPOSITAR"
-    const aliases =
-      d?.totalADepositar ??
-      d?.total_a_depositar ??
-      d?.totalDepositar ??
-      d?.total_depositar ??
-      t?.totalADepositar ??
-      t?.total_a_depositar ??
-      t?.totalDepositar ??
-      t?.total_depositar ??
-      t?.depositoEfectivo ??
-      t?.efectivoParaDepositos ??
-      t?.efectivo_para_depositos ??
-      t?.totalDeposito ??
-      t?.total_deposito ??
-      null;
-
-    if (aliases != null && !isNaN(aliases)) {
-      const val = nnum(aliases);
-      if (val !== 0) return val;
-    }
-
-    // 3) FALLBACK (solo si no hay nada previo): sumar EFECTIVO de cierre/arques
-    if (Array.isArray(d?.cierre) && d.cierre.length) {
-      return d.cierre.reduce((acc, c) => acc + nnum(c?.efectivo), 0);
-    }
-    if (Array.isArray(d?.arqueo) && d.arqueo.length) {
-      return d.arqueo.reduce((acc, c) => acc + nnum(c?.efectivo), 0);
-    }
-    return 0;
-  };
 
   // Cargar sucursales y set defaults
   useEffect(() => {
@@ -265,7 +266,8 @@ export default function Finanzas() {
     };
 
     recalc();
-  }, [selectedSucursal, sucursales, ready, isAdmin, extractTotalADepositar]);
+  // ❌ NO incluir extractTotalADepositar en deps (es helper estable fuera)
+  }, [selectedSucursal, sucursales, ready, isAdmin]);
 
   const abrirModalActividad = () => {
     calendarRef.current?.openAddModal?.();
