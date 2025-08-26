@@ -201,20 +201,6 @@ export default function GastosList({
                   />
                 </td>
 
-                {/* Ref */}
-                <td data-label="No. de ref">
-                  <input
-                    className="rc-input"
-                    placeholder="Ref"
-                    value={g.ref || ''}
-                    onChange={(e) => setGasto(i, 'ref', e.target.value)}
-                    onKeyDown={(e) => handleEnterConfirm(i, e)}
-                    disabled={disabled}
-                    aria-label="Referencia"
-                    style={{ width: '100%', textAlign: 'center' }}
-                  />
-                </td>
-
                 {/* Cantidad (sin flechas/rueda) */}
                 <td data-label="Cantidad">
                   <input
@@ -240,6 +226,20 @@ export default function GastosList({
                     onWheel={(e) => { e.currentTarget.blur(); }}
                     disabled={disabled}
                     aria-label="Cantidad"
+                    style={{ width: '100%', textAlign: 'center' }}
+                  />
+                </td>
+
+                {/* Ref */}
+                <td data-label="No. de ref">
+                  <input
+                    className="rc-input"
+                    placeholder="Ref"
+                    value={g.ref || ''}
+                    onChange={(e) => setGasto(i, 'ref', e.target.value)}
+                    onKeyDown={(e) => handleEnterConfirm(i, e)}
+                    disabled={disabled}
+                    aria-label="Referencia"
                     style={{ width: '100%', textAlign: 'center' }}
                   />
                 </td>
