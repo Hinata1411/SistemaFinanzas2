@@ -573,3 +573,21 @@ body{
 .modal-backdrop{
   z-index: 2000 !important;
 }
+
+/* === OVERRIDES mínimos para pill activo con esquinas redondeadas === */
+
+/* Permite que el pill sobresalga sin que se recorte el borde derecho */
+.sidebar{
+  overflow-y: hidden !important;
+  overflow-x: visible !important;
+}
+.menu-container{
+  overflow-y: auto !important;
+  overflow-x: visible !important;
+}
+
+/* Redondeado completo en el estado activo */
+.menu-link.active,
+.submenu-link.active{
+  border-radius: 18px !important;
+}
