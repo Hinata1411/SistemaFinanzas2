@@ -87,26 +87,105 @@
   display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-bottom:8px;
 }
 
-/* Tabla */
-.tabla-wrap{ width:100%; }
-.tabla{
-  width:100%;
-  border-collapse: collapse;
-  background:#fff; border:1px solid #e7e2d9; border-radius:14px; overflow:hidden;
-  box-shadow: var(--shadow);
-}
-.tabla thead th{
-  background:#15824C; color:#fff; text-align:center;
-  padding:14px; font-size:1.05rem;
-}
-.tabla td{
-  padding:14px; border-top:1px solid #f0ece6; text-align:center;
-  color:var(--slate);
-}
-.tabla tr.selected{ background:#FFF7ED; }
-.empty{ padding:18px; color:#6b7280; text-align:center; }
+/* ===== Tabla responsive (Usuarios) ===== */
 
-/* Responsive */
-@media (max-width: 900px){
-  .form-usuario{ grid-template-columns: 1fr; }
+/* Fallback de scroll en anchos medianos */
+.tabla-wrap{ overflow-x: auto; }
+
+/* Mantén los emails legibles (rompe líneas largas) */
+.tabla td:nth-child(2){ overflow-wrap: anywhere; word-break: break-word; }
+
+/* Vista "cards" en móvil */
+@media (max-width: 760px){
+  /* Oculta encabezados */
+  .tabla thead{
+    border:0; clip:rect(0 0 0 0); height:1px; margin:-1px; overflow:hidden;
+    padding:0; position:absolute; width:1px;
+  }
+
+  /* Tabla -> bloques apilados */
+  .tabla,
+  .tabla tbody,
+  .tabla tr,
+  .tabla td{
+    display:block; width:100%;
+  }
+
+  /* Cada fila como tarjeta */
+  .tabla tr{
+    background:#fff;
+    margin:10px 0;
+    border:1px solid #e7e2d9;
+    border-radius:12px;
+    box-shadow: var(--shadow);
+    overflow:hidden;
+    cursor: pointer; /* ya que la fila es seleccionable */
+  }
+
+  /* Celdas con label a la izquierda y valor a la derecha */
+  .tabla td{
+    text-align:left;
+    border-top:1px solid #f0ece6;
+    padding:12px 14px 12px calc(14px + 120px);
+    position:relative;
+    min-height:44px;
+    color:var(--slate);
+  }
+  .tabla td:first-child{ border-top:none; }
+
+  /* Labels de cada campo (sin cambiar JSX) */
+  .tabla td:nth-child(1)::before{ content:'Nombre'; }
+  .tabla td:nth-child(2)::before{ content:'Email'; }
+  .tabla td:nth-child(3)::before{ content:'Rol'; }
+  .tabla td:nth-child(4)::before{ content:'Sucursal'; }
+
+  .tabla td::before{
+    position:absolute;
+    left:14px; top:50%;
+    transform: translateY(-50%);
+    font-weight:800; color:var(--dark);
+    width:110px;
+    white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis;
+  }
+
+  /* Estado seleccionado se nota mejor en cards */
+  .tabla tr.selected{
+    background:#FFF7ED;
+    box-shadow: 0 8px 26px rgba(0,0,0,.08);
+    border-color:#f3dcc2;
+  }
+
+  /* Botones compactos si hubiera acciones dentro de la fila */
+  .btn-min{ padding:8px 10px; }
+}
+
+/* ===== Formulario apilado (siempre 1 columna) ===== */
+.form-usuario{
+  display:grid;
+  grid-template-columns: 1fr;  /* <- apilado */
+  gap:12px;
+  max-width: 720px;            /* opcional: limita ancho para mejor lectura */
+  margin-inline: auto;         /* centra el formulario dentro de la card */
+}
+
+/* Evita desbordes de inputs en pantallas chicas */
+.form-usuario .form-row{ min-width: 0; }
+.form-usuario .form-row input,
+.form-usuario .form-row select{
+  width:100%;
+}
+
+/* Acciones del formulario */
+.form-actions{
+  grid-column: 1 / -1;
+  display:flex;
+  gap:8px;
+  justify-content:flex-end;    /* en desktop queda a la derecha */
+}
+
+/* En móvil, botón a todo lo ancho */
+@media (max-width: 760px){
+  .form-actions{ justify-content: stretch; }
+  .form-actions .btn{ width:100%; }
 }

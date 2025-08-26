@@ -1,684 +1,561 @@
 // src/RegistrarPagos.jsx
 import React, { useEffect, useMemo, useState } from 'react';
-import Swal from 'sweetalert2';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
-  collection,
-  addDoc,
-  getDocs,
-  query,
-  where,
-  doc,
-  getDoc,
-  updateDoc,
-  serverTimestamp,
-  increment,
+  collection, addDoc, getDoc, getDocs, query, where,
+  doc, updateDoc, serverTimestamp, increment
 } from 'firebase/firestore';
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import './RegistrarPagos.css';
+
+import Swal from 'sweetalert2';
+import 'sweetalert2/dist/sweetalert2.min.css';
 
 import { auth, db } from './firebase';
-import { n, toMoney } from './utils/numbers';
-import { todayISO } from './utils/dates';
+import { todayISO as getTodayISO } from './utils/dates';
+import { n } from './utils/numbers';
 
 import CategoriasModal from './components/registrar-cierre/CategoriasModal';
 import AttachmentViewerModal from './components/registrar-cierre/AttachmentViewerModal';
 
-// ===== Helpers / defaults =====
-const INIT_CATS = [
-  'Pagos de servicios',
-  'Proveedor',
-  'Nómina',
-  'Transporte',
-  'Publicidad',
-  'Mantenimiento',
-  'Varios',
-];
+// ====== Helpers ======
+const money = (v) =>
+  new Intl.NumberFormat('es-GT', { style: 'currency', currency: 'GTQ', maximumFractionDigits: 2 }).format(Number(v) || 0);
 
-const money = (x) =>
-  new Intl.NumberFormat('es-GT', { style: 'currency', currency: 'GTQ' }).format(Number(x || 0));
-
-const branchLabel = (s) => s?.ubicacion || s?.nombre || s?.id || '—';
-
-// Extrae “Total a depositar” como en Finanzas (robusto con alias)
-const nnum = (v) => (typeof v === 'number' ? v : parseFloat(v || 0)) || 0;
 const extractTotalADepositar = (d) => {
   const t = d?.totales || {};
-  const fromTotalsGeneral =
-    t?.totalGeneral ??
-    t?.total_general ??
-    null;
+  const nnum = (v) => (typeof v === 'number' ? v : parseFloat(v || 0)) || 0;
 
-  if (fromTotalsGeneral != null && !isNaN(fromTotalsGeneral)) {
-    const val = nnum(fromTotalsGeneral);
-    if (val !== 0) return val;
+  const fromTotals = t?.totalGeneral ?? t?.total_general ?? null;
+  if (fromTotals != null && !isNaN(fromTotals)) {
+    const val = nnum(fromTotals); if (val !== 0) return val;
   }
-
-  const aliases =
-    d?.totalADepositar ??
-    d?.total_a_depositar ??
-    d?.totalDepositar ??
-    d?.total_depositar ??
-    t?.totalADepositar ??
-    t?.total_a_depositar ??
-    t?.totalDepositar ??
-    t?.total_depositar ??
-    t?.depositoEfectivo ??
-    t?.efectivoParaDepositos ??
-    t?.efectivo_para_depositos ??
-    t?.totalDeposito ??
-    t?.total_deposito ??
-    null;
-
+  const aliases = d?.totalADepositar ?? d?.total_a_depositar ?? d?.totalDepositar ??
+                  d?.total_depositar ?? t?.totalADepositar ?? t?.total_a_depositar ??
+                  t?.totalDepositar ?? t?.total_depositar ?? t?.depositoEfectivo ??
+                  t?.efectivoParaDepositos ?? t?.efectivo_para_depositos ??
+                  t?.totalDeposito ?? t?.total_deposito ?? null;
   if (aliases != null && !isNaN(aliases)) {
-    const val = nnum(aliases);
-    if (val !== 0) return val;
+    const val = nnum(aliases); if (val !== 0) return val;
   }
-
-  if (Array.isArray(d?.cierre) && d.cierre.length) {
-    return d.cierre.reduce((acc, c) => acc + nnum(c?.efectivo), 0);
-  }
-  if (Array.isArray(d?.arqueo) && d.arqueo.length) {
-    return d.arqueo.reduce((acc, c) => acc + nnum(c?.efectivo), 0);
-  }
+  if (Array.isArray(d?.cierre)) return d.cierre.reduce((acc, c) => acc + nnum(c?.efectivo), 0);
+  if (Array.isArray(d?.arqueo)) return d.arqueo.reduce((acc, c) => acc + nnum(c?.efectivo), 0);
   return 0;
 };
 
+const okTypes = ['image/png', 'image/jpeg', 'application/pdf'];
+
+// ====== Componente ======
 export default function RegistrarPagos() {
-  // ===== Perfil (solo admin) =====
-  const [me, setMe] = useState({ loaded: false, role: 'viewer', username: '' });
+  const [me, setMe] = useState({ loaded: false, role: 'viewer', uid: null, username: '' });
+  const isAdmin = me.role === 'admin';
+
+  // sucursales
+  const [sucursales, setSucursales] = useState([]);
+  const [activeSucursalId, setActiveSucursalId] = useState(null);
+
+  // fecha (por día)
+  const [fecha, setFecha] = useState(getTodayISO());
+
+  // KPI por sucursal (dinero para depósitos) y caja chica
+  const [kpiDepositosBySuc, setKpiDepositosBySuc] = useState({}); // { [id]: number }
+  const [cajaChicaBySuc, setCajaChicaBySuc] = useState({});        // { [id]: number }
+
+  // categorías
+  const INIT_CATS = ['Varios','Servicios','Transporte','Publicidad','Mantenimiento','Ajuste de caja chica'];
+  const [categorias, setCategorias] = useState(INIT_CATS);
+  const [showCatModal, setShowCatModal] = useState(false);
+
+  // pagos por sucursal (estado local)
+  // map por sucursal: { items: [...], cajaChicaUsada: number }
+  const [pagosMap, setPagosMap] = useState({});
+
+  // visor
+  const [viewer, setViewer] = useState({ open:false, url:'', mime:'', name:'' });
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        setMe({ loaded: true, role: 'viewer', username: '' });
-        return;
-      }
+      if (!user) { setMe({ loaded:true, role:'viewer', uid:null, username:'' }); return; }
       try {
-        const snap = await getDoc(doc(db, 'usuarios', user.uid));
-        const data = snap.exists() ? snap.data() : {};
-        setMe({
-          loaded: true,
-          role: data.role || 'viewer',
-          username: data.username || '',
-        });
+        const us = await getDoc(doc(db, 'usuarios', user.uid));
+        const ud = us.exists() ? us.data() : {};
+        setMe({ loaded:true, role: (ud.role||'viewer'), uid:user.uid, username: ud.username || '' });
       } catch {
-        setMe({ loaded: true, role: 'viewer', username: '' });
+        setMe({ loaded:true, role:'viewer', uid:user.uid, username:'' });
       }
     });
     return () => unsub();
   }, []);
-  const isAdmin = me.role === 'admin';
 
-  // ===== Sucursales (por ubicación) =====
-  const [sucursales, setSucursales] = useState([]);
+  // Cargar sucursales + KPI (sumar cierres) + caja chica
   useEffect(() => {
+    if (!me.loaded || !isAdmin) return;
+
     (async () => {
       try {
         const qs = await getDocs(collection(db, 'sucursales'));
-        const list = qs.docs.map((snap) => {
+        const arr = qs.docs.map((snap) => {
           const d = snap.data() || {};
+          // === Igual que en Finanzas ===
           return {
             id: snap.id,
             nombre: d.nombre || d.name || snap.id,
             ubicacion: d.ubicacion || d.location || '',
-            cajaChica: Number(d.cajaChica || 0),
+            ...d, // (opcional) mantiene otros campos
           };
         });
-        setSucursales(list);
-      } catch (e) {
-        console.error('Sucursales:', e);
-        setSucursales([]);
-      }
-    })();
-  }, []);
+        setSucursales(arr);
+        setActiveSucursalId(prev => prev || arr[0]?.id || null);
 
-  const orderedSucursales = useMemo(
-    () => [...sucursales].sort((a, b) =>
-      branchLabel(a).localeCompare(branchLabel(b), 'es', { sensitivity: 'base' })),
-    [sucursales]
-  );
+        const hoy = getTodayISO();
 
-  const [activeSucursalId, setActiveSucursalId] = useState(null);
-  const activeSucursal = useMemo(
-    () => orderedSucursales.find(s => s.id === activeSucursalId) || orderedSucursales[0] || null,
-    [orderedSucursales, activeSucursalId]
-  );
-  useEffect(() => {
-    if (!activeSucursalId && orderedSucursales.length) {
-      setActiveSucursalId(orderedSucursales[0].id);
-    }
-  }, [orderedSucursales, activeSucursalId]);
-
-  // ===== Fecha de trabajo =====
-  const [fecha, setFecha] = useState(todayISO());
-
-  // ===== KPI "Dinero de ventas disponible" (cierres de la fecha por sucursal) - menos lo ya asignado =====
-  const [ventasDelDia, setVentasDelDia] = useState(0);          // total a depositar del día (cierres)
-  const [pagosAsignadosPrevios, setPagosAsignadosPrevios] = useState(0); // ya registrados antes
-  const [cajaChicaDisponible, setCajaChicaDisponible] = useState(0);
-
-  useEffect(() => {
-    (async () => {
-      if (!activeSucursal) {
-        setVentasDelDia(0);
-        setPagosAsignadosPrevios(0);
-        setCajaChicaDisponible(0);
-        return;
-      }
-      const sucId = activeSucursal.id;
-
-      // 1) KPI ventas del día (sumando total a depositar desde cierres por sucursal y fecha)
-      try {
-        const cierresRef = collection(db, 'cierres');
-        const qRef = query(cierresRef, where('sucursalId', '==', sucId), where('fecha', '==', fecha));
-        const snap = await getDocs(qRef);
-        let sum = 0;
-        snap.docs.forEach(d => { sum += extractTotalADepositar(d.data() || {}); });
-        setVentasDelDia(sum);
-      } catch {
-        setVentasDelDia(0);
-      }
-
-      // 2) Pagos ya asignados para esa fecha/sucursal
-      try {
-        const pagosRef = collection(db, 'registrarPagos');
-        const pq = query(pagosRef, where('sucursalId', '==', sucId), where('fecha', '==', fecha));
-        const psnap = await getDocs(pq);
-        let totalPrevio = 0;
-        psnap.docs.forEach(s => {
-          const d = s.data() || {};
-          const t = Number(d.totalUtilizado || 0);
-          totalPrevio += isNaN(t) ? 0 : t;
+        // Leer cajaChica y kpiDepositos override de cada sucursal
+        const caja = {};
+        const override = {};
+        arr.forEach(s => {
+          caja[s.id] = Number(s?.cajaChica || 0);
+          if (typeof s?.kpiDepositos === 'number') override[s.id] = Number(s.kpiDepositos);
         });
-        setPagosAsignadosPrevios(totalPrevio);
-      } catch {
-        setPagosAsignadosPrevios(0);
-      }
 
-      // 3) Caja chica disponible (en doc sucursal)
-      try {
-        const sSnap = await getDoc(doc(db, 'sucursales', sucId));
-        const d = sSnap.exists() ? (sSnap.data() || {}) : {};
-        setCajaChicaDisponible(Number(d.cajaChica || 0));
-      } catch {
-        setCajaChicaDisponible(0);
+        // Calcular “dinero para depósitos” (igual que Finanzas) si no hay override
+        const kpi = { ...override };
+        await Promise.all(arr.map(async (s) => {
+          if (kpi[s.id] != null) return; // usa override
+          const cierresRef = collection(db, 'cierres');
+          const qRef = query(cierresRef, where('sucursalId','==',s.id), where('fecha','<=',hoy));
+          const snap = await getDocs(qRef);
+          let sum = 0;
+          snap.forEach(d => { sum += extractTotalADepositar(d.data() || {}); });
+          kpi[s.id] = sum;
+        }));
+
+        setKpiDepositosBySuc(kpi);
+        setCajaChicaBySuc(caja);
+      } catch (e) {
+        console.error(e);
+        setSucursales([]);
+        setKpiDepositosBySuc({});
+        setCajaChicaBySuc({});
       }
     })();
-  }, [activeSucursal, fecha]);
+  }, [me.loaded, isAdmin]);
 
-  const ventasDisponibles = Math.max(0, ventasDelDia - pagosAsignadosPrevios);
-
-  // ===== Categorías =====
-  const [categorias, setCategorias] = useState(INIT_CATS);
-  const [showCatModal, setShowCatModal] = useState(false);
-  const handleChangeCategorias = (nextCategorias, oldName, newName) => {
-    setCategorias(nextCategorias);
-    // si renombraste/eliminaste, no tocamos filas existentes (opcional)
-  };
-
-  // ===== Items de la tabla =====
-  const [items, setItems] = useState([
-    {
-      descripcion: '',
-      monto: '',
-      ref: '',
-      categoria: INIT_CATS[0],
-      fileBlob: null,
-      filePreview: '',
-      fileUrl: '',
-      fileName: '',
-      fileMime: '',
-    },
-  ]);
-
-  const addItem = () => {
-    setItems(prev => ([
-      ...prev.map(it => ({ ...it })), // sin lock; puedes agregar si quieres
-      {
-        descripcion: '',
-        monto: '',
-        ref: '',
-        categoria: categorias[0] || '',
-        fileBlob: null,
-        filePreview: '',
-        fileUrl: '',
-        fileName: '',
-        fileMime: '',
-      },
-    ]));
-  };
-
-  const removeItem = (i) => setItems(prev => prev.filter((_, idx) => idx !== i));
-  const setItem = (i, field, val) =>
-    setItems(prev => {
-      const next = [...prev];
-      next[i] = { ...next[i], [field]: val };
-      return next;
+  // Inicializar pagosMap por sucursal
+  useEffect(() => {
+    if (!sucursales.length) return;
+    setPagosMap((prev) => {
+      const copy = { ...prev };
+      sucursales.forEach(s => {
+        if (!copy[s.id]) {
+          copy[s.id] = {
+            items: [
+              { descripcion:'', monto:'', ref:'', categoria: categorias[0] || 'Varios',
+                fileBlob:null, fileUrl:'', fileName:'', fileMime:'', locked:false }
+            ],
+            cajaChicaUsada: 0,
+          };
+        }
+      });
+      return copy;
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sucursales.length]);
 
-  // Adjuntos
-  const [viewer, setViewer] = useState({ open: false, url: '', mime: '', name: '' });
-  const openViewer = (url, mime, name) => setViewer({ open: true, url, mime: mime || '', name: name || '' });
-  const closeViewer = () => setViewer({ open: false, url: '', mime: '', name: '' });
+  if (!me.loaded) {
+    return <div className="rc-tab-empty">Cargando permisos…</div>;
+  }
+  if (!isAdmin) {
+    return <div className="rc-tab-empty">Solo administradores</div>;
+  }
+
+  const active = activeSucursalId;
+  const suc = sucursales.find(s => s.id === active) || {};
+  const state = pagosMap[active] || { items:[], cajaChicaUsada:0 };
+
+  // === Igual que en Finanzas: etiqueta por ubicación (fallback nombre/id) ===
+  const branchLabel = (s) => s?.ubicacion || s?.nombre || s?.id || '—';
+
+  const setRow = (i, field, val) => {
+    setPagosMap(prev => {
+      const m = { ...prev };
+      const arr = [...(m[active]?.items || [])];
+      arr[i] = { ...arr[i], [field]: val };
+      m[active] = { ...(m[active]||{}), items: arr };
+      return m;
+    });
+  };
+
+  const addRow = () => {
+    setPagosMap(prev => {
+      const m = { ...prev };
+      const arr = [...(m[active]?.items || [])].map(x => ({ ...x, locked:true }));
+      arr.push({
+        descripcion:'', monto:'', ref:'', categoria: categorias[0] || 'Varios',
+        fileBlob:null, fileUrl:'', fileName:'', fileMime:'', locked:false
+      });
+      m[active] = { ...(m[active]||{}), items: arr };
+      return m;
+    });
+  };
+
+  const removeRow = (i) => {
+    setPagosMap(prev => {
+      const m = { ...prev };
+      const arr = [...(m[active]?.items || [])];
+      arr.splice(i,1);
+      m[active] = { ...(m[active]||{}), items: arr };
+      return m;
+    });
+  };
 
   const handlePickFile = (i) => {
-    const el = document.getElementById(`pago-file-${i}`);
+    const el = document.getElementById(`pago-file-${active}-${i}`);
     if (el) el.click();
   };
 
   const handleFileChange = (i, e) => {
     const file = e.target?.files?.[0];
     if (!file) return;
-    const okTypes = ['image/png', 'image/jpeg', 'application/pdf'];
     if (!okTypes.includes(file.type)) {
       Swal.fire('Formato no permitido', 'Solo PNG, JPG o PDF', 'warning');
       e.target.value = '';
       return;
     }
-    const maxBytes = 8 * 1024 * 1024;
-    if (file.size > maxBytes) {
-      Swal.fire('Archivo muy grande', 'Máximo permitido: 8MB', 'warning');
+    if (file.size > 8 * 1024 * 1024) {
+      Swal.fire('Archivo muy grande', 'Máximo 8MB', 'warning');
       e.target.value = '';
       return;
     }
-    const isImage = file.type.startsWith('image/');
-    const preview = isImage ? URL.createObjectURL(file) : '';
-    setItem(i, 'fileBlob', file);
-    setItem(i, 'filePreview', preview);
-    setItem(i, 'fileMime', file.type);
-    setItem(i, 'fileName', file.name);
-    setItem(i, 'fileUrl', '');
+    setRow(i, 'fileBlob', file);
+    setRow(i, 'fileName', file.name);
+    setRow(i, 'fileMime', file.type);
+    setRow(i, 'fileUrl', '');
   };
 
-  // Totales
-  const totalUtilizado = useMemo(
-    () => (items || []).reduce((s, it) => s + n(it.monto), 0),
-    [items]
-  );
+  const totalUtilizado = (state.items || []).reduce((s, r) => s + (parseFloat(r.monto || 0) || 0), 0);
+  const kpiDepositos = Number(kpiDepositosBySuc[active] || 0);
+  const cajaChicaDisponible = Number(cajaChicaBySuc[active] || 0);
 
-  // Sobrante y caja chica
-  const [cajaChicaUsada, setCajaChicaUsada] = useState(0);
-  const sobranteParaMananaBruto = ventasDisponibles - totalUtilizado; // puede ser negativo
-  const sobranteParaMananaConCaja = sobranteParaMananaBruto >= 0
-    ? sobranteParaMananaBruto
-    : (sobranteParaMananaBruto + cajaChicaUsada);
+  const sobranteBruto = kpiDepositos - totalUtilizado;
+  const deficit = Math.min(0, sobranteBruto); // negativo o 0
+  const sobranteFinal = Math.max(0, sobranteBruto + (state.cajaChicaUsada || 0)); // lo que queda para mañana
+  const mostrarUsarCajaChica = deficit < 0;
 
   const usarCajaChica = async () => {
-    const deficit = Math.abs(sobranteParaMananaBruto);
-    if (deficit <= 0) return;
-    if (cajaChicaDisponible <= 0) {
-      return Swal.fire('Caja chica', 'No hay caja chica disponible en esta sucursal.', 'info');
-    }
-    const sugerido = Math.min(deficit, cajaChicaDisponible);
-    const { value: montoStr } = await Swal.fire({
+    const maxNecesario = Math.abs(deficit);
+    const maxPermitido = Math.min(maxNecesario, cajaChicaDisponible);
+    if (maxPermitido <= 0) return Swal.fire('Caja chica', 'No hay caja chica disponible', 'info');
+
+    const { value } = await Swal.fire({
       title: 'Usar caja chica',
       input: 'number',
-      inputAttributes: { step: '0.01', min: '0' },
-      inputValue: Number(sugerido).toFixed(2),
+      inputLabel: `Necesario: ${money(maxNecesario)} · Disponible: ${money(cajaChicaDisponible)}`,
+      inputAttributes: { min: '0', step: '0.01' },
+      inputValue: maxPermitido.toFixed(2),
       showCancelButton: true,
       confirmButtonText: 'Aplicar',
       cancelButtonText: 'Cancelar',
-      inputValidator: (v) => {
-        const x = parseFloat(v || '0');
-        if (isNaN(x) || x <= 0) return 'Monto inválido';
-        if (x > cajaChicaDisponible) return `No puedes usar más de ${money(cajaChicaDisponible)}`;
-        return undefined;
-      },
+      preConfirm: (raw) => {
+        const v = parseFloat(raw || 0);
+        if (isNaN(v) || v <= 0) return 'Ingresa un monto válido';
+        if (v > maxPermitido) return `No puedes usar más de ${money(maxPermitido)}`;
+        return v;
+      }
     });
-    if (!montoStr) return;
-    const monto = parseFloat(montoStr);
-    setCajaChicaUsada((prev) => {
-      const next = Number(prev || 0) + monto;
-      if (next > cajaChicaDisponible) return cajaChicaDisponible; // clamp
-      return next;
+    if (!value || typeof value === 'string') return;
+
+    setPagosMap(prev => {
+      const m = { ...prev };
+      m[active] = { ...(m[active]||{}), cajaChicaUsada: Number((m[active]?.cajaChicaUsada || 0) + value) };
+      return m;
     });
+    await Swal.fire({ icon: 'success', title: 'Caja chica aplicada', timer: 1000, showConfirmButton:false });
   };
 
-  // ===== Guardar =====
-  const [busy, setBusy] = useState(false);
+  const openViewer = (url, mime, name) => setViewer({ open:true, url, mime:mime||'', name:name||'' });
+  const closeViewer = () => setViewer({ open:false, url:'', mime:'', name:'' });
+
   const onSave = async () => {
-    if (!isAdmin) {
-      return Swal.fire('Solo administradores', 'No tienes permisos para registrar pagos.', 'info');
-    }
-    if (!activeSucursal) {
-      return Swal.fire('Sucursal', 'Selecciona una sucursal válida.', 'warning');
-    }
-    if (!fecha) {
-      return Swal.fire('Fecha', 'Selecciona una fecha válida.', 'warning');
-    }
-    if (totalUtilizado <= 0) {
-      return Swal.fire('Validación', 'Agrega al menos un monto a depositar.', 'warning');
-    }
-
-    // Si aún con caja chica queda negativo, no permitir
-    if (sobranteParaMananaConCaja < 0) {
-      return Swal.fire(
-        'Fondos insuficientes',
-        'El total asignado excede lo disponible (aún usando caja chica). Reduce montos o usa más caja chica.',
-        'warning'
-      );
-    }
-
     try {
-      setBusy(true);
+      if (!active) return Swal.fire('Sucursal', 'Selecciona una sucursal', 'warning');
+      if (!fecha) return Swal.fire('Fecha', 'Selecciona una fecha', 'warning');
 
-      // Subir adjuntos
+      const items = state.items || [];
+      if (!items.length) return Swal.fire('Pagos', 'Agrega al menos un pago', 'warning');
+
+      // Subir adjuntos y limpiar payload
       const storage = getStorage();
-      const folder = `pagos/${activeSucursal.id}/${fecha}`;
-      const itemsListos = await Promise.all(items.map(async (it, i) => {
-        const { fileBlob, filePreview, ...rest } = it;
+      const folder = `pagos/${active}/${fecha}`;
+     
+
+      const ready = await Promise.all(items.map(async (r, i) => {
+        const { fileBlob, ...rest } = r;
         if (fileBlob) {
-          const safeName = (it.fileName || fileBlob.name || `pago_${i}`).replace(/[^\w.\-.]+/g, '_');
-          const path = `${folder}/${Date.now()}_${i}_${safeName}`;
+          const safe = (r.fileName || fileBlob.name || `pago_${i}`).replace(/[^\w.\-]+/g, '_');
+          const path = `${folder}/${Date.now()}_${i}_${safe}`;
           const fileRef = sRef(storage, path);
-          await uploadBytes(fileRef, fileBlob, {
-            contentType: it.fileMime || fileBlob.type || 'application/octet-stream',
-          });
+          await uploadBytes(fileRef, fileBlob, 
+            { contentType: r.fileMime || fileBlob.type || 'application/octet-stream' });
           const url = await getDownloadURL(fileRef);
-          return { ...rest, fileUrl: url, fileName: safeName, fileMime: it.fileMime || fileBlob.type || '' };
+          return { ...rest, fileUrl:url, fileName:safe, fileMime:(r.fileMime || fileBlob.type || '') };
         }
-        return { ...rest, fileUrl: it.fileUrl || '', fileName: it.fileName || '', fileMime: it.fileMime || '' };
+        return { ...rest };
       }));
 
-      // Documento de pago
-      const actor = {
-        uid: auth.currentUser?.uid || null,
-        username: me.username || '',
-        email: auth.currentUser?.email || '',
-      };
-
+      // Guardar documento de pagos
+      const actor = { uid: me.uid, username: me.username };
       const payload = {
         fecha,
-        sucursalId: activeSucursal.id,
-        sucursalUbicacion: activeSucursal.ubicacion || '',
-        items: itemsListos,
+        sucursalId: active,
+        items: ready,
         totalUtilizado,
-        ventasDelDia,
-        ventasDisponiblesAntes: ventasDisponibles,
-        sobranteParaManana: Math.max(0, sobranteParaMananaConCaja),
-        cajaChicaUsada: Number(cajaChicaUsada || 0),
-        createdAt: serverTimestamp(),
+        cajaChicaUsada: Number(state.cajaChicaUsada || 0),
+        sobranteParaManana: sobranteFinal,
         createdBy: actor,
+        createdAt: serverTimestamp(),
       };
+      await addDoc(collection(db, 'pagos'), payload);
 
-      await addDoc(collection(db, 'registrarPagos'), payload);
-
-      // Actualizar caja chica de sucursal si se usó
-      if (cajaChicaUsada > 0) {
-        await updateDoc(doc(db, 'sucursales', activeSucursal.id), {
-          cajaChica: increment(-Math.abs(cajaChicaUsada)),
-        });
+      // Descontar caja chica en sucursal
+      const deltaCajaChica = -Number(state.cajaChicaUsada || 0);
+      if (deltaCajaChica !== 0) {
+        await updateDoc(doc(db, 'sucursales', active), { cajaChica: increment(deltaCajaChica) });
       }
 
-      await Swal.fire({ icon: 'success', title: 'Pagos registrados', timer: 1400, showConfirmButton: false });
+      // Escribir override para KPI de depósitos del Home (si usaste todo, queda 0)
+      await updateDoc(doc(db, 'sucursales', active), { kpiDepositos: Number(sobranteFinal) });
 
-      // Reset básico
-      setItems([{
-        descripcion: '',
-        monto: '',
-        ref: '',
-        categoria: categorias[0] || '',
-        fileBlob: null,
-        filePreview: '',
-        fileUrl: '',
-        fileName: '',
-        fileMime: '',
-      }]);
-      setCajaChicaUsada(0);
+      // Actualizar estados locales (refrescar caja y kpi)
+      setCajaChicaBySuc(prev => ({ ...prev, [active]: Number(prev[active] || 0) + deltaCajaChica }));
+      setKpiDepositosBySuc(prev => ({ ...prev, [active]: Number(sobranteFinal) }));
+
+      await Swal.fire({ icon:'success', title:'Pagos guardados', timer:1400, showConfirmButton:false });
     } catch (e) {
       console.error(e);
-      Swal.fire('Error', e?.message || 'No se pudo guardar.', 'error');
-    } finally {
-      setBusy(false);
+      Swal.fire('Error', e.message || 'No se pudo guardar.', 'error');
     }
   };
 
-  if (!me.loaded) {
-    return <div className="rc-tab-empty" style={{ padding: 16 }}>Cargando permisos…</div>;
-  }
-  if (!isAdmin) {
-    return <div className="rc-tab-empty" style={{ padding: 16 }}>Solo administradores</div>;
-  }
-
   return (
-    <div className="rp-shell" style={{ display: 'grid', gap: 12 }}>
-      {/* Header + filtros */}
-      <section className="rc-card" style={{ padding: 14 }}>
-        <div className="rc-card-hd" style={{ display: 'flex', alignItems: 'end', gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 auto' }}>
-            <h2 style={{ margin: 0, color: 'var(--dark)' }}>Registrar Pagos</h2>
-          </div>
+    <div className="rc-shell">
+      <div className="rc-header">
+        <div className="rc-header-left">
+          <h1>Registrar Pagos</h1>
 
-          <div style={{ display: 'grid', gap: 6 }}>
-            <label style={{ fontWeight: 600, color: 'var(--dark-2)' }}>Fecha</label>
-            <input
-              type="date"
-              value={fecha}
-              onChange={(e) => setFecha(e.target.value)}
-              className="rc-input"
-              style={{ minWidth: 180 }}
-            />
-          </div>
+          <div className="rc-date" style={{ display:'grid', gap:8, gridTemplateColumns:'1fr 1fr', alignItems:'end' }}>
+            {/* FECHA */}
+            <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+              <label>Fecha</label>
+              <input type="date" value={fecha} onChange={(e)=>setFecha(e.target.value)} />
+            </div>
 
-          <div style={{ display: 'grid', gap: 6 }}>
-            <label style={{ fontWeight: 600, color: 'var(--dark-2)' }}>Categorías</label>
-            <button className="rc-btn rc-btn-outline" onClick={() => setShowCatModal(true)}>
-              Administrar categorías
-            </button>
+            {/* Acciones */}
+            <div className="rc-tabs-actions" style={{ gridColumn:'1 / -1', display:'flex', gap:8, flexWrap:'wrap', marginTop:8 }}>
+              <button type="button" className="rc-btn rc-btn-accent" onClick={onSave}>
+                Guardar pagos
+              </button>
+              <button type="button" className="rc-btn rc-btn-outline" onClick={()=>setShowCatModal(true)}>
+                Categorías
+              </button>
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* Píldoras de sucursal */}
-        <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {orderedSucursales.map((s) => (
+      {/* PILS de sucursal (muestran UBICACIÓN) */}
+      <div className="rc-tabs-row rc-tabs-attached">
+        <div className="rc-tabs rc-tabs-browser" role="tablist" aria-label="Sucursales">
+          {sucursales.map((s) => (
             <button
               key={s.id}
+              className={`rc-tab ${active === s.id ? 'active' : ''}`}
+              onClick={()=>setActiveSucursalId(s.id)}
               type="button"
-              className={`rc-btn ${activeSucursal?.id === s.id ? 'rc-btn-accent' : 'rc-btn-outline'}`}
-              onClick={() => setActiveSucursalId(s.id)}
-              title={branchLabel(s)}
+              role="tab"
+              aria-selected={active === s.id}
             >
               {branchLabel(s)}
             </button>
           ))}
         </div>
-      </section>
+      </div>
 
-      {/* KPIs */}
-      <section className="rc-card" style={{ padding: 14 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-          <div className="kpi-card" style={{ padding: 10 }}>
+      {/* KPI compacto */}
+      <section className="rc-card" style={{ marginTop: 8 }}>
+        <div className="rc-card-bd" style={{ display:'flex', gap:18, alignItems:'center', flexWrap:'wrap' }}>
+          <div>
             <div className="kpi-title">Sucursal</div>
-            <div className="kpi-value" style={{ fontWeight: 800 }}>{branchLabel(activeSucursal)}</div>
+            <div className="kpi-value" style={{ color:'var(--dark)' }}>{branchLabel(suc)}</div>
           </div>
-          <div className="kpi-card" style={{ padding: 10 }}>
-            <div className="kpi-title">Dinero de ventas disponible (hoy)</div>
-            <div className="kpi-value">{money(ventasDisponibles)}</div>
+          <div>
+            <div className="kpi-title">Dinero para depósitos</div>
+            <div className="kpi-value">{money(kpiDepositos)}</div>
           </div>
-          <div className="kpi-card" style={{ padding: 10 }}>
+          <div>
             <div className="kpi-title">Caja chica disponible</div>
-            <div className="kpi-value">{money(cajaChicaDisponible - cajaChicaUsada)}</div>
+            <div className="kpi-value">{money(cajaChicaDisponible)}</div>
+          </div>
+          <div>
+            <div className="kpi-title">Sobrante para mañana</div>
+            <div className="kpi-value" style={{ color: sobranteFinal > 0 ? 'var(--accent)' : 'var(--dark)' }}>
+              {money(sobranteFinal)}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Tabla de items */}
-      <section className="rc-card" style={{ padding: 0 }}>
-        <table className="rc-table" style={{ width: '100%' }}>
-          {/* prettier-ignore */}
+      {/* TABLA */}
+      <section className="rc-card">
+        <div className="rc-card-hd"><h3>Asignar pagos</h3></div>
+        <table className="rc-table">
           <colgroup>
-            <col style={{ width: '34%' }} />
-            <col style={{ width: '16%' }} />
-            <col style={{ width: '16%' }} />
-            <col style={{ width: '16%' }} />
-            <col style={{ width: '18%' }} />
+            <col style={{width:'auto'}}/>
+            <col style={{width:'160px'}}/>
+            <col style={{width:'160px'}}/>
+            <col style={{width:'200px'}}/>
+            <col style={{width:'200px'}}/>
+            <col style={{width:'120px'}}/>
           </colgroup>
-          <thead>
-            <tr>
-              <th style={{ textAlign: 'left' }}>Descripción</th>
-              <th style={{ textAlign: 'center' }}>Monto a depositar</th>
-              <th style={{ textAlign: 'center' }}>Ref</th>
-              <th style={{ textAlign: 'center' }}>Img/PDF</th>
-              <th style={{ textAlign: 'center' }}>Categoría</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.length === 0 && (
-              <tr>
-                <td colSpan={5} className="rc-empty">Sin pagos aún.</td>
-              </tr>
-            )}
-            {items.map((it, i) => (
-              <tr key={i}>
+        <thead>
+          <tr>
+            <th>Descripción</th>
+            <th style={{textAlign:'center'}}>Monto a depositar</th>
+            <th style={{textAlign:'center'}}>Ref</th>
+            <th style={{textAlign:'center'}}>Img</th>
+            <th style={{textAlign:'center'}}>Categoría</th>
+            <th style={{textAlign:'center'}}>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(!state.items || !state.items.length) && (
+            <tr><td colSpan={6} className="rc-empty">Sin pagos</td></tr>
+          )}
+          {state.items?.map((r, i) => {
+            const isPdf = (r.fileMime || '').includes('pdf');
+            return (
+              <tr key={`${active}-${i}`}>
                 <td>
                   <input
                     className="rc-input"
-                    placeholder="Descripción..."
-                    value={it.descripcion}
-                    onChange={(e) => setItem(i, 'descripcion', e.target.value)}
+                    placeholder="Descripción"
+                    value={r.descripcion}
+                    onChange={(e)=>setRow(i,'descripcion',e.target.value)}
+                    style={{width:'100%'}}
                   />
                 </td>
-                <td style={{ textAlign: 'center' }}>
+                <td>
                   <input
-                    className="rc-input"
-                    type="number"
-                    inputMode="decimal"
-                    step="0.01"
-                    min="0"
-                    value={it.monto}
-                    onChange={(e) => setItem(i, 'monto', e.target.value)}
-                    style={{ textAlign: 'center' }}
+                    className="rc-input rc-qty no-spin"
+                    type="number" min="0" step="0.01" inputMode="decimal"
+                    value={r.monto ?? ''}
+                    onChange={(e)=>setRow(i,'monto',e.target.value)}
+                    onWheel={(e)=>e.currentTarget.blur()}
+                    style={{width:'100%', textAlign:'center'}}
                   />
                 </td>
-                <td style={{ textAlign: 'center' }}>
+                <td>
                   <input
                     className="rc-input"
                     placeholder="Referencia"
-                    value={it.ref || ''}
-                    onChange={(e) => setItem(i, 'ref', e.target.value)}
-                    style={{ textAlign: 'center' }}
+                    value={r.ref || ''}
+                    onChange={(e)=>setRow(i,'ref',e.target.value)}
+                    style={{width:'100%', textAlign:'center'}}
                   />
                 </td>
-                <td style={{ textAlign: 'center' }}>
-                  <input
-                    id={`pago-file-${i}`}
-                    type="file"
-                    accept="image/png,image/jpeg,application/pdf"
-                    style={{ display: 'none' }}
-                    onChange={(e) => handleFileChange(i, e)}
-                  />
-                  <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-                    <button className="rc-btn rc-btn-outline" type="button" onClick={() => handlePickFile(i)}>
-                      {it.fileBlob || it.fileUrl ? 'Cambiar' : 'Subir'}
-                    </button>
-                    {(it.filePreview || it.fileUrl) && (
-                      <button
-                        className="rc-btn rc-btn-ghost"
-                        type="button"
-                        onClick={() => openViewer(it.filePreview || it.fileUrl, it.fileMime, it.fileName)}
-                        title="Ver adjunto"
-                      >
-                        Ver
-                      </button>
-                    )}
-                    <button
-                      className="rc-btn rc-btn-ghost"
-                      type="button"
-                      onClick={() => {
-                        setItem(i, 'fileBlob', null);
-                        setItem(i, 'filePreview', '');
-                        setItem(i, 'fileUrl', '');
-                        setItem(i, 'fileName', '');
-                        setItem(i, 'fileMime', '');
-                      }}
-                      title="Quitar adjunto"
-                    >
-                      Quitar
-                    </button>
-                    <button
-                      className="rc-btn rc-btn-ghost"
-                      type="button"
-                      onClick={() => removeItem(i)}
-                      title="Eliminar fila"
-                    >
-                      ✕
+                <td style={{textAlign:'center'}}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, flexWrap:'wrap' }}>
+                    {r.fileUrl || r.fileBlob ? (
+                      <>
+                        <span style={{ fontSize:12, color:'var(--slate)' }}>
+                          {isPdf ? 'PDF' : 'Imagen'}
+                        </span>
+                        <button className="rc-btn rc-btn-outline"
+                          type="button"
+                          onClick={()=>openViewer(r.fileUrl || '', r.fileMime || '', r.fileName || '')}
+                          disabled={!r.fileUrl}
+                        >
+                          Ver
+                        </button>
+                      </>
+                    ) : <span style={{ color:'var(--muted)' }}>—</span>}
+                    <input
+                      id={`pago-file-${active}-${i}`}
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={(e)=>handleFileChange(i,e)}
+                      style={{ display:'none' }}
+                    />
+                    <button className="rc-btn rc-btn-outline" type="button" onClick={()=>handlePickFile(i)}>
+                      {r.fileUrl || r.fileBlob ? 'Cambiar' : 'Adjuntar'}
                     </button>
                   </div>
                 </td>
-                <td style={{ textAlign: 'center' }}>
-                  <select
-                    className="rc-input rc-select"
-                    value={it.categoria || categorias[0] || ''}
-                    onChange={(e) => setItem(i, 'categoria', e.target.value)}
+                <td>
+                  <select className="rc-input rc-select"
+                    value={r.categoria}
+                    onChange={(e)=>setRow(i,'categoria',e.target.value)}
                   >
-                    {categorias.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
+                    {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                   </select>
                 </td>
+                <td style={{textAlign:'center'}}>
+                  <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>removeRow(i)}>✕</button>
+                </td>
               </tr>
-            ))}
-          </tbody>
-
-          <tfoot>
-            <tr>
-              <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--dark)' }}>
-                Total utilizado
-              </td>
-              <td style={{ textAlign: 'center', fontWeight: 800, color: 'var(--dark)' }}>
-                {toMoney(totalUtilizado)}
-              </td>
-              <td colSpan={3} />
-            </tr>
-            <tr>
-              <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--dark)' }}>
-                Sobrante para mañana
-              </td>
-              <td style={{
-                textAlign: 'center',
-                fontWeight: 800,
-                color: sobranteParaMananaConCaja < 0 ? '#b91c1c' : 'var(--accent)',
-              }}>
-                {toMoney(Math.max(0, sobranteParaMananaConCaja))}
-              </td>
-              <td colSpan={3} style={{ textAlign: 'right' }}>
-                {sobranteParaMananaBruto < 0 && (
-                  <button className="rc-btn rc-btn-primary" type="button" onClick={usarCajaChica}>
-                    Usar caja chica
-                  </button>
-                )}
-                {cajaChicaUsada > 0 && (
-                  <span style={{ marginLeft: 10, fontWeight: 700, color: 'var(--dark-2)' }}>
-                    Se tomó de caja chica: {money(cajaChicaUsada)}
-                  </span>
-                )}
-              </td>
-            </tr>
-          </tfoot>
+            );
+          })}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colSpan={1} style={{textAlign:'right', fontWeight:800, color:'var(--dark)'}}>Total utilizado</td>
+            <td style={{textAlign:'right', fontWeight:800, color:'var(--dark)'}}>{money(totalUtilizado)}</td>
+            <td colSpan={4}/>
+          </tr>
+          <tr>
+            <td colSpan={1} style={{textAlign:'right', fontWeight:800, color:'var(--dark)'}}>Sobrante para mañana</td>
+            <td style={{textAlign:'right', fontWeight:800, color: sobranteFinal >= 0 ? 'var(--accent)':'var(--dark)'}}>
+              {money(sobranteFinal)}
+            </td>
+            <td colSpan={4} style={{ textAlign:'right' }}>
+              {mostrarUsarCajaChica && (
+                <button className="rc-btn rc-btn-primary" type="button" onClick={usarCajaChica}>
+                  Usar caja chica
+                </button>
+              )}
+              {state.cajaChicaUsada > 0 && (
+                <span style={{ marginLeft:12, fontWeight:700, color:'var(--dark)' }}>
+                  Se tomó de caja chica: {money(state.cajaChicaUsada)}
+                </span>
+              )}
+            </td>
+          </tr>
+        </tfoot>
         </table>
 
-        <div style={{ padding: 12, display: 'flex', gap: 8 }}>
-          <button type="button" className="rc-btn rc-btn-outline" onClick={addItem}>
-            + Agregar fila
-          </button>
-          <div style={{ flex: 1 }} />
-          <button
-            type="button"
-            className="rc-btn rc-btn-accent"
-            onClick={onSave}
-            disabled={busy || !activeSucursal}
-            title="Guardar pagos"
-          >
-            {busy ? 'Guardando…' : 'Guardar'}
-          </button>
+        <div className="rc-gastos-actions" style={{ marginTop:10 }}>
+          <button type="button" className="rc-btn rc-btn-outline" onClick={addRow}>+ Agregar pago</button>
         </div>
       </section>
 
       {/* Modales */}
       <CategoriasModal
         open={showCatModal}
-        onClose={() => setShowCatModal(false)}
+        onClose={()=>setShowCatModal(false)}
         categorias={categorias}
-        onChangeCategorias={handleChangeCategorias}
+        onChangeCategorias={(nextCats, oldName, newName) => {
+          setCategorias(nextCats);
+          if (oldName) {
+            setPagosMap(prev => {
+              const copy = { ...prev };
+              Object.keys(copy).forEach(k => {
+                copy[k].items = copy[k].items.map(it => (
+                  it.categoria === oldName ? { ...it, categoria: (newName || nextCats[0] || 'Varios') } : it
+                ));
+              });
+              return copy;
+            });
+          }
+        }}
       />
 
       <AttachmentViewerModal

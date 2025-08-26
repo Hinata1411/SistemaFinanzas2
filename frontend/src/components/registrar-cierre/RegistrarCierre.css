@@ -252,7 +252,54 @@
 .rc-sheet{ display:grid; gap:16px; }
 .rc-sheet-3cols{ grid-template-columns: repeat(3, 1fr); }
 .rc-col{ border:1px solid #f0ece6; border-radius:12px; padding:12px; background:#f9fafb; }
-.rc-col-hd{ font-weight:800; color:var(--dark); margin-bottom:8px; }
+
+/* === Mejora visual de encabezado por caja (ArqueoGrid) === */
+.rc-col-hd{
+  width: 100% !important;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between; /* título a la izquierda, apertura a la derecha */
+  flex-wrap: nowrap;              /* evita que "Apertura" salte de línea si hay espacio */
+}
+
+/* Aumenta la jerarquía visual de "Caja 1/2/3" */
+.rc-col-hd > span:first-child{
+  font-size: clamp(18px, 2.1vw, 24px);
+  font-weight: 800;
+  color: var(--dark);
+  letter-spacing: .2px;
+}
+
+/* Asegura el bloque de "Apertura" a la derecha y en línea */
+.rc-col-hd > div:last-child{
+  margin-left: auto;              /* empuja a la derecha */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  min-width: 240px;               /* da espacio para label + input */
+}
+
+/* Input de apertura: ancho fluido y texto alineado a la derecha */
+.rc-col-hd > div:last-child .rc-input{
+  width: clamp(140px, 18vw, 180px);
+  text-align: right;
+  max-width: 100%;
+}
+
+/* Label "Apertura" un poco más sobrio */
+.rc-col-hd > div:last-child .rc-cell-label{
+  color: #6b7280;
+  font-weight: 700;
+}
+
+/* (Reafirma 3 columnas y evita que se rompan) */
+.rc-sheet-3cols{
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+
 
 .rc-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 0; }
 .rc-row-sep{ border-top:1px dashed #e2dfd8; margin:8px 0; }
@@ -450,11 +497,13 @@
 .rc-td-actions{ display:flex; gap:8px; flex-wrap:wrap; }
 .rc-empty{ text-align:center; color:#6b7280; padding:14px; }
 
-/* Responsive */
-@media (max-width: 1100px){
-  .rc-grid-bottom{ grid-template-columns: 1fr; }
+/* ==== Fix responsivo ArqueoGrid (994px–1426px) ==== */
+@media (max-width: 1426px) and (min-width: 994px) {
+  .rc-sheet-3cols {
+    grid-template-columns: repeat(1fr); /* 2 columnas en rango medio */
+  }
 }
-@media (max-width: 900px){
+@media (max-width: 994px){
   .rc-sheet-3cols{ grid-template-columns: 1fr; }
   .rc-select{ width:100%; }
   .rc-qty{ width:120px; }
@@ -659,3 +708,103 @@
   margin: 0;
 }
 
+/* ========= GASTOS: tabla responsive ========= */
+@media (max-width: 860px){
+  /* Oculta encabezado accesiblemente */
+  .rc-gastos-table thead{
+    border:0; clip:rect(0 0 0 0); height:1px; margin:-1px; overflow:hidden;
+    padding:0; position:absolute; width:1px;
+  }
+  /* Ignorar widths del colgroup en móvil */
+  .rc-gastos-table colgroup{ display:none; }
+
+  /* Tabla -> bloques */
+  .rc-gastos-table,
+  .rc-gastos-table tbody,
+  .rc-gastos-table tr,
+  .rc-gastos-table td{
+    display:block; width:100%;
+  }
+
+  /* Cada fila como “card” */
+  .rc-gastos-table tr{
+    background:#fff;
+    margin:10px 0;
+    border:1px solid #e7e2d9;
+    border-radius:12px;
+    box-shadow: var(--shadow);
+    overflow:hidden;
+  }
+
+  /* Celdas con label fijo a la izquierda */
+  .rc-gastos-table td{
+    position:relative;
+    border:none;
+    border-top:1px solid #f0ece6;
+    padding:12px 14px 12px calc(14px + 140px); /* 140px = ancho del label */
+    min-height:48px;
+    text-align:left;
+  }
+  .rc-gastos-table td:first-child{ border-top:none; }
+
+  /* Etiqueta por celda (usa data-label si lo agregas; si no, cae a nth-child) */
+  .rc-gastos-table td::before{
+    content: attr(data-label);
+    position:absolute;
+    left:14px; top:50%;
+    transform: translateY(-50%);
+    width:130px;
+    font-weight:800; color:var(--dark);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  /* Fallback por posición (si no usas data-label en los <td>) */
+  .rc-gastos-table td:nth-child(1)::before{ content:'Categoría'; }
+  .rc-gastos-table td:nth-child(2)::before{ content:'Descripción'; }
+  .rc-gastos-table td:nth-child(3)::before{ content:'Ref'; }
+  .rc-gastos-table td:nth-child(4)::before{ content:'Cantidad'; }
+  .rc-gastos-table td:nth-child(5)::before{ content:'Comprobante'; }
+  .rc-gastos-table td:nth-child(6)::before{ content:'Acciones'; }
+
+  /* Inputs/selects llenan su celda y se alinean bien */
+  .rc-gastos-table td .rc-input,
+  .rc-gastos-table td .rc-select{
+    width:100% !important;
+    max-width:none !important;
+    display:block;
+    box-sizing:border-box;
+  }
+  .rc-gastos-table td:nth-child(2) .rc-input{ text-align:left; }   /* Descripción */
+  .rc-gastos-table td:nth-child(3) .rc-input,
+  .rc-gastos-table td:nth-child(4) .rc-input{ text-align:center; } /* Ref, Cantidad */
+
+  /* Comprobante/Acciones: botones en fila, con wrap si hace falta */
+  .rc-gastos-table td:nth-child(5) > div,
+  .rc-gastos-table td:nth-child(6){
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+    padding-top:12px;
+    padding-bottom:12px;
+  }
+
+  /* Footer: “Total de gastos” como bloque */
+  .rc-gastos-table tfoot,
+  .rc-gastos-table tfoot tr,
+  .rc-gastos-table tfoot td{ display:block; width:100%; }
+  .rc-gastos-table tfoot td{
+    border:1px solid #e7e2d9;
+    border-radius:12px;
+    margin-top:6px;
+    padding:12px 14px;
+    text-align:right;
+    background:#fff;
+  }
+  .rc-gastos-table tfoot td:last-child{ display:none; } /* oculta la celda vacía */
+}
+@media (max-width: 860px){
+  /* Forzar que Gastos use SIEMPRE su propio label */
+  .rc-gastos-table td::before{
+    content: attr(data-label) !important;
+  }
+}

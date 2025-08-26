@@ -1,0 +1,30 @@
+/* src/RegistrarPagos.css */
+.registrar-pagos .rc-table th,
+.registrar-pagos .rc-table td{
+  padding: 12px 10px; /* más aire en filas */
+}
+
+.registrar-pagos .rc-input,
+.registrar-pagos .rc-select{
+  height: 44px;              /* más altos */
+  padding: 10px 12px;        /* más cómodos */
+  font-size: 15px;           /* un poquito más grande */
+  border-radius: 12px;       /* consistente con tu UI redondeada */
+}
+
+/* Descripción: aún más alto y ancho mínimo */
+.registrar-pagos .rc-input.rc-desc{
+  height: 48px;
+  min-width: 420px;          /* asegura que sea más largo */
+}
+
+/* Números centrados y cómodos */
+.registrar-pagos .rc-input.rc-qty{
+  text-align: center;
+  font-weight: 600;
+}
+
+/* Select más cómodo */
+.registrar-pagos .rc-select{
+  appearance: auto;
+}

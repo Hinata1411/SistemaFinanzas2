@@ -11,6 +11,7 @@ import Usuarios from './utils/Usuarios.js';
 import Login from './auth/Login';
 import { RequireAdmin } from './router/guards';
 import RegistrarPagos from './RegistrarPagos.jsx';
+import HistorialPagos from './HistorialPagos.jsx';
 
 function App() {
   return (
@@ -34,6 +35,14 @@ function App() {
           <Route path="Ventas" element={<Ventas />} />
 
           {/* solo ADMIN puede entrar */}
+          <Route
+            path="HistorialPagos"
+            element={
+              <RequireAdmin>
+                <HistorialPagos/>
+              </RequireAdmin>
+            }
+          />
           <Route
             path="RegistrarPagos"
             element={

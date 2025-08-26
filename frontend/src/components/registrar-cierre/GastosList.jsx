@@ -150,7 +150,7 @@ export default function GastosList({
           <tr>
             <th style={{ textAlign: 'center' }}>Categoría</th>
             <th style={{ textAlign: 'center' }}>Descripción</th>
-            <th style={{ textAlign: 'center' }}>Ref</th>
+            <th style={{ textAlign: 'center' }}>No. de ref</th>
             <th style={{ textAlign: 'center' }}>Cantidad</th>
             <th style={{ textAlign: 'center' }}>Comprobante</th>
             <th style={{ textAlign: 'center' }}>Acciones</th>
@@ -173,7 +173,7 @@ export default function GastosList({
             return (
               <tr key={i}>
                 {/* Categoría */}
-                <td>
+                <td data-label="Categoría">
                   <select
                     className="rc-input rc-select"
                     value={g.categoria}
@@ -188,7 +188,7 @@ export default function GastosList({
                 </td>
 
                 {/* Descripción */}
-                <td>
+                <td data-label="Descripción">
                   <input
                     className="rc-input rc-desc"
                     placeholder="Descripción"
@@ -202,7 +202,7 @@ export default function GastosList({
                 </td>
 
                 {/* Ref */}
-                <td>
+                <td data-label="No. de ref">
                   <input
                     className="rc-input"
                     placeholder="Ref"
@@ -216,7 +216,7 @@ export default function GastosList({
                 </td>
 
                 {/* Cantidad (sin flechas/rueda) */}
-                <td>
+                <td data-label="Cantidad">
                   <input
                     className="rc-input rc-qty no-spin"
                     type="number"
@@ -245,7 +245,7 @@ export default function GastosList({
                 </td>
 
                 {/* Comprobante */}
-                <td style={{ textAlign: 'center' }}>
+                <td data-label="Comprobante" style={{ textAlign: 'center' }}>
                   <div style={{ display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
                     {hasFile ? (
                       <>
@@ -301,7 +301,7 @@ export default function GastosList({
                 </td>
 
                 {/* Acciones */}
-                <td style={{ textAlign: 'center' }}>
+                <td data-label="Acciones" style={{ textAlign: 'center' }}>
                   {!readOnly && locked && (
                     <button
                       type="button"

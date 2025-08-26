@@ -1,4 +1,4 @@
-/* Paleta (misma del login/dashboard) */
+/* Paleta (misma del login/dashboard) */  
 :root{
   --primary:#14B866;
   --dark:#155E4B;
@@ -30,19 +30,26 @@ html, body, #root {
   gap: 12px;
 }
 
-/* ===== Topbar: título izq + botón der ===== */
+/* ===== Topbar =====
+   - 1ª fila: Título (izq) | Botón (der)
+   - 2ª fila: Branch filter centrado a ancho del contenedor
+*/
 .topbar{
   width: min(1200px, 100%);
   margin: 0 auto 8px auto;
-  display: flex;
-  justify-content: space-between;
+
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "title addbtn"
+    "branch branch";
   align-items: center;
   gap: 12px;
 }
 
-
 .home-header{
   margin: 0;
+  grid-area: title;
 }
 .home-header h1{
   margin: 6px 0;
@@ -54,8 +61,9 @@ html, body, #root {
   width: 100%;
 }
 
-/* Botón agregar (a la derecha en la topbar) */
+/* Botón agregar (derecha en la topbar) */
 .add-task-btn{
+  grid-area: addbtn;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -73,54 +81,129 @@ html, body, #root {
 .add-task-btn:hover{ filter: brightness(0.95); }
 .add-task-btn:active{ transform: translateY(1px); }
 
-/* Fila de contenido: KPI columna izq + calendario der */
+/* ====== Filtro de sucursal (debajo y centrado) ====== */
+.branch-filter{
+  grid-area: branch;
+  width: 100%;
+  margin: 0 auto 6px auto;
+
+  display: flex;
+  justify-content: center;  /* centrado */
+  gap: 10px;
+  align-items: center;
+}
+.branch-filter label{
+  font-weight: 600;
+  color: var(--dark-2);
+}
+.branch-filter select{
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  box-shadow: var(--shadow);
+  background: #fff;
+  min-width: 260px;
+  max-width: min(90vw, 420px);
+}
+
+/* ===== Fila de contenido: KPI columna izq + calendario der */
 .content-row{
   width: min(1400px, 100%);
   margin: 0 auto 10px auto;
   display: grid;
-  grid-template-columns: 200px 1fr;  /* izq KPIs | der calendario */
-  gap: 14px;
+  grid-template-columns: 280px 1fr;  /* izq KPIs | der calendario */
+  gap: 24px;
   align-items: start;
 }
 
-/* Columna izquierda: KPIs en columna */
+/* =========================
+   KPI (layout solicitado)
+   ========================= */
+
+/* Columna izquierda: de columna única a rejilla fluida en móviles */
 .kpi-left{
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;   /* desktop estrecho: 1 columna */
   gap: 12px;
 }
 
-/* KPI compactas (bajitas y largas dentro de la columna) */
+/* Estructura de cada KPI:
+   fila 1:  [Sucursal: ...]   (centrado y ocupa 2 col)
+   fila 2:  [Caja chica disponible] | [Dinero para depósitos]
+   fila 3:  [Q ...]                 | [Q ...]
+*/
 .kpi-card{
   background: #fff;
   border: 1px solid #ede9e2;
   border-radius: 16px;
   box-shadow: var(--shadow);
-  padding: 8px 14px;
-  min-height: 110px;
-  max-height: 80px;
+  padding: 12px 16px;
   width: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas:
+    "suc suc"
+    "lab1 lab2"
+    "val1 val2";
+  row-gap: 6px;
+  column-gap: 16px;
+
+  /* alturas sin conflicto */
+  min-height: 110px;
 }
 
-.kpi-title{ 
-  font-size: .85rem; 
-  color: var(--dark-2); 
-  font-weight:600; 
-  margin-bottom:0px; 
+/* 1) Título principal: “Sucursal: …” */
+.kpi-card > .kpi-title:first-child{
+  grid-area: suc;
+  text-align: center;
+  font-size: clamp(.95rem, 2vw, 1.05rem);
+  font-weight: 700;
+  color: var(--dark-2);
+  margin: 0;
 }
 
-.kpi-value{ 
-  font-size: 0.85rem; 
-  color: var(--accent); 
-  font-weight:750; 
-  line-height:1.2; 
+/* 2) Subtítulos (labels) */
+.kpi-card > .kpi-title:nth-child(2){
+  grid-area: lab1;
+  justify-self: start;
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--dark-2);
+  margin: 0;
+}
+.kpi-card > .kpi-title:nth-child(4){
+  grid-area: lab2;
+  justify-self: start;
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--dark-2);
+  margin: 0;
 }
 
+/* 3) Valores (Q …) */
+.kpi-card > .kpi-value:nth-child(3){
+  grid-area: val1;
+  justify-self: start;
+  font-size: clamp(1rem, 2.2vw, 1.15rem);
+  color: var(--accent);
+  font-weight: 750;
+  line-height: 1.25;
+}
+.kpi-card > .kpi-value:nth-child(5){
+  grid-area: val2;
+  justify-self: start;
+  font-size: clamp(1rem, 2.2vw, 1.15rem);
+  color: var(--accent);
+  font-weight: 750;
+  line-height: 1.25;
+}
 
-/* Calendario a la derecha */
+/* (fallback por si hay estilos heredados) */
+.kpi-title{ margin-bottom: 0; }
+.kpi-value{ }
+
+/* Calendario a la derecha (sin cambios) */
 .home-calendar-card{
   background: #fff;
   border: 1px solid #ede9e2;
@@ -156,28 +239,6 @@ html, body, #root {
 }
 .e-schedule .e-appointment:hover{ opacity: .92; }
 
-/* ====== Filtro de sucursal ====== */
-.branch-filter{
-  width: min(300px, 50%);
-  margin: 0 auto 6px auto;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  align-items: center;
-}
-.branch-filter label{
-  font-weight: 600;
-  color: var(--dark-2);
-}
-.branch-filter select{
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid #e5e7eb;
-  box-shadow: var(--shadow);
-  background: #fff;
-}
-
-
 /* Animación */
 @keyframes fadeInUp{
   from{ opacity:0; transform: translateY(14px); }
@@ -187,12 +248,36 @@ html, body, #root {
 /* =========================
    Responsive
    ========================= */
+
+/* Apilar KPI + calendario y centrar filtro debajo en móviles */
 @media (max-width: 900px){
   .content-row{
     grid-template-columns: 1fr;     /* apila KPI y calendario */
   }
+  .kpi-left{
+    /* KPI en varias columnas si hay ancho */
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
 }
+
+/* Controles más compactos */
 @media (max-width: 780px){
   .add-task-btn{ min-width: 160px; }
-  .kpi-card{ min-height: 54px; }
+  .kpi-card{
+    row-gap: 4px;
+    column-gap: 12px;
+    padding: 10px 12px;
+    min-height: 96px;
+  }
+}
+
+/* Teléfonos pequeños */
+@media (max-width: 520px){
+  .branch-filter select{ min-width: 0; width: 100%; }
+  .kpi-card{
+    grid-template-columns: 1fr 1fr;
+  }
+  .kpi-card > .kpi-title:first-child{
+    font-size: 1rem;
+  }
 }
