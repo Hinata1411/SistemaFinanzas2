@@ -60,5 +60,11 @@
     "glob": "^11.0.3",
     "react-app-rewired": "^2.2.1",
     "rimraf": "^6.0.1"
-  }
+  },
+  "engines": {
+  "node": "18.x"
 }
+
+  
+}
+
