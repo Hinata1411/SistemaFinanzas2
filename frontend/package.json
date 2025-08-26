@@ -2,7 +2,6 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
-  "proxy": "http://localhost:3001",
   "dependencies": {
     "@syncfusion/ej2-base": "^29.1.33",
     "@syncfusion/ej2-data": "^29.1.33",
