@@ -9,7 +9,9 @@
   # 2) Apaga el secret scanning estándar
   SECRETS_SCAN_ENABLED = "false"
 
+# Proxy: Frontend -> Netlify -> Render (evita CORS en el navegador)
 [[redirects]]
-  from = "/*"
-  to   = "/index.html"
+  from = "/api/*"
+  to = "https://sistemafinanzas2.onrender.com/api/:splat"
   status = 200
+  force = true
