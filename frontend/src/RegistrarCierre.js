@@ -634,7 +634,17 @@ export default function RegistrarCierre() {
         <div className="rc-tabs rc-tabs-browser" role="tablist" aria-label="Secciones">
           <button className={`rc-tab ${activeTab === TABS.ARQUEO ? 'active' : ''}`} onClick={() => setActiveTab(TABS.ARQUEO)} type="button" role="tab" aria-selected={activeTab === TABS.ARQUEO}>Arqueo físico</button>
 
-          <button className={`rc-tab ${activeTab === TABS.CIERRE ? 'active' : ''}`} onClick={() => setActiveTab(TABS.CIERRE)} type="button" role="tab" aria-selected={activeTab === TABS.CIERRE} disabled={!isAdmin}>Cierre de sistema</button>
+          {isAdmin && (
+            <button
+              className={`rc-tab ${activeTab === TABS.CIERRE ? 'active' : ''}`}
+              onClick={() => setActiveTab(TABS.CIERRE)}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === TABS.CIERRE}
+            >
+              Cierre de sistema
+            </button>
+          )}
 
           <button className={`rc-tab ${activeTab === TABS.GASTOS ? 'active' : ''}`} onClick={() => setActiveTab(TABS.GASTOS)} type="button" role="tab" aria-selected={activeTab === TABS.GASTOS}>Gastos</button>
 
