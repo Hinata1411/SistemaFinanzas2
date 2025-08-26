@@ -1,5 +1,5 @@
 // src/RegistrarPagos.jsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
   collection, addDoc, getDoc, getDocs, query, where,
@@ -13,7 +13,6 @@ import 'sweetalert2/dist/sweetalert2.min.css';
 
 import { auth, db } from './firebase';
 import { todayISO as getTodayISO } from './utils/dates';
-import { n } from './utils/numbers';
 
 import CategoriasModal from './components/registrar-cierre/CategoriasModal';
 import AttachmentViewerModal from './components/registrar-cierre/AttachmentViewerModal';
@@ -87,7 +86,7 @@ export default function RegistrarPagos() {
     return () => unsub();
   }, []);
 
-  // Cargar sucursales + KPI (sumar cierres) + caja chica
+  // Cargar sucursales + KPI (sumar cierres) + caja chica (MISMA lógica que en Finanzas)
   useEffect(() => {
     if (!me.loaded || !isAdmin) return;
 
@@ -96,12 +95,11 @@ export default function RegistrarPagos() {
         const qs = await getDocs(collection(db, 'sucursales'));
         const arr = qs.docs.map((snap) => {
           const d = snap.data() || {};
-          // === Igual que en Finanzas ===
           return {
             id: snap.id,
             nombre: d.nombre || d.name || snap.id,
             ubicacion: d.ubicacion || d.location || '',
-            ...d, // (opcional) mantiene otros campos
+            ...d,
           };
         });
         setSucursales(arr);
@@ -109,7 +107,7 @@ export default function RegistrarPagos() {
 
         const hoy = getTodayISO();
 
-        // Leer cajaChica y kpiDepositos override de cada sucursal
+        // 1) leer caja chica + posibles overrides
         const caja = {};
         const override = {};
         arr.forEach(s => {
@@ -117,17 +115,32 @@ export default function RegistrarPagos() {
           if (typeof s?.kpiDepositos === 'number') override[s.id] = Number(s.kpiDepositos);
         });
 
-        // Calcular “dinero para depósitos” (igual que Finanzas) si no hay override
-        const kpi = { ...override };
+        // 2) sumar cierres (Total a depositar)
+        const desdeCierres = {};
         await Promise.all(arr.map(async (s) => {
-          if (kpi[s.id] != null) return; // usa override
           const cierresRef = collection(db, 'cierres');
           const qRef = query(cierresRef, where('sucursalId','==',s.id), where('fecha','<=',hoy));
           const snap = await getDocs(qRef);
           let sum = 0;
           snap.forEach(d => { sum += extractTotalADepositar(d.data() || {}); });
-          kpi[s.id] = sum;
+          desdeCierres[s.id] = sum;
         }));
+
+        // 3) ¿hay pagos hoy? para decidir si usar override
+        const hayPagosHoy = {};
+        await Promise.all(arr.map(async (s) => {
+          const pagosRef = collection(db, 'pagos');
+          const qRef = query(pagosRef, where('sucursalId', '==', s.id), where('fecha', '==', hoy));
+          const snap = await getDocs(qRef);
+          hayPagosHoy[s.id] = snap.size > 0;
+        }));
+
+        // 4) construir mapas finales
+        const kpi = {};
+        arr.forEach(s => {
+          const usarOverride = hayPagosHoy[s.id] && override[s.id] != null;
+          kpi[s.id] = usarOverride ? override[s.id] : (desdeCierres[s.id] || 0);
+        });
 
         setKpiDepositosBySuc(kpi);
         setCajaChicaBySuc(caja);
@@ -138,7 +151,7 @@ export default function RegistrarPagos() {
         setCajaChicaBySuc({});
       }
     })();
-  }, [me.loaded, isAdmin]);
+  }, [me.loaded, isAdmin, getTodayISO, extractTotalADepositar]);
 
   // Inicializar pagosMap por sucursal
   useEffect(() => {
@@ -158,7 +171,7 @@ export default function RegistrarPagos() {
       });
       return copy;
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sucursales.length]);
 
   if (!me.loaded) {
@@ -172,7 +185,7 @@ export default function RegistrarPagos() {
   const suc = sucursales.find(s => s.id === active) || {};
   const state = pagosMap[active] || { items:[], cajaChicaUsada:0 };
 
-  // === Igual que en Finanzas: etiqueta por ubicación (fallback nombre/id) ===
+  // Igual que en Finanzas: etiqueta por ubicación (fallback)
   const branchLabel = (s) => s?.ubicacion || s?.nombre || s?.id || '—';
 
   const setRow = (i, field, val) => {
@@ -237,8 +250,8 @@ export default function RegistrarPagos() {
   const cajaChicaDisponible = Number(cajaChicaBySuc[active] || 0);
 
   const sobranteBruto = kpiDepositos - totalUtilizado;
-  const deficit = Math.min(0, sobranteBruto); // negativo o 0
-  const sobranteFinal = Math.max(0, sobranteBruto + (state.cajaChicaUsada || 0)); // lo que queda para mañana
+  const deficit = Math.min(0, sobranteBruto);
+  const sobranteFinal = Math.max(0, sobranteBruto + (state.cajaChicaUsada || 0));
   const mostrarUsarCajaChica = deficit < 0;
 
   const usarCajaChica = async () => {
@@ -286,7 +299,6 @@ export default function RegistrarPagos() {
       // Subir adjuntos y limpiar payload
       const storage = getStorage();
       const folder = `pagos/${active}/${fecha}`;
-     
 
       const ready = await Promise.all(items.map(async (r, i) => {
         const { fileBlob, ...rest } = r;
@@ -294,7 +306,7 @@ export default function RegistrarPagos() {
           const safe = (r.fileName || fileBlob.name || `pago_${i}`).replace(/[^\w.\-]+/g, '_');
           const path = `${folder}/${Date.now()}_${i}_${safe}`;
           const fileRef = sRef(storage, path);
-          await uploadBytes(fileRef, fileBlob, 
+          await uploadBytes(fileRef, fileBlob,
             { contentType: r.fileMime || fileBlob.type || 'application/octet-stream' });
           const url = await getDownloadURL(fileRef);
           return { ...rest, fileUrl:url, fileName:safe, fileMime:(r.fileMime || fileBlob.type || '') };
@@ -322,10 +334,10 @@ export default function RegistrarPagos() {
         await updateDoc(doc(db, 'sucursales', active), { cajaChica: increment(deltaCajaChica) });
       }
 
-      // Escribir override para KPI de depósitos del Home (si usaste todo, queda 0)
+      // Escribir override para KPI de depósitos del Home (se usa SOLO si hay pagos hoy)
       await updateDoc(doc(db, 'sucursales', active), { kpiDepositos: Number(sobranteFinal) });
 
-      // Actualizar estados locales (refrescar caja y kpi)
+      // Actualizar estados locales (refrescar caja y kpi en esta vista)
       setCajaChicaBySuc(prev => ({ ...prev, [active]: Number(prev[active] || 0) + deltaCajaChica }));
       setKpiDepositosBySuc(prev => ({ ...prev, [active]: Number(sobranteFinal) }));
 

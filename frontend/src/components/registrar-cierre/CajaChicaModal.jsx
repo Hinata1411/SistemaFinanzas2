@@ -1,5 +1,5 @@
+// src/components/registrar-cierre/CajaChicaModal.jsx
 import React, { useState, useEffect } from 'react';
-import { clamp } from '../../utils/numbers';
 import { toMoney } from '../../utils/numbers';
 
 export default function CajaChicaModal({

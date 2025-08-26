@@ -75,17 +75,6 @@ export default function Ventas() {
     .toLocaleString('es-GT', { style: 'currency', currency: 'GTQ' });
 
   const totalVentas = useMemo(() => cuadres.reduce((acc,c)=> acc + totalVentaDeCuadre(c), 0), [cuadres]);
-  const promedioVentas = cuadres.length ? (totalVentas / cuadres.length) : 0;
-  const diaMasVenta = useMemo(() => {
-    if (!cuadres.length) return '-';
-    let best = cuadres[0], max = totalVentaDeCuadre(cuadres[0]);
-    for (let i=1;i<cuadres.length;i++){
-      const v = totalVentaDeCuadre(cuadres[i]);
-      if (v > max){ max = v; best = cuadres[i]; }
-    }
-    return `${formatDate(best.fecha)} (${fmtQ(max)})`;
-  }, [cuadres]);
-
   // Navegar a RegistrarCierre con modo
   const handleVer = (c) => {
     navigate(`/Finanzas/RegistrarCierre?id=${c.id}&mode=view`);

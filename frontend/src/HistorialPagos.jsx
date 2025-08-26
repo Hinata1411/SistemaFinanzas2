@@ -65,37 +65,35 @@ export default function Pagos() {
   }, []);
 
   // Cargar sucursales
-  // Cargar sucursales
-useEffect(() => {
-  (async () => {
-    try {
-      const qs = await getDocs(collection(db, 'sucursales'));
-      const arr = qs.docs.map(d => {
-        const data = d.data() || {};
-        const ubicacion =
-          data.ubicacion ??
-          data['ubicación'] ??      // por si está guardado con tilde
-          '';
-        return {
-          id: d.id,
-          ...data,
-          nombre: data.nombre || d.id,
-          ubicacion
-        };
-      });
-      setSucursalesList(arr);
+  useEffect(() => {
+    (async () => {
+      try {
+        const qs = await getDocs(collection(db, 'sucursales'));
+        const arr = qs.docs.map(d => {
+          const data = d.data() || {};
+          const ubicacion =
+            data.ubicacion ??
+            data['ubicación'] ??      // por si está guardado con tilde
+            '';
+          return {
+            id: d.id,
+            ...data,
+            nombre: data.nombre || d.id,
+            ubicacion
+          };
+        });
+        setSucursalesList(arr);
 
-      // Map para mostrar etiquetas en UI: ubicación primero, si no, nombre
-      const m = {};
-      arr.forEach(s => { m[s.id] = s.ubicacion || s.nombre; });
-      setSucursalesMap(m);
-    } catch {
-      setSucursalesList([]);
-      setSucursalesMap({});
-    }
-  })();
-}, []);
-
+        // Map para mostrar etiquetas en UI: ubicación primero, si no, nombre
+        const m = {};
+        arr.forEach(s => { m[s.id] = s.ubicacion || s.nombre; });
+        setSucursalesMap(m);
+      } catch {
+        setSucursalesList([]);
+        setSucursalesMap({});
+      }
+    })();
+  }, []);
 
   // Cargar pagos según filtros
   const currentSucursalValue = isAdmin ? sucursalFiltro : (me.sucursalId || 'all');
@@ -165,7 +163,6 @@ useEffect(() => {
       }));
       const totalUtilizado = sumItems(newItems);
       // Recalcular sobranteParaManana si existía
-      const cajaChicaUsada = n(editor.doc.cajaChicaUsada || 0);
       const prevTotal = n(editor.doc.totalUtilizado || 0);
       const prevSobrante = n(editor.doc.sobranteParaManana || 0);
       const delta = totalUtilizado - prevTotal;
@@ -199,9 +196,38 @@ useEffect(() => {
       showCancelButton:true
     });
     if (!confirmar.isConfirmed) return;
-    await deleteDoc(doc(db, 'pagos', row.id));
-    await Swal.fire('Eliminado', 'El registro ha sido eliminado.', 'success');
-    refetch();
+
+    try {
+      // === Revertir efectos en la sucursal antes de borrar ===
+      const sucId = row.sucursalId;
+      const sucRef = doc(db, 'sucursales', sucId);
+      const sucSnap = await getDoc(sucRef);
+      const sucData = sucSnap.exists() ? (sucSnap.data() || {}) : {};
+
+      const totalUtilizado = n(row.totalUtilizado ?? sumItems(row.items));
+      const cajaChicaUsada = n(row.cajaChicaUsada);
+      const addBackDepositos = totalUtilizado - cajaChicaUsada; // lo que se "consumió" de kpi
+
+      const currentKpi = n(sucData.kpiDepositos);
+      const currentCaja = n(sucData.cajaChica);
+
+      const nextKpi = currentKpi + addBackDepositos;
+      const nextCaja = currentCaja + cajaChicaUsada;
+
+      await updateDoc(sucRef, {
+        kpiDepositos: nextKpi,
+        cajaChica: nextCaja,
+      });
+
+      // Borrar el documento de pagos
+      await deleteDoc(doc(db, 'pagos', row.id));
+
+      await Swal.fire('Eliminado', 'El registro ha sido eliminado y los saldos fueron revertidos.', 'success');
+      refetch();
+    } catch (e) {
+      console.error(e);
+      Swal.fire('Error', e?.message || 'No se pudo eliminar.', 'error');
+    }
   };
 
   // UI

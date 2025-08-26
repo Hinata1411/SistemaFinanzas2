@@ -111,14 +111,14 @@ const MyCalendar = forwardRef(({ showAddButton = true }, ref) => {
   }, [events]);
 
   // Evita scroll del fondo cuando el modal está visible
-    useEffect(() => {
-      if (modalOpen) {
-        document.body.classList.add('modal-open');
-      } else {
-        document.body.classList.remove('modal-open');
-      }
-      return () => document.body.classList.remove('modal-open');
-    }, [modalOpen]);
+  useEffect(() => {
+    if (modalOpen) {
+      document.body.classList.add('modal-open');
+    } else {
+      document.body.classList.remove('modal-open');
+    }
+    return () => document.body.classList.remove('modal-open');
+  }, [modalOpen]);
 
   // Maneja cambios en inputs del modal
   const handleChange = field => e => {
@@ -165,8 +165,8 @@ const MyCalendar = forwardRef(({ showAddButton = true }, ref) => {
   // 5) Guardar evento (nuevo o editado) + programar popup emergente
   const handleSave = () => {
     const {
-      title, description, date, startTime, endTime, priority, alert,
-      alertTime, frequency, category, status, visibility, branchId
+      title, description, date, startTime, endTime, /* priority, */ alert,
+      alertTime, /* frequency, category, status, */ visibility, branchId
     } = newEvent;
 
     if (!title || !date || !startTime || !endTime) {
