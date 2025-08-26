@@ -1,10 +1,11 @@
 // src/RegistrarPagos.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
   collection, addDoc, getDoc, getDocs, query, where,
   doc, updateDoc, serverTimestamp, increment
 } from 'firebase/firestore';
+import { useSearchParams } from 'react-router-dom';
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import './RegistrarPagos.css';
 
@@ -43,9 +44,19 @@ const extractTotalADepositar = (d) => {
 };
 
 const okTypes = ['image/png', 'image/jpeg', 'application/pdf'];
+const n = (v) => {
+  const x = typeof v === 'number' ? v : parseFloat(v || 0);
+  return Number.isFinite(x) ? x : 0;
+};
 
 // ====== Componente ======
 export default function RegistrarPagos() {
+  const [sp] = useSearchParams();
+  const editId = sp.get('id') || null;
+  const mode = (sp.get('mode') || '').toLowerCase();
+  const isViewing = mode === 'view';
+  const isEditingExisting = !!editId && mode === 'edit';
+
   const [me, setMe] = useState({ loaded: false, role: 'viewer', uid: null, username: '' });
   const isAdmin = me.role === 'admin';
 
@@ -72,6 +83,9 @@ export default function RegistrarPagos() {
   // visor
   const [viewer, setViewer] = useState({ open:false, url:'', mime:'', name:'' });
 
+  // Para deltas al editar
+  const [originalDoc, setOriginalDoc] = useState(null);
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) { setMe({ loaded:true, role:'viewer', uid:null, username:'' }); return; }
@@ -88,7 +102,7 @@ export default function RegistrarPagos() {
 
   // Cargar sucursales + KPI (sumar cierres) + caja chica (MISMA lógica que en Finanzas)
   useEffect(() => {
-    if (!me.loaded || !isAdmin) return;
+    if (!me.loaded) return;
 
     (async () => {
       try {
@@ -103,7 +117,11 @@ export default function RegistrarPagos() {
           };
         });
         setSucursales(arr);
-        setActiveSucursalId(prev => prev || arr[0]?.id || null);
+
+        // Si venimos con documento, no fijamos sucursal aún; la fijamos al cargar el doc
+        if (!editId) {
+          setActiveSucursalId(prev => prev || arr[0]?.id || null);
+        }
 
         const hoy = getTodayISO();
 
@@ -151,7 +169,7 @@ export default function RegistrarPagos() {
         setCajaChicaBySuc({});
       }
     })();
-  }, [me.loaded, isAdmin]);
+  }, [me.loaded, editId]);
 
   // Inicializar pagosMap por sucursal
   useEffect(() => {
@@ -174,21 +192,70 @@ export default function RegistrarPagos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sucursales.length]);
 
+  // === Precarga cuando venimos de HistorialPagos: ?id=<doc>&mode=<view|edit> ===
+  useEffect(() => {
+    if (!editId) return;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, 'pagos', editId));
+        if (!snap.exists()) {
+          await Swal.fire('No encontrado', 'El registro de pagos no existe.', 'warning');
+          return;
+        }
+        const d = snap.data() || {};
+        setOriginalDoc({ id: editId, ...d });
+
+        // Fijar sucursal y fecha del documento
+        setActiveSucursalId(d.sucursalId || null);
+        setFecha(d.fecha || getTodayISO());
+
+        // Asegurar que exista el slot para esa sucursal
+        setPagosMap(prev => {
+          const copy = { ...prev };
+          if (!copy[d.sucursalId]) {
+            copy[d.sucursalId] = { items: [], cajaChicaUsada: 0 };
+          }
+          // Cargar items en el mapa; blobs nulos (se vuelven a subir si se cambian)
+          copy[d.sucursalId].items = (Array.isArray(d.items) ? d.items : []).map(it => ({
+            descripcion: it.descripcion || '',
+            monto: n(it.monto),
+            ref: it.ref || '',
+            categoria: it.categoria || 'Varios',
+            fileUrl: it.fileUrl || '',
+            fileName: it.fileName || '',
+            fileMime: it.fileMime || '',
+            fileBlob: null,
+            locked: false,
+          }));
+          copy[d.sucursalId].cajaChicaUsada = n(d.cajaChicaUsada);
+          return copy;
+        });
+      } catch (e) {
+        console.error(e);
+        Swal.fire('Error', e?.message || 'No se pudo cargar el registro.', 'error');
+      }
+    })();
+  }, [editId]);
+
   if (!me.loaded) {
     return <div className="rc-tab-empty">Cargando permisos…</div>;
   }
-  if (!isAdmin) {
+  // Permisos: si es "view", cualquiera puede ver; si es edición o nuevo y no eres admin, bloquear.
+  if (!isAdmin && !isViewing) {
     return <div className="rc-tab-empty">Solo administradores</div>;
   }
 
   const active = activeSucursalId;
-  const suc = sucursales.find(s => s.id === active) || {};
+  const suc = (sucursales.find(s => s.id === active) || {});
   const state = pagosMap[active] || { items:[], cajaChicaUsada:0 };
+
+  const readOnly = isViewing; // bandera para bloquear inputs cuando se está viendo
 
   // Igual que en Finanzas: etiqueta por ubicación (fallback)
   const branchLabel = (s) => s?.ubicacion || s?.nombre || s?.id || '—';
 
   const setRow = (i, field, val) => {
+    if (readOnly) return;
     setPagosMap(prev => {
       const m = { ...prev };
       const arr = [...(m[active]?.items || [])];
@@ -199,6 +266,7 @@ export default function RegistrarPagos() {
   };
 
   const addRow = () => {
+    if (readOnly) return;
     setPagosMap(prev => {
       const m = { ...prev };
       const arr = [...(m[active]?.items || [])].map(x => ({ ...x, locked:true }));
@@ -212,6 +280,7 @@ export default function RegistrarPagos() {
   };
 
   const removeRow = (i) => {
+    if (readOnly) return;
     setPagosMap(prev => {
       const m = { ...prev };
       const arr = [...(m[active]?.items || [])];
@@ -222,11 +291,13 @@ export default function RegistrarPagos() {
   };
 
   const handlePickFile = (i) => {
+    if (readOnly) return;
     const el = document.getElementById(`pago-file-${active}-${i}`);
     if (el) el.click();
   };
 
   const handleFileChange = (i, e) => {
+    if (readOnly) return;
     const file = e.target?.files?.[0];
     if (!file) return;
     if (!okTypes.includes(file.type)) {
@@ -255,6 +326,7 @@ export default function RegistrarPagos() {
   const mostrarUsarCajaChica = deficit < 0;
 
   const usarCajaChica = async () => {
+    if (readOnly) return;
     const maxNecesario = Math.abs(deficit);
     const maxPermitido = Math.min(maxNecesario, cajaChicaDisponible);
     if (maxPermitido <= 0) return Swal.fire('Caja chica', 'No hay caja chica disponible', 'info');
@@ -288,6 +360,7 @@ export default function RegistrarPagos() {
   const openViewer = (url, mime, name) => setViewer({ open:true, url, mime:mime||'', name:name||'' });
   const closeViewer = () => setViewer({ open:false, url:'', mime:'', name:'' });
 
+  // Guardar nuevo o actualizar existente
   const onSave = async () => {
     try {
       if (!active) return Swal.fire('Sucursal', 'Selecciona una sucursal', 'warning');
@@ -296,10 +369,10 @@ export default function RegistrarPagos() {
       const items = state.items || [];
       if (!items.length) return Swal.fire('Pagos', 'Agrega al menos un pago', 'warning');
 
-      // Subir adjuntos y limpiar payload
       const storage = getStorage();
       const folder = `pagos/${active}/${fecha}`;
 
+      // Subir adjuntos si hay blob; conservar si solo hay URL
       const ready = await Promise.all(items.map(async (r, i) => {
         const { fileBlob, ...rest } = r;
         if (fileBlob) {
@@ -314,59 +387,100 @@ export default function RegistrarPagos() {
         return { ...rest };
       }));
 
-      // Guardar documento de pagos
+      // Recalcular totales
+      const totalUtilizadoCalc = ready.reduce((s, it) => s + n(it.monto), 0);
+      const cajaChicaUsada = n(state.cajaChicaUsada || 0);
+      const sobranteParaManana = Math.max(0, (kpiDepositos - totalUtilizadoCalc) + cajaChicaUsada);
+
       const actor = { uid: me.uid, username: me.username };
-      const payload = {
-        fecha,
-        sucursalId: active,
-        items: ready,
-        totalUtilizado,
-        cajaChicaUsada: Number(state.cajaChicaUsada || 0),
-        sobranteParaManana: sobranteFinal,
-        createdBy: actor,
-        createdAt: serverTimestamp(),
-      };
-      await addDoc(collection(db, 'pagos'), payload);
 
-      // Descontar caja chica en sucursal
-      const deltaCajaChica = -Number(state.cajaChicaUsada || 0);
-      if (deltaCajaChica !== 0) {
-        await updateDoc(doc(db, 'sucursales', active), { cajaChica: increment(deltaCajaChica) });
+      if (isEditingExisting) {
+        // Delta caja chica
+        const prevCaja = n(originalDoc?.cajaChicaUsada);
+        const deltaCajaChica = -(cajaChicaUsada - prevCaja); // si usas más ahora, restamos más a caja
+
+        await updateDoc(doc(db, 'pagos', editId), {
+          fecha,
+          sucursalId: active,
+          items: ready,
+          totalUtilizado: totalUtilizadoCalc,
+          cajaChicaUsada,
+          sobranteParaManana,
+          updatedAt: serverTimestamp(),
+          updatedBy: actor,
+        });
+
+        // Ajustar caja chica y kpiDepositos
+        if (deltaCajaChica !== 0) {
+          await updateDoc(doc(db, 'sucursales', active), { cajaChica: increment(deltaCajaChica) });
+          setCajaChicaBySuc(prev => ({ ...prev, [active]: n(prev[active]) + deltaCajaChica }));
+        }
+        await updateDoc(doc(db, 'sucursales', active), { kpiDepositos: Number(sobranteParaManana) });
+        setKpiDepositosBySuc(prev => ({ ...prev, [active]: Number(sobranteParaManana) }));
+
+        await Swal.fire({ icon:'success', title:'Pagos actualizados', timer:1400, showConfirmButton:false });
+      } else {
+        // Guardar documento de pagos (nuevo)
+        await addDoc(collection(db, 'pagos'), {
+          fecha,
+          sucursalId: active,
+          items: ready,
+          totalUtilizado: totalUtilizadoCalc,
+          cajaChicaUsada,
+          sobranteParaManana,
+          createdBy: actor,
+          createdAt: serverTimestamp(),
+        });
+
+        // Descontar caja chica en sucursal
+        const deltaCajaChica = -cajaChicaUsada;
+        if (deltaCajaChica !== 0) {
+          await updateDoc(doc(db, 'sucursales', active), { cajaChica: increment(deltaCajaChica) });
+        }
+        // Override kpi para hoy
+        await updateDoc(doc(db, 'sucursales', active), { kpiDepositos: Number(sobranteParaManana) });
+
+        // Actualizar estados locales (refrescar caja y kpi en esta vista)
+        setCajaChicaBySuc(prev => ({ ...prev, [active]: Number(prev[active] || 0) + deltaCajaChica }));
+        setKpiDepositosBySuc(prev => ({ ...prev, [active]: Number(sobranteParaManana) }));
+
+        await Swal.fire({ icon:'success', title:'Pagos guardados', timer:1400, showConfirmButton:false });
       }
-
-      // Escribir override para KPI de depósitos del Home (se usa SOLO si hay pagos hoy)
-      await updateDoc(doc(db, 'sucursales', active), { kpiDepositos: Number(sobranteFinal) });
-
-      // Actualizar estados locales (refrescar caja y kpi en esta vista)
-      setCajaChicaBySuc(prev => ({ ...prev, [active]: Number(prev[active] || 0) + deltaCajaChica }));
-      setKpiDepositosBySuc(prev => ({ ...prev, [active]: Number(sobranteFinal) }));
-
-      await Swal.fire({ icon:'success', title:'Pagos guardados', timer:1400, showConfirmButton:false });
     } catch (e) {
       console.error(e);
       Swal.fire('Error', e.message || 'No se pudo guardar.', 'error');
     }
   };
 
+  const headerSuffix = isEditingExisting ? '(editando)' : isViewing ? '(viendo)' : '';
+
   return (
     <div className="rc-shell">
       <div className="rc-header">
         <div className="rc-header-left">
-          <h1>Registrar Pagos</h1>
+          <h1>Registrar Pagos {headerSuffix && <span>{headerSuffix}</span>}</h1>
 
           <div className="rc-date" style={{ display:'grid', gap:8, gridTemplateColumns:'1fr 1fr', alignItems:'end' }}>
             {/* FECHA */}
             <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
               <label>Fecha</label>
-              <input type="date" value={fecha} onChange={(e)=>setFecha(e.target.value)} />
+              <input
+                type="date"
+                value={fecha}
+                onChange={(e)=>setFecha(e.target.value)}
+                disabled={readOnly}
+                readOnly={readOnly}
+              />
             </div>
 
             {/* Acciones */}
             <div className="rc-tabs-actions" style={{ gridColumn:'1 / -1', display:'flex', gap:8, flexWrap:'wrap', marginTop:8 }}>
-              <button type="button" className="rc-btn rc-btn-accent" onClick={onSave}>
-                Guardar pagos
-              </button>
-              <button type="button" className="rc-btn rc-btn-outline" onClick={()=>setShowCatModal(true)}>
+              {!readOnly && (
+                <button type="button" className="rc-btn rc-btn-accent" onClick={onSave}>
+                  {isEditingExisting ? 'Actualizar pagos' : 'Guardar pagos'}
+                </button>
+              )}
+              <button type="button" className="rc-btn rc-btn-outline" onClick={()=>setShowCatModal(true)} disabled={readOnly}>
                 Categorías
               </button>
             </div>
@@ -381,10 +495,12 @@ export default function RegistrarPagos() {
             <button
               key={s.id}
               className={`rc-tab ${active === s.id ? 'active' : ''}`}
-              onClick={()=>setActiveSucursalId(s.id)}
+              onClick={()=>!readOnly && setActiveSucursalId(s.id)}
               type="button"
               role="tab"
               aria-selected={active === s.id}
+              disabled={readOnly}
+              title={readOnly ? 'Vista de solo lectura' : ''}
             >
               {branchLabel(s)}
             </button>
@@ -453,6 +569,8 @@ export default function RegistrarPagos() {
                     value={r.descripcion}
                     onChange={(e)=>setRow(i,'descripcion',e.target.value)}
                     style={{width:'100%'}}
+                    disabled={readOnly}
+                    readOnly={readOnly}
                   />
                 </td>
                 <td>
@@ -463,6 +581,8 @@ export default function RegistrarPagos() {
                     onChange={(e)=>setRow(i,'monto',e.target.value)}
                     onWheel={(e)=>e.currentTarget.blur()}
                     style={{width:'100%', textAlign:'center'}}
+                    disabled={readOnly}
+                    readOnly={readOnly}
                   />
                 </td>
                 <td>
@@ -472,6 +592,8 @@ export default function RegistrarPagos() {
                     value={r.ref || ''}
                     onChange={(e)=>setRow(i,'ref',e.target.value)}
                     style={{width:'100%', textAlign:'center'}}
+                    disabled={readOnly}
+                    readOnly={readOnly}
                   />
                 </td>
                 <td style={{textAlign:'center'}}>
@@ -496,8 +618,9 @@ export default function RegistrarPagos() {
                       accept="image/*,application/pdf"
                       onChange={(e)=>handleFileChange(i,e)}
                       style={{ display:'none' }}
+                      disabled={readOnly}
                     />
-                    <button className="rc-btn rc-btn-outline" type="button" onClick={()=>handlePickFile(i)}>
+                    <button className="rc-btn rc-btn-outline" type="button" onClick={()=>handlePickFile(i)} disabled={readOnly}>
                       {r.fileUrl || r.fileBlob ? 'Cambiar' : 'Adjuntar'}
                     </button>
                   </div>
@@ -506,12 +629,13 @@ export default function RegistrarPagos() {
                   <select className="rc-input rc-select"
                     value={r.categoria}
                     onChange={(e)=>setRow(i,'categoria',e.target.value)}
+                    disabled={readOnly}
                   >
                     {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                   </select>
                 </td>
                 <td style={{textAlign:'center'}}>
-                  <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>removeRow(i)}>✕</button>
+                  <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>removeRow(i)} disabled={readOnly}>✕</button>
                 </td>
               </tr>
             );
@@ -529,7 +653,7 @@ export default function RegistrarPagos() {
               {money(sobranteFinal)}
             </td>
             <td colSpan={4} style={{ textAlign:'right' }}>
-              {mostrarUsarCajaChica && (
+              {mostrarUsarCajaChica && !readOnly && (
                 <button className="rc-btn rc-btn-primary" type="button" onClick={usarCajaChica}>
                   Usar caja chica
                 </button>
@@ -545,7 +669,7 @@ export default function RegistrarPagos() {
         </table>
 
         <div className="rc-gastos-actions" style={{ marginTop:10 }}>
-          <button type="button" className="rc-btn rc-btn-outline" onClick={addRow}>+ Agregar pago</button>
+          <button type="button" className="rc-btn rc-btn-outline" onClick={addRow} disabled={readOnly}>+ Agregar pago</button>
         </div>
       </section>
 
@@ -555,6 +679,7 @@ export default function RegistrarPagos() {
         onClose={()=>setShowCatModal(false)}
         categorias={categorias}
         onChangeCategorias={(nextCats, oldName, newName) => {
+          if (readOnly) return;
           setCategorias(nextCats);
           if (oldName) {
             setPagosMap(prev => {

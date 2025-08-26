@@ -178,7 +178,7 @@ export default function ArqueoGrid({
 
               {/* Total de caja (NETO) */}
               <div className="rc-row rc-total-caja" style={{ marginTop: 6 }}>
-                <span className="rc-cell-label strong">Total de caja</span>
+                <span className="rc-cell-label strong">Total de caja (menos apertura)</span>
                 <b>{toMoney(totalNeto)}</b>
               </div>
 

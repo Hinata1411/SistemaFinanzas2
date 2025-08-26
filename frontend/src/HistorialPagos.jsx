@@ -1,15 +1,17 @@
-// src/Pagos.js
+// src/Pagos.js  (o src/HistorialPagos.jsx)
 import React, { useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
   collection, deleteDoc, doc, getDoc, getDocs,
   query, where, updateDoc, orderBy
 } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import './HistorialPagos.css';
 
 import { auth, db } from './firebase';
 import { getTodayLocalISO as getTodayLocalISO_ventas } from './utils/dates';
+
 // En Ventas usas getTodayLocalISO; aquí lo replico por compatibilidad:
 const getTodayLocalISO = getTodayLocalISO_ventas || (() => {
   const d = new Date();
@@ -30,6 +32,8 @@ function sumItems(items) {
 }
 
 export default function Pagos() {
+  const navigate = useNavigate(); // Hook de navegación
+
   // Perfil del usuario
   const [me, setMe] = useState({ loaded:false, role:'viewer', sucursalId:null });
   const isAdmin = me.role === 'admin';
@@ -46,7 +50,7 @@ export default function Pagos() {
   const [pagos, setPagos] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Modales
+  // Modales (conservados pero ya no indispensables)
   const [viewer, setViewer] = useState({ open:false, doc:null });
   const [editor, setEditor] = useState({ open:false, doc:null, items:[] });
 
@@ -111,7 +115,6 @@ export default function Pagos() {
       let qRef = query(col, ...conditions, orderBy('fecha','desc'));
       const snap = await getDocs(qRef);
       const rows = snap.docs.map(d => ({ id:d.id, ...(d.data()||{}) }));
-      // Si admin y “Todas”, opcionalmente podríamos agrupar; aquí mostramos plano con sucursalCol
       setPagos(rows);
     } catch (e) {
       console.error(e);
@@ -134,8 +137,10 @@ export default function Pagos() {
       : sucursalesList.filter(s => s.id === me.sucursalId);
   }, [sucursalesList, me, isAdmin]);
 
-  // Acciones
-  const handleVer = (row) => setViewer({ open:true, doc: row });
+  // Acciones → Navegar a RegistrarPagos con id y modo
+  const handleVer = (row) => {
+    navigate(`/Finanzas/RegistrarPagos?id=${row.id}&mode=view`);
+  };
   const closeViewer = () => setViewer({ open:false, doc:null });
 
   const handleEditar = async (row) => {
@@ -143,9 +148,7 @@ export default function Pagos() {
       await Swal.fire('Solo lectura', 'No tienes permisos para editar.', 'info');
       return;
     }
-    // Clonamos items para edición
-    const items = (row.items || []).map(x => ({ ...x }));
-    setEditor({ open:true, doc: row, items });
+    navigate(`/Finanzas/RegistrarPagos?id=${row.id}&mode=edit`);
   };
   const closeEditor = () => setEditor({ open:false, doc:null, items:[] });
 
@@ -162,18 +165,15 @@ export default function Pagos() {
         fileMime: it.fileMime || '',
       }));
       const totalUtilizado = sumItems(newItems);
-      // Recalcular sobranteParaManana si existía
       const prevTotal = n(editor.doc.totalUtilizado || 0);
       const prevSobrante = n(editor.doc.sobranteParaManana || 0);
       const delta = totalUtilizado - prevTotal;
-      // Mantener lógica simple: ajustamos sobrante en sentido contrario al cambio de total
       const newSobrante = prevSobrante - delta;
 
       await updateDoc(doc(db, 'pagos', docId), {
         items: newItems,
         totalUtilizado,
         sobranteParaManana: newSobrante,
-        // opcional: updatedAt
       });
       await Swal.fire({ icon:'success', title:'Pago actualizado', timer:1200, showConfirmButton:false });
       closeEditor();
@@ -206,7 +206,7 @@ export default function Pagos() {
 
       const totalUtilizado = n(row.totalUtilizado ?? sumItems(row.items));
       const cajaChicaUsada = n(row.cajaChicaUsada);
-      const addBackDepositos = totalUtilizado - cajaChicaUsada; // lo que se "consumió" de kpi
+      const addBackDepositos = totalUtilizado - cajaChicaUsada;
 
       const currentKpi = n(sucData.kpiDepositos);
       const currentCaja = n(sucData.cajaChica);
@@ -219,7 +219,6 @@ export default function Pagos() {
         cajaChica: nextCaja,
       });
 
-      // Borrar el documento de pagos
       await deleteDoc(doc(db, 'pagos', row.id));
 
       await Swal.fire('Eliminado', 'El registro ha sido eliminado y los saldos fueron revertidos.', 'success');
@@ -338,7 +337,7 @@ export default function Pagos() {
         )}
       </section>
 
-      {/* Viewer Modal */}
+      {/* Viewer Modal (conservado por si lo usas en otros flujos) */}
       {viewer.open && viewer.doc && (
         <div className="modal-overlay">
           <div className="modal">
@@ -378,13 +377,13 @@ export default function Pagos() {
               </table>
             </div>
             <div className="modal-ft">
-              <button className="rc-btn" onClick={closeViewer}>Cerrar</button>
+              <button className="rc-btn" onClick={()=>setViewer({ open:false, doc:null })}>Cerrar</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Editor Modal (solo admin) */}
+      {/* Editor Modal (conservado, pero ya no se usa al navegar a RegistrarPagos) */}
       {editor.open && editor.doc && (
         <div className="modal-overlay">
           <div className="modal" >
@@ -451,7 +450,6 @@ export default function Pagos() {
                             });
                           }}
                           placeholder="Referencia"
-                          
                         />
                       </td>
                       <td>
@@ -465,7 +463,6 @@ export default function Pagos() {
                             });
                           }}
                           placeholder="Categoría"
-                          
                         />
                       </td>
                       <td>
