@@ -63,13 +63,6 @@ export default function Ventas() {
       : sucursalesList.filter((s) => s.id === me.sucursalId);
   }, [sucursalesList, me, isAdmin]);
 
-  // KPI helpers
-  const totalVentaDeCuadre = (c) => {
-    const base = Array.isArray(c.cierre) && c.cierre.length ? c.cierre : (c.arqueo || []);
-    return base.reduce((acc, caja) =>
-      acc + n(caja.efectivo) + n(caja.tarjeta) + n(caja.motorista), 0);
-  };
-
   // Navegar a RegistrarCierre con modo
   const handleVer = (c) => {
     navigate(`/Finanzas/RegistrarCierre?id=${c.id}&mode=view`);
