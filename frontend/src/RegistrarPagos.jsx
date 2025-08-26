@@ -225,6 +225,7 @@ export default function RegistrarPagos() {
             fileName: it.fileName || '',
             fileMime: it.fileMime || '',
             fileBlob: null,
+            filePreview: '',
             locked: false,
           }));
           copy[d.sucursalId].cajaChicaUsada = n(d.cajaChicaUsada);
@@ -272,7 +273,7 @@ export default function RegistrarPagos() {
       const arr = [...(m[active]?.items || [])].map(x => ({ ...x, locked:true }));
       arr.push({
         descripcion:'', monto:'', ref:'', categoria: categorias[0] || 'Varios',
-        fileBlob:null, fileUrl:'', fileName:'', fileMime:'', locked:false
+      fileBlob:null, filePreview:'', fileUrl:'', fileName:'', fileMime:'', locked:false
       });
       m[active] = { ...(m[active]||{}), items: arr };
       return m;
@@ -290,16 +291,17 @@ export default function RegistrarPagos() {
     });
   };
 
-  const handlePickFile = (i) => {
-    if (readOnly) return;
-    const el = document.getElementById(`pago-file-${active}-${i}`);
-    if (el) el.click();
-  };
+    const handlePickFile = (i) => {
+      if (readOnly) return;
+      const el = document.getElementById(`pago-file-${active}-${i}`);
+      if (el) el.click();
+    };
 
-  const handleFileChange = (i, e) => {
+    const handleFileChange = (i, e) => {
     if (readOnly) return;
     const file = e.target?.files?.[0];
     if (!file) return;
+
     if (!okTypes.includes(file.type)) {
       Swal.fire('Formato no permitido', 'Solo PNG, JPG o PDF', 'warning');
       e.target.value = '';
@@ -310,11 +312,36 @@ export default function RegistrarPagos() {
       e.target.value = '';
       return;
     }
+
+    // Si ya había un preview previo, libéralo para evitar leaks
+    try {
+      const prev = (pagosMap[active]?.items || [])[i]?.filePreview;
+      if (prev) URL.revokeObjectURL(prev);
+    } catch {}
+
+    // Crea SIEMPRE un preview local (sirve para imagen y PDF)
+    const preview = URL.createObjectURL(file);
+
     setRow(i, 'fileBlob', file);
+    setRow(i, 'filePreview', preview);   // <-- ESTE FALTABA
     setRow(i, 'fileName', file.name);
     setRow(i, 'fileMime', file.type);
+    setRow(i, 'fileUrl', '');            // limpiamos URL remota si se reemplaza el archivo
+  };
+
+
+    const clearFile = (i) => {
+    const item = (pagosMap[active]?.items || [])[i];
+    if (item?.filePreview) {
+      try { URL.revokeObjectURL(item.filePreview); } catch {}
+    }
+    setRow(i, 'fileBlob', null);
+    setRow(i, 'filePreview', '');
+    setRow(i, 'fileMime', '');
+    setRow(i, 'fileName', '');
     setRow(i, 'fileUrl', '');
   };
+
 
   const totalUtilizado = (state.items || []).reduce((s, r) => s + (parseFloat(r.monto || 0) || 0), 0);
   const kpiDepositos = Number(kpiDepositosBySuc[active] || 0);
@@ -374,7 +401,7 @@ export default function RegistrarPagos() {
 
       // Subir adjuntos si hay blob; conservar si solo hay URL
       const ready = await Promise.all(items.map(async (r, i) => {
-        const { fileBlob, ...rest } = r;
+        const { fileBlob, filePreview, ...rest } = r;
         if (fileBlob) {
           const safe = (r.fileName || fileBlob.name || `pago_${i}`).replace(/[^\w.-]+/g, '_');
           const path = `${folder}/${Date.now()}_${i}_${safe}`;
@@ -598,18 +625,24 @@ export default function RegistrarPagos() {
                 </td>
                 <td style={{textAlign:'center'}}>
                   <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, flexWrap:'wrap' }}>
-                    {r.fileUrl || r.fileBlob ? (
+                    {(r.filePreview || r.fileUrl || r.fileBlob) ? (
                       <>
                         <span style={{ fontSize:12, color:'var(--slate)' }}>
                           {isPdf ? 'PDF' : 'Imagen'}
                         </span>
                         <button className="rc-btn rc-btn-outline"
                           type="button"
-                          onClick={()=>openViewer(r.fileUrl || '', r.fileMime || '', r.fileName || '')}
-                          disabled={!r.fileUrl}
+                          onClick={()=>openViewer(r.filePreview || r.fileUrl || '', r.fileMime || '', r.fileName || '')}
+                          disabled={!(r.filePreview || r.fileUrl)}
                         >
                           Ver
                         </button>
+
+                        {!readOnly && (
+                          <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>clearFile(i)}>
+                            Quitar
+                          </button>
+                        )}
                       </>
                     ) : <span style={{ color:'var(--muted)' }}>—</span>}
                     <input
