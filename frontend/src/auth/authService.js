@@ -4,9 +4,9 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { db } from '../firebase';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 
-console.log('API base =', process.env.REACT_APP_API_URL);
-
-const API = process.env.REACT_APP_API_URL || 'https://sistemafinanzas2.onrender.com/api';
+// Base del API (usa proxy /api en Netlify si no hay env)
+const API = (process.env.REACT_APP_API_URL || '/api').replace(/\/+$/, '');
+console.log('API base =', API);
 
 /** Lee la colección 'usuarios' y devuelve [{email, username, role?}] */
 export async function fetchUsersForSelect() {
@@ -23,33 +23,45 @@ export async function fetchUsersForSelect() {
 
 /** Login con Firebase y canje en backend */
 export async function loginAndGetBackendToken(email, password) {
+  // 1) Login Firebase
   const cred = await signInWithEmailAndPassword(auth, email, password);
   const user = cred.user;
 
-  localStorage.setItem('email', user.email);
+  // Guarda email para tu app
+  localStorage.setItem('email', user.email || '');
 
-  // Token fresco de Firebase
+  // 2) ID token fresco de Firebase
   const idToken = await user.getIdToken(true);
 
-  // Envía el token en Authorization
-  const resp = await fetch(`${API}/auth/login`, {
+  // 3) Intercambio con tu backend
+  const url = `${API}/auth/login`;
+  const resp = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${idToken}`,
+      Authorization: `Bearer ${idToken}`,
     },
-    credentials: 'omit',
+    credentials: 'omit', // cambia a 'include' si usas cookies/sesión en backend
     body: JSON.stringify({ idToken }),
   });
 
+  // 4) Manejo de errores HTTP
   if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`HTTP ${resp.status}: ${text}`);
+    const txt = await resp.text().catch(() => '');
+    throw new Error(`HTTP ${resp.status} en ${url}: ${txt || 'Error de autenticación'}`);
   }
 
-  const data = await resp.json();
-  if (!data?.token) throw new Error(data?.message || 'Respuesta inválida del servidor');
+  // 5) Parseo seguro de respuesta
+  const contentType = resp.headers.get('content-type') || '';
+  const data = contentType.includes('application/json')
+    ? await resp.json()
+    : { raw: await resp.text().catch(() => '') };
 
+  if (!data?.token) {
+    throw new Error(data?.message || 'Respuesta inválida del servidor (falta token)');
+  }
+
+  // 6) Persistir token/rol
   localStorage.setItem('token', data.token);
 
   return {
@@ -60,13 +72,13 @@ export async function loginAndGetBackendToken(email, password) {
   };
 }
 
-/** (Opcional) Obtiene doc de usuario */
+/** (Opcional) Obtiene doc de usuario por UID */
 export async function getUserDoc(uid) {
   const ref = doc(db, 'usuarios', uid);
   const snap = await getDoc(ref);
   return snap.exists() ? snap.data() : null;
 }
 
-// ✅ Export por defecto con identificador (no anónimo)
+// Export por defecto
 const authService = { fetchUsersForSelect, loginAndGetBackendToken, getUserDoc };
 export default authService;
