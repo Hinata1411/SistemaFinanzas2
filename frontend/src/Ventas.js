@@ -7,7 +7,6 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from './firebase';
 
 import { useCuadres } from './hooks/useCuadres';
-import { n } from './utils/numbers';
 import { getTodayLocalISO, formatDate } from './utils/dates';
 import VentasTable from './components/ventas/VentasTable';
 import GroupDownloadModal from './components/ventas/GroupDownloadModal';
