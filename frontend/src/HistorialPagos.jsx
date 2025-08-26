@@ -1,4 +1,4 @@
-// src/Pagos.js  (o src/HistorialPagos.jsx)
+//src/HistorialPagos.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
@@ -141,8 +141,6 @@ export default function Pagos() {
   const handleVer = (row) => {
     navigate(`/Finanzas/RegistrarPagos?id=${row.id}&mode=view`);
   };
-  const closeViewer = () => setViewer({ open:false, doc:null });
-
   const handleEditar = async (row) => {
     if (!isAdmin) {
       await Swal.fire('Solo lectura', 'No tienes permisos para editar.', 'info');

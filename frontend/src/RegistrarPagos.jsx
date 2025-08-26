@@ -343,7 +343,11 @@ export default function RegistrarPagos() {
   };
 
 
-  const totalUtilizado = (state.items || []).reduce((s, r) => s + (parseFloat(r.monto || 0) || 0), 0);
+  const totalUtilizado = useMemo(
+  () => (state.items || []).reduce((s, r) => s + (parseFloat(r.monto || 0) || 0), 0),
+  [state.items]
+  );
+
   const kpiDepositos = Number(kpiDepositosBySuc[active] || 0);
   const cajaChicaDisponible = Number(cajaChicaBySuc[active] || 0);
 
