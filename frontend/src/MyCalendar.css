@@ -68,54 +68,26 @@
 .e-schedule .e-appointment:hover {
   opacity: 0.9;
 }
-/* ===== Fix modal/overlay por encima del calendario ===== */
-.modal-backdrop {
-  position: fixed;         /* cubre toda la ventana */
-  inset: 0;
-  background: rgba(0,0,0,.5);
-  z-index: 5000;           /* debajo del modal, encima de todo lo demás */
+
+/* 1) Asegurar los modales SIEMPRE por encima de todo */
+.modal,
+.modal-backdrop,
+.ReactModal__Overlay,
+.rc-modal-mask,
+.swal2-container {
+  position: fixed !important;
+  z-index: 6000 !important;     /* subir si algo aún lo tapa */
 }
 
-.modal.d-block {
-  position: fixed;         /* centrado en viewport */
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 5010;           /* por encima del backdrop */
+/* 2) Si usas popups propios del calendario de Syncfusion */
+.e-quick-popup-wrapper,
+.e-dialog,
+.e-schedule-dialog {
+  z-index: 6500 !important;
 }
 
-.modal-dialog {
-  width: min(720px, 96vw);
-  margin: 0;               /* lo centramos con flex del .modal */
-}
-
-.modal-content {
-  max-height: 90vh;        /* si es alta, que scrollee adentro */
-  overflow: auto;
-  border-radius: 12px;
-}
-
-/* El calendario y contenedores no deben sobrepasar al modal */
-.calendar-container,
-.home-calendar-card,
-.rbc-calendar {
-  position: relative;
-  z-index: 1;              /* bajo el 1050/1060 del modal */
-}
-
-/* Evitar scroll de fondo cuando el modal está abierto */
-.modal-open {
-  overflow: hidden;
-}
-
-.topbar,
-.navbar,
-.sidebar,
-.offcanvas,
-.home-calendar-card,
-.calendar-container,
-.rbc-calendar {
-  position: relative;
-  z-index: 1200;           /* muy por debajo del 5000 del modal */
+/* 3) Evitar “saltos” de la barra al abrir el modal (Bootstrap) */
+body.modal-open {
+  padding-right: 0 !important;  /* elimina compensación de scrollbar */
+  overflow: hidden;              /* conserva el bloqueo de fondo */
 }
