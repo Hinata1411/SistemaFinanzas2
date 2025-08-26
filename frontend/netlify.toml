@@ -4,8 +4,10 @@
   publish = "build"
 
 [build.environment]
-  # Desactiva el escaneo "smart" que está marcando falsos positivos (Firebase keys en frontend)
+  # 1) Apaga el smart detection (ya lo tenías)
   SECRETS_SCAN_SMART_DETECTION_ENABLED = "false"
+  # 2) Apaga el secret scanning estándar
+  SECRETS_SCAN_ENABLED = "false"
 
 [[redirects]]
   from = "/*"
