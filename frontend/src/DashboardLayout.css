@@ -126,7 +126,7 @@ body{
 .menu-link.active{
   background: var(--surface);
   color: var(--dark);
-  border-radius: 999px 12px 12px 999px;
+  border-radius: 18px;
   width: calc(101% + var(--pill-out));
   margin-right: calc(var(--pill-out) * -1);
   position: relative;
@@ -363,7 +363,7 @@ body{
   background: var(--surface);
   color: var(--dark);
   font-weight: 700;
-  border-radius: 999px 12px 12px 999px;
+  border-radius: 18px;
   width: calc(101% + var(--pill-out));
   margin-right: calc(var(--pill-out) * -1);
   position: relative;
