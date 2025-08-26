@@ -574,20 +574,18 @@ body{
   z-index: 2000 !important;
 }
 
-/* === OVERRIDES mínimos para pill activo con esquinas redondeadas === */
-
-/* Permite que el pill sobresalga sin que se recorte el borde derecho */
-.sidebar{
-  overflow-y: hidden !important;
-  overflow-x: visible !important;
-}
-.menu-container{
-  overflow-y: auto !important;
-  overflow-x: visible !important;
-}
-
-/* Redondeado completo en el estado activo */
+/* === OVERRIDES: quitar pill y dejar activo normal === */
 .menu-link.active,
 .submenu-link.active{
-  border-radius: 18px !important;
+  width: 100% !important;
+  margin-right: 0 !important;
+  border-radius: 16px !important;   /* igual que los ítems normales */
+  position: static !important;      /* sin posicionamiento especial */
+  z-index: auto !important;         /* sin elevar por encima */
+}
+
+/* Si quieres asegurarte de que nada sobresalga, deja oculto el overflow horizontal */
+.sidebar,
+.menu-container{
+  overflow-x: hidden !important;
 }
