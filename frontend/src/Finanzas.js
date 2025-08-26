@@ -9,9 +9,9 @@ import './Finanzas.css';
 export default function Finanzas() {
   const [ready, setReady] = useState(false);
 
-  // KPI totales (compat)
-  const [cajaChica, setCajaChica] = useState(0);
-  const [efectivoDepositos, setEfectivoDepositos] = useState(0);
+  // KPI totales (compat) -> solo setters para evitar warning "unused var"
+  const [, setCajaChica] = useState(0);
+  const [, setEfectivoDepositos] = useState(0);
 
   // KPI por sucursal: { [id]: { cajaChica: number, ventas: number } }
   const [kpiBySucursal, setKpiBySucursal] = useState({});
@@ -223,9 +223,22 @@ export default function Finanzas() {
         }
       });
 
-      const [cajas, ventas] = await Promise.all([
+      // 3) ¿Hay pagos hoy? Si no hay, ignorar override y "regresar" al cálculo desde cierres
+      const pagosTodayPromises = sucIds.map(async (id) => {
+        try {
+          const pagosRef = collection(db, 'pagos');
+          const qRef = query(pagosRef, where('sucursalId', '==', id), where('fecha', '==', hoy));
+          const snap = await getDocs(qRef);
+          return { id, has: snap.size > 0 };
+        } catch {
+          return { id, has: false };
+        }
+      });
+
+      const [cajas, ventas, pagosToday] = await Promise.all([
         Promise.all(cajaPromises),
         Promise.all(ventasPromises),
+        Promise.all(pagosTodayPromises),
       ]);
 
       const map = {};
@@ -235,8 +248,10 @@ export default function Finanzas() {
       sucIds.forEach((id) => {
         const cx = cajas.find(x => x.id === id) || { caja: 0, kpiOverride: null };
         const vv = ventas.find(x => x.id === id)?.ventas || 0;
+        const hayPagos = pagosToday.find(x => x.id === id)?.has || false;
 
-        const usedVentas = (cx.kpiOverride != null) ? cx.kpiOverride : vv;
+        // Si hay pagos para HOY y hay override -> usar override; si NO hay pagos -> ignorar override
+        const usedVentas = (hayPagos && cx.kpiOverride != null) ? cx.kpiOverride : vv;
 
         map[id] = { cajaChica: cx.caja, ventas: usedVentas };
 
@@ -250,7 +265,7 @@ export default function Finanzas() {
     };
 
     recalc();
-  }, [selectedSucursal, sucursales, ready, isAdmin]);
+  }, [selectedSucursal, sucursales, ready, isAdmin, extractTotalADepositar]);
 
   const abrirModalActividad = () => {
     calendarRef.current?.openAddModal?.();
