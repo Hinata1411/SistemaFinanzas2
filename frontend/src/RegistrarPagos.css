@@ -1,30 +1,56 @@
-/* src/RegistrarPagos.css */
-.registrar-pagos .rc-table th,
-.registrar-pagos .rc-table td{
-  padding: 12px 10px; /* más aire en filas */
-}
+/* ===== SOLO RegistrarPagos (usa el mismo estilo que Gastos) ===== */
 
-.registrar-pagos .rc-input,
-.registrar-pagos .rc-select{
-  height: 44px;              /* más altos */
-  padding: 10px 12px;        /* más cómodos */
-  font-size: 15px;           /* un poquito más grande */
-  border-radius: 12px;       /* consistente con tu UI redondeada */
-}
+/* Título limpio */
+.registrar-pagos .rc-card-hd h3 { margin: 0; }
 
-/* Descripción: aún más alto y ancho mínimo */
-.registrar-pagos .rc-input.rc-desc{
-  height: 48px;
-  min-width: 420px;          /* asegura que sea más largo */
+/* Alinear columnas como en Gastos */
+.registrar-pagos .rc-gastos-table td:nth-child(1) .rc-input { /* Descripción */
+  text-align: left;
+  font-weight: 500;
 }
-
-/* Números centrados y cómodos */
-.registrar-pagos .rc-input.rc-qty{
+.registrar-pagos .rc-gastos-table td:nth-child(2) .rc-input { /* Monto */
   text-align: center;
-  font-weight: 600;
+  font-weight: 800;
+}
+.registrar-pagos .rc-gastos-table td:nth-child(3) .rc-input { /* Ref */
+  text-align: center;
 }
 
-/* Select más cómodo */
-.registrar-pagos .rc-select{
-  appearance: auto;
+/* Comprobante: botones en fila, centrados (con wrap si hace falta) */
+.registrar-pagos .rc-gastos-table .img-cell > div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.registrar-pagos .rc-gastos-table .img-cell .rc-btn {
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+/* Acciones centradas */
+.registrar-pagos .rc-gastos-table td:nth-child(6) {
+  text-align: center;
+}
+
+/* Footer como en Gastos */
+.registrar-pagos .rc-gastos-table tfoot td {
+  background: #fafafa;
+  border: 1px solid #e7e2d9;
+  border-radius: 12px;
+}
+
+/* Mantén el fix de spinners si no lo tienes global */
+.registrar-pagos .no-spin[type="number"]{
+  appearance: textfield;
+  -moz-appearance: textfield;
+  -webkit-appearance: none;
+}
+.registrar-pagos .no-spin::-webkit-outer-spin-button,
+.registrar-pagos .no-spin::-webkit-inner-spin-button{
+  -webkit-appearance: none;
+  margin: 0;
 }

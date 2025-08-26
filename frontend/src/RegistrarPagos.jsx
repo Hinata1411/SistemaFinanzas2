@@ -482,7 +482,7 @@ export default function RegistrarPagos() {
   const headerSuffix = isEditingExisting ? '(editando)' : isViewing ? '(viendo)' : '';
 
   return (
-    <div className="rc-shell">
+    <div className="rc-shell registrar-pagos">
       <div className="rc-header">
         <div className="rc-header-left">
           <h1>Registrar Pagos {headerSuffix && <span>{headerSuffix}</span>}</h1>
@@ -562,149 +562,190 @@ export default function RegistrarPagos() {
       {/* TABLA */}
       <section className="rc-card">
         <div className="rc-card-hd"><h3>Asignar pagos</h3></div>
-        <table className="rc-table">
-          <colgroup>
-            <col style={{width:'auto'}}/>
-            <col style={{width:'160px'}}/>
-            <col style={{width:'160px'}}/>
-            <col style={{width:'200px'}}/>
-            <col style={{width:'200px'}}/>
-            <col style={{width:'120px'}}/>
-          </colgroup>
-        <thead>
-          <tr>
-            <th>Descripción</th>
-            <th style={{textAlign:'center'}}>Monto a depositar</th>
-            <th style={{textAlign:'center'}}>Ref</th>
-            <th style={{textAlign:'center'}}>Img</th>
-            <th style={{textAlign:'center'}}>Categoría</th>
-            <th style={{textAlign:'center'}}>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(!state.items || !state.items.length) && (
-            <tr><td colSpan={6} className="rc-empty">Sin pagos</td></tr>
-          )}
-          {state.items?.map((r, i) => {
-            const isPdf = (r.fileMime || '').includes('pdf');
-            return (
-              <tr key={`${active}-${i}`}>
-                <td>
-                  <input
-                    className="rc-input"
-                    placeholder="Descripción"
-                    value={r.descripcion}
-                    onChange={(e)=>setRow(i,'descripcion',e.target.value)}
-                    style={{width:'100%'}}
-                    disabled={readOnly}
-                    readOnly={readOnly}
-                  />
-                </td>
-                <td>
-                  <input
-                    className="rc-input rc-qty no-spin"
-                    type="number" min="0" step="0.01" inputMode="decimal"
-                    value={r.monto ?? ''}
-                    onChange={(e)=>setRow(i,'monto',e.target.value)}
-                    onWheel={(e)=>e.currentTarget.blur()}
-                    style={{width:'100%', textAlign:'center'}}
-                    disabled={readOnly}
-                    readOnly={readOnly}
-                  />
-                </td>
-                <td>
-                  <input
-                    className="rc-input"
-                    placeholder="Referencia"
-                    value={r.ref || ''}
-                    onChange={(e)=>setRow(i,'ref',e.target.value)}
-                    style={{width:'100%', textAlign:'center'}}
-                    disabled={readOnly}
-                    readOnly={readOnly}
-                  />
-                </td>
-                <td style={{textAlign:'center'}}>
-                  <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, flexWrap:'wrap' }}>
-                    {(r.filePreview || r.fileUrl || r.fileBlob) ? (
-                      <>
-                        <span style={{ fontSize:12, color:'var(--slate)' }}>
-                          {isPdf ? 'PDF' : 'Imagen'}
-                        </span>
-                        <button className="rc-btn rc-btn-outline"
-                          type="button"
-                          onClick={()=>openViewer(r.filePreview || r.fileUrl || '', r.fileMime || '', r.fileName || '')}
-                          disabled={!(r.filePreview || r.fileUrl)}
-                        >
-                          Ver
-                        </button>
 
-                        {!readOnly && (
-                          <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>clearFile(i)}>
-                            Quitar
-                          </button>
-                        )}
-                      </>
-                    ) : <span style={{ color:'var(--muted)' }}>—</span>}
-                    <input
-                      id={`pago-file-${active}-${i}`}
-                      type="file"
-                      accept="image/*,application/pdf"
-                      onChange={(e)=>handleFileChange(i,e)}
-                      style={{ display:'none' }}
+        <table className="rc-table rc-gastos-table rc-pagos-table">
+          {/* colgroup opcional (lo oculta el responsive <860px) */}
+          <colgroup>
+            <col style={{width:'140px'}}/>     {/* Categoría */}
+            <col style={{width:'140px'}}/>    {/* Descripción */}
+            <col style={{width:'140px'}}/>     {/* Monto */}
+            <col style={{width:'140px'}}/>     {/* Ref */}
+            <col style={{width:'180px'}}/>     {/* Img */}
+            <col style={{width:'120px'}}/>     {/* Acciones */}
+          </colgroup>
+
+          <thead>
+            <tr>
+               <th style={{textAlign:'center'}}>Categoría</th>
+              <th style={{textAlign:'center'}}>Descripción</th>
+              <th style={{textAlign:'center'}}>Cantidad</th>
+              <th style={{textAlign:'center'}}>No. de ref</th>
+              <th style={{textAlign:'center'}}>Comprobante</th>
+              <th style={{textAlign:'center'}}>Acciones</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {(!state.items || !state.items.length) && (
+              <tr><td colSpan={6} className="rc-empty">Sin pagos</td></tr>
+            )}
+
+            {state.items?.map((r, i) => {
+              const isPdf = (r.fileMime || '').includes('pdf');
+              const hasFile = !!(r.filePreview || r.fileUrl || r.fileBlob);
+              return (
+                <tr key={`${active}-${i}`}>
+
+                  {/* Categoría */}
+                  <td data-label="Categoría">
+                    <select
+                      className="rc-input rc-select"
+                      value={r.categoria}
+                      onChange={(e)=>setRow(i,'categoria',e.target.value)}
                       disabled={readOnly}
+                    >
+                      {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                  </td>
+
+                  {/* Descripción */}
+                  <td data-label="Descripción">
+                    <input
+                      className="rc-input rc-desc"
+                      placeholder="Descripción"
+                      value={r.descripcion}
+                      onChange={(e)=>setRow(i,'descripcion',e.target.value)}
+                      disabled={readOnly}
+                      readOnly={readOnly}
                     />
-                    <button className="rc-btn rc-btn-outline" type="button" onClick={()=>handlePickFile(i)} disabled={readOnly}>
-                      {r.fileUrl || r.fileBlob ? 'Cambiar' : 'Adjuntar'}
-                    </button>
-                  </div>
-                </td>
-                <td>
-                  <select className="rc-input rc-select"
-                    value={r.categoria}
-                    onChange={(e)=>setRow(i,'categoria',e.target.value)}
-                    disabled={readOnly}
-                  >
-                    {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                  </select>
-                </td>
-                <td style={{textAlign:'center'}}>
-                  <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>removeRow(i)} disabled={readOnly}>✕</button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-        <tfoot>
-          <tr>
-            <td colSpan={1} style={{textAlign:'right', fontWeight:800, color:'var(--dark)'}}>Total utilizado</td>
-            <td style={{textAlign:'right', fontWeight:800, color:'var(--dark)'}}>{money(totalUtilizado)}</td>
-            <td colSpan={4}/>
-          </tr>
-          <tr>
-            <td colSpan={1} style={{textAlign:'right', fontWeight:800, color:'var(--dark)'}}>Sobrante para mañana</td>
-            <td style={{textAlign:'right', fontWeight:800, color: sobranteFinal >= 0 ? 'var(--accent)':'var(--dark)'}}>
-              {money(sobranteFinal)}
-            </td>
-            <td colSpan={4} style={{ textAlign:'right' }}>
-              {mostrarUsarCajaChica && !readOnly && (
-                <button className="rc-btn rc-btn-primary" type="button" onClick={usarCajaChica}>
-                  Usar caja chica
-                </button>
-              )}
-              {state.cajaChicaUsada > 0 && (
-                <span style={{ marginLeft:12, fontWeight:700, color:'var(--dark)' }}>
-                  Se tomó de caja chica: {money(state.cajaChicaUsada)}
-                </span>
-              )}
-            </td>
-          </tr>
-        </tfoot>
+                  </td>
+
+                  {/* Monto */}
+                  <td data-label="Monto a depositar">
+                    <input
+                      className="rc-input rc-qty no-spin"
+                      type="number" min="0" step="0.01" inputMode="decimal"
+                      value={r.monto ?? ''}
+                      onChange={(e)=>setRow(i,'monto',e.target.value)}
+                      onWheel={(e)=>e.currentTarget.blur()}
+                      disabled={readOnly}
+                      readOnly={readOnly}
+                    />
+                  </td>
+
+                  {/* Ref */}
+                  <td data-label="Ref">
+                    <input
+                      className="rc-input"
+                      placeholder="Referencia"
+                      value={r.ref || ''}
+                      onChange={(e)=>setRow(i,'ref',e.target.value)}
+                      disabled={readOnly}
+                      readOnly={readOnly}
+                    />
+                  </td>
+
+                  {/* Comprobante (Img/PDF) */}
+                  <td data-label="Comprobante" className="img-cell">
+                    <div>
+                      {hasFile ? (
+                        <>
+                          <button
+                            className="rc-btn rc-btn-outline"
+                            type="button"
+                            onClick={()=>openViewer(r.filePreview || r.fileUrl || '', r.fileMime || '', r.fileName || '')}
+                            disabled={!(r.filePreview || r.fileUrl)}
+                            title="Ver comprobante"
+                          >
+                            {isPdf ? 'PDF' : 'Ver'}
+                          </button>
+
+                          {!readOnly && (
+                            <>
+                              <button className="rc-btn rc-btn-outline" type="button" onClick={()=>handlePickFile(i)}>
+                                Cambiar
+                              </button>
+                              <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>clearFile(i)}>
+                                Quitar
+                              </button>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        !readOnly && (
+                          <>
+                            <input
+                              id={`pago-file-${active}-${i}`}
+                              type="file"
+                              accept="image/*,application/pdf"
+                              onChange={(e)=>handleFileChange(i,e)}
+                              style={{ display:'none' }}
+                              disabled={readOnly}
+                            />
+                            <button className="rc-btn rc-btn-outline" type="button" onClick={()=>handlePickFile(i)}>
+                              Adjuntar
+                            </button>
+                          </>
+                        )
+                      )}
+                    </div>
+                  </td>
+
+                  
+                  {/* Acciones */}
+                  <td data-label="Acciones" style={{textAlign:'center'}}>
+                    <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>removeRow(i)} disabled={readOnly}>✕</button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+
+          <tfoot>
+            <tr>
+              <td></td>
+              <td style={{ fontWeight:800, textAlign:'right', color:'var(--dark)' }}>
+                Total utilizado
+              </td>
+              <td style={{ fontWeight:800, textAlign:'right', color:'var(--dark)' }}>
+                {money(totalUtilizado)}
+              </td>
+              {/* resto vacío */}
+              <td colSpan={4}></td>
+            </tr>
+
+            <tr>
+              <td></td>
+              <td style={{ fontWeight:800, textAlign:'right', color:'var(--dark)' }}>
+                Sobrante para mañana
+              </td>
+              <td style={{ fontWeight:800, textAlign:'right', color: sobranteFinal >= 0 ? 'var(--accent)' : 'var(--dark)' }}>
+                {money(sobranteFinal)}
+              </td>
+              <td colSpan={4} style={{ textAlign:'right' }}>
+                {mostrarUsarCajaChica && !readOnly && (
+                  <button className="rc-btn rc-btn-primary" type="button" onClick={usarCajaChica}>
+                    Usar caja chica
+                  </button>
+                )}
+                {state.cajaChicaUsada > 0 && (
+                  <span style={{ marginLeft:12, fontWeight:700, color:'var(--dark)' }}>
+                    Se tomó de caja chica: {money(state.cajaChicaUsada)}
+                  </span>
+                )}
+              </td>
+            </tr>
+          </tfoot>
         </table>
 
-        <div className="rc-gastos-actions" style={{ marginTop:10 }}>
-          <button type="button" className="rc-btn rc-btn-outline" onClick={addRow} disabled={readOnly}>+ Agregar pago</button>
-        </div>
+        {!readOnly && (
+          <div className="rc-gastos-actions" style={{ marginTop:10 }}>
+            <button type="button" className="rc-btn rc-btn-outline" onClick={addRow}>+ Agregar pago</button>
+          </div>
+        )}
       </section>
+
+
 
       {/* Modales */}
       <CategoriasModal
