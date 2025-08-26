@@ -252,7 +252,10 @@ export default function Login() {
                   />
                   <label className="form-check-label" htmlFor="rememberMe">Recordar contraseña</label>
                 </div>
-                <a href="#" className="small-link" onClick={onForgot}>¿Olvidaste tu contraseña?</a>
+                {/* botón accesible en lugar de <a href="#"> */}
+                <button type="button" className="small-link" onClick={onForgot}>
+                  ¿Olvidaste tu contraseña?
+                </button>
               </div>
 
               {/* Botón */}

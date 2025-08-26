@@ -14,8 +14,6 @@ import GroupDownloadModal from './components/ventas/GroupDownloadModal';
 import { exportSingleCuadrePdf, exportGroupedPdf } from './pdf/exportadores';
 import './components/ventas/Ventas.css';
 
-const MODAL_BASE = `/* (sin uso ya, puedes borrar si quieres) */`;
-
 export default function Ventas() {
   const navigate = useNavigate();
 
@@ -71,10 +69,7 @@ export default function Ventas() {
     return base.reduce((acc, caja) =>
       acc + n(caja.efectivo) + n(caja.tarjeta) + n(caja.motorista), 0);
   };
-  const fmtQ = (val) => (typeof val === 'number' ? val : parseFloat(val || 0))
-    .toLocaleString('es-GT', { style: 'currency', currency: 'GTQ' });
 
-  const totalVentas = useMemo(() => cuadres.reduce((acc,c)=> acc + totalVentaDeCuadre(c), 0), [cuadres]);
   // Navegar a RegistrarCierre con modo
   const handleVer = (c) => {
     navigate(`/Finanzas/RegistrarCierre?id=${c.id}&mode=view`);
