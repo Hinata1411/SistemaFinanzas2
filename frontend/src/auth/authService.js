@@ -4,6 +4,8 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { db } from '../firebase';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 
+const API = process.env.REACT_APP_API_URL || 'https://sistemafinanzas2.onrender.com/api';
+
 /** Lee la colección 'usuarios' y devuelve [{email, username, role?}] */
 export async function fetchUsersForSelect() {
   const qs = await getDocs(collection(db, 'usuarios'));
@@ -17,48 +19,46 @@ export async function fetchUsersForSelect() {
   });
 }
 
-/**
- * Login con Firebase, postea idToken a tu backend y guarda token/email.
- * Devuelve { user, token, role?, backend }
- */
+/** Login con Firebase y canje en backend */
 export async function loginAndGetBackendToken(email, password) {
   const cred = await signInWithEmailAndPassword(auth, email, password);
   const user = cred.user;
 
-  // Guarda el email para el layout
   localStorage.setItem('email', user.email);
 
-  // ID token de Firebase
-  const idToken = await user.getIdToken();
+  // Token fresco de Firebase
+  const idToken = await user.getIdToken(true);
 
-  // Envía el token al backend
-  const resp = await fetch('http://localhost:3001/api/auth/login', {
+  // Llama a tu backend en Render (URL desde .env)
+  const resp = await fetch(`${API}/auth/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${idToken}`, // header
+    },
     credentials: 'omit',
-    body: JSON.stringify({ idToken }),
+    body: JSON.stringify({ idToken }),       // compat: también en body
   });
 
   if (!resp.ok) {
-    const text = await resp.text();
+    const text = await resp.text().catch(() => '');
     throw new Error(`HTTP ${resp.status}: ${text}`);
   }
 
   const data = await resp.json();
   if (!data?.token) throw new Error(data?.message || 'Respuesta inválida del servidor');
 
-  // Guarda el token para PrivateRoute
-  localStorage.setItem('token', data.token);
+ localStorage.setItem('role', (data.role || 'viewer').toLowerCase());
 
   return {
     user,
     token: data.token,
-    role: data.role || data.rol, // si tu backend lo manda
+    role: data.role || data.rol,
     backend: data,
   };
 }
 
-/** (Opcional) Obtiene doc de usuario para rol u otros datos */
+/** (Opcional) Obtiene doc de usuario */
 export async function getUserDoc(uid) {
   const ref = doc(db, 'usuarios', uid);
   const snap = await getDoc(ref);

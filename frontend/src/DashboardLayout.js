@@ -14,8 +14,26 @@ function DashboardLayout({ userEmail, userRole }) {
   const email = userEmail || localStorage.getItem('email') || 'user@example.com';
 
   // Rol
-  const getRole = () =>
-    String(userRole || localStorage.getItem('role') || 'viewer').toLowerCase();
+  const decodeRoleFromToken = () => {
+    try {
+      const t = localStorage.getItem('token') || '';
+      const p = t.split('.')[1];
+      if (!p) return null;
+      const json = JSON.parse(atob(p.replace(/-/g, '+').replace(/_/g, '/')));
+      return (json.role || json.rol || (json.isAdmin ? 'admin' : 'viewer') || '').toLowerCase();
+    } catch { return null; }
+  };
+
+  const getRole = () => {
+    const fromProp = (userRole || '').toString().toLowerCase();
+    if (fromProp) return fromProp;
+    const fromLS = (localStorage.getItem('role') || '').toLowerCase();
+    if (fromLS) return fromLS;
+    const fromJWT = decodeRoleFromToken();
+    if (fromJWT) return fromJWT;
+    return 'viewer';
+  };
+
   const [role, setRole] = useState(getRole());
   const isAdmin = role === 'admin';
 
@@ -36,6 +54,7 @@ function DashboardLayout({ userEmail, userRole }) {
 
     const onStorage = (e) => {
       if (e.key === 'role') setRole(String(e.newValue || 'viewer').toLowerCase());
+      if (e.key === 'token') setRole(getRole());
       if (e.key === 'theme') {
         const val = e.newValue || 'light';
         setTheme(val);
