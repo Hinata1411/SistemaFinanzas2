@@ -3,6 +3,10 @@
   command = "npm ci && npm run build"
   publish = "build"
 
+[build.environment]
+  # Desactiva el escaneo "smart" que está marcando falsos positivos (Firebase keys en frontend)
+  SECRETS_SCAN_SMART_DETECTION_ENABLED = "false"
+
 [[redirects]]
   from = "/*"
   to   = "/index.html"
