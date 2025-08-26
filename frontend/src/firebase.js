@@ -1,51 +1,24 @@
-// src/firebase.js
-// SDKs Firebase v9 (modular)
+// src/firebase.js (CRA)
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { getMessaging, getToken, onMessage } from 'firebase/messaging';
+import { getMessaging } from 'firebase/messaging';
 import { getStorage } from 'firebase/storage';
 
-// ⚠️ Usa tus propias credenciales
 const firebaseConfig = {
-  apiKey: "AIzaSyBL8onIxodd41sUUc8r9JLQg4lLwGPSmzc",
-  authDomain: "grafica-ventas.firebaseapp.com",
-  projectId: "grafica-ventas",
-  storageBucket: "grafica-ventas.firebasestorage.app",
-  messagingSenderId: "841964521076",
-  appId: "1:841964521076:web:67d2d9d155924e92eeb321",
-  measurementId: "G-QE8FMBLSL0"
+  apiKey: process.env.REACT_APP_FB_API_KEY,
+  authDomain: process.env.REACT_APP_FB_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FB_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FB_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FB_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FB_APP_ID,
+  measurementId: process.env.REACT_APP_FB_MEASUREMENT_ID
 };
 
-// Inicializa Firebase una sola vez
 const app = initializeApp(firebaseConfig);
-
-// Servicios que usas en la app
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
-
-
-let messaging;
-try {
-  messaging = getMessaging(app);
-} catch (e) {
-  // Si el navegador no soporta FCM o no estás en HTTPS/localhost,
-  // evita romper la app.
-  console.warn('FCM no disponible en este entorno:', e?.message || e);
-  messaging = undefined;
-}
-
-export {
-  app,
-  auth,
-  db,
-  storage,
-  // Auth helpers (si prefieres importarlos desde aquí)
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail,
-  // FCM (si lo usas)
-  messaging,
-  getToken,
-  onMessage,
-};
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+export const storage = getStorage(app);
+export { signInWithEmailAndPassword, sendPasswordResetEmail };
+// messaging opcional si lo usas:
+// export const messaging = (() => { try { return getMessaging(app); } catch { return undefined; } })();
