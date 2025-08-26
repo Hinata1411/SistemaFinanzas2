@@ -151,7 +151,7 @@ export default function RegistrarPagos() {
         setCajaChicaBySuc({});
       }
     })();
-  }, [me.loaded, isAdmin, getTodayISO, extractTotalADepositar]);
+  }, [me.loaded, isAdmin]);
 
   // Inicializar pagosMap por sucursal
   useEffect(() => {

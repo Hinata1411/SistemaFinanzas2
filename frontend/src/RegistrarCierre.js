@@ -459,7 +459,7 @@ export default function RegistrarCierre() {
           if (fileBlob) {
             // nombre seguro (evita caracteres que rompen rutas)
             const safeName = (g.fileName || fileBlob.name || `gasto_${i}`)
-              .replace(/[^\w.\-]+/g, '_'); // <- OJO al rango
+              .replace(/[^\w.-]+/g, '_'); // <- OJO al rango
             const path = `${folder}/${Date.now()}_${i}_${safeName}`;
             const fileRef = sRef(storage, path);
             await uploadBytes(fileRef, fileBlob, {
