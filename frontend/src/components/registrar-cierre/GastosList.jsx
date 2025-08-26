@@ -141,8 +141,8 @@ export default function GastosList({
         <colgroup>
           <col style={{width:'200px'}}/>
           <col style={{width:'auto'}}/>
-          <col style={{width:'120px'}}/>
-          <col style={{width:'120px'}}/>
+          <col style={{width:'140px'}}/>
+          <col style={{width:'200px'}}/>
           <col style={{width:'180px'}}/>{/* Comprobante */}
           <col style={{width:'120px'}}/>{/* Acciones */}
         </colgroup>
@@ -150,8 +150,8 @@ export default function GastosList({
           <tr>
             <th style={{ textAlign: 'center' }}>Categoría</th>
             <th style={{ textAlign: 'center' }}>Descripción</th>
-            <th style={{ textAlign: 'center' }}>No. de ref</th>
             <th style={{ textAlign: 'center' }}>Cantidad</th>
+            <th style={{ textAlign: 'center' }}>No. de ref</th>
             <th style={{ textAlign: 'center' }}>Comprobante</th>
             <th style={{ textAlign: 'center' }}>Acciones</th>
           </tr>
@@ -201,20 +201,6 @@ export default function GastosList({
                   />
                 </td>
 
-                {/* Ref */}
-                <td data-label="No. de ref">
-                  <input
-                    className="rc-input"
-                    placeholder="Ref"
-                    value={g.ref || ''}
-                    onChange={(e) => setGasto(i, 'ref', e.target.value)}
-                    onKeyDown={(e) => handleEnterConfirm(i, e)}
-                    disabled={disabled}
-                    aria-label="Referencia"
-                    style={{ width: '100%', textAlign: 'center' }}
-                  />
-                </td>
-
                 {/* Cantidad (sin flechas/rueda) */}
                 <td data-label="Cantidad">
                   <input
@@ -240,6 +226,20 @@ export default function GastosList({
                     onWheel={(e) => { e.currentTarget.blur(); }}
                     disabled={disabled}
                     aria-label="Cantidad"
+                    style={{ width: '100%', textAlign: 'center' }}
+                  />
+                </td>
+
+                {/* Ref */}
+                <td data-label="No. de ref">
+                  <input
+                    className="rc-input"
+                    placeholder="Ref"
+                    value={g.ref || ''}
+                    onChange={(e) => setGasto(i, 'ref', e.target.value)}
+                    onKeyDown={(e) => handleEnterConfirm(i, e)}
+                    disabled={disabled}
+                    aria-label="Referencia"
                     style={{ width: '100%', textAlign: 'center' }}
                   />
                 </td>
@@ -332,12 +332,14 @@ export default function GastosList({
         {/* Total de gastos */}
         <tfoot>
           <tr className="rc-gastos-total">
-            <td colSpan={4} style={{ textAlign: 'right', fontWeight: 800, color: 'var(--dark)' }}>
+            <td /> {/* primera columna vacía */}
+            <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--dark)' }}>
               Total de gastos
             </td>
             <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--dark)' }}>
               {toMoney(totalGastos)}
             </td>
+            <td /> {/* las demás columnas vacías */}
             <td />
           </tr>
         </tfoot>
