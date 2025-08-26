@@ -134,7 +134,7 @@ export default function Ventas() {
     return (
       <div className="ventas-shell">
         <header className="ventas-header">
-          <h1>Ventas</h1>
+            <h1>Historial de Cuadres</h1>
         </header>
         <div className="empty" style={{ background:'#fff', padding:16, borderRadius:12, border:'1px solid #e7e2d9' }}>
           Cargando perfil…
@@ -148,7 +148,7 @@ export default function Ventas() {
   return (
     <div className="ventas-shell">
       <header className="ventas-header">
-        <h1>Ventas</h1>
+        <h1>Historial de Cuadres</h1>
         <div className="ventas-actions">
 
           {/* Descargar agrupado: solo admin */}
@@ -202,6 +202,7 @@ export default function Ventas() {
         // Flags para ocultar acciones cuando es viewer:
         canManage={canManage}
         canDownload={canDownload}
+        isAdmin={isAdmin}
       />
 
       {/* Modal descargas agrupadas solo admin */}

@@ -1,3 +1,4 @@
+// src/RegistrarCierre.jsx
 import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -17,7 +18,7 @@ import { db, auth } from './firebase';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import './components/registrar-cierre/RegistrarCierre.css';
-import AmexModal from './components/registrar-cierre/AmexModal';
+import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 import { todayISO } from './utils/dates';
 import { n } from './utils/numbers';
@@ -48,7 +49,6 @@ const INIT_GASTO_CATEGORIAS = [
   'Ajuste de caja chica',
 ];
 
-/** 👇 Ahora cada caja lleva `apertura: 1000` por defecto */
 const emptyArqueoCaja = () => ({
   q200: '',
   q100: '',
@@ -68,7 +68,6 @@ const emptyCierreCaja = () => ({
   motorista: '',
 });
 
-/** Normaliza un arreglo de arqueo a 3 cajas y asegura apertura=1000 si falta */
 const normalizeArqueo = (arr) => {
   const base = [emptyArqueoCaja(), emptyArqueoCaja(), emptyArqueoCaja()];
   const src = Array.isArray(arr) ? arr : [];
@@ -82,7 +81,6 @@ const normalizeArqueo = (arr) => {
   });
 };
 
-/** Píls de sección */
 const TABS = {
   ARQUEO: 'arqueo',
   CIERRE: 'cierre',
@@ -90,6 +88,26 @@ const TABS = {
   PY: 'py',
   AMEX: 'amex',
   RESUMEN: 'resumen',
+};
+
+const AMEX_FLAVORS = [
+  'Pepperoni', 'Jamón', 'Only Cheese', 'Hawaiana', 'Magnífica', 'Dúo dinámico',
+  'No meat', '4 estaciones', 'Cheese fingers',
+  'Border cheese', 'Suprema', 'Full meat', 'Super chilly', 'Tejana',
+  'Border champiñones', 'Americana', 'Italiana',
+];
+
+const AMEX_PRICES_DEFAULT = AMEX_FLAVORS.reduce((acc, name) => {
+  acc[name] = 85;
+  return acc;
+}, {});
+AMEX_PRICES_DEFAULT['Pepperoni'] = 65;
+AMEX_PRICES_DEFAULT['Jamón'] = 65;
+AMEX_PRICES_DEFAULT['Cheese fingers'] = 40;
+
+const blockWheel = (e) => e.currentTarget.blur();
+const blockArrows = (e) => {
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault();
 };
 
 export default function RegistrarCierre() {
@@ -102,11 +120,11 @@ export default function RegistrarCierre() {
   const [originalDoc, setOriginalDoc] = useState(null);
 
   // Perfil usuario
-  const [me, setMe] = useState({ loaded: false, role: 'viewer', sucursalId: null });
+  const [me, setMe] = useState({ loaded: false, role: 'viewer', sucursalId: null, username: '' });
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        setMe({ loaded: true, role: 'viewer', sucursalId: null });
+        setMe({ loaded: true, role: 'viewer', sucursalId: null, username: '' });
         return;
       }
       try {
@@ -116,37 +134,33 @@ export default function RegistrarCierre() {
           loaded: true,
           role: data.role || 'viewer',
           sucursalId: data.sucursalId || null,
+          username: data.username || '',
         });
       } catch (e) {
         console.error(e);
-        setMe({ loaded: true, role: 'viewer', sucursalId: null });
+        setMe({ loaded: true, role: 'viewer', sucursalId: null, username: '' });
       }
     });
     return () => unsub();
   }, []);
   const isAdmin = me.role === 'admin';
 
-  // Sucursales desde hook (puede que no traiga extras)
+  // Sucursales
   const sucursales = useSucursales();
 
-  // Filtrar sucursales visibles
   const sucursalesVisibles = useMemo(() => {
     if (!me.loaded) return [];
     return isAdmin ? sucursales : sucursales.filter((s) => s.id === me.sucursalId);
   }, [sucursales, me, isAdmin]);
 
   const [activeSucursalId, setActiveSucursalId] = useState(null);
-
-  // Doc real de la sucursal activa (para extras)
   const [activeSucursalDoc, setActiveSucursalDoc] = useState(null);
 
-  // Al cargar, fijar sucursal activa
   useEffect(() => {
     if (!me.loaded || !sucursalesVisibles.length) return;
     setActiveSucursalId((prev) => prev || sucursalesVisibles[0]?.id || null);
   }, [me.loaded, sucursalesVisibles]);
 
-  // Cuando cambia la sucursal activa, leer SIEMPRE el doc real de Firestore
   useEffect(() => {
     (async () => {
       if (!activeSucursalId) { setActiveSucursalDoc(null); return; }
@@ -160,15 +174,10 @@ export default function RegistrarCierre() {
     })();
   }, [activeSucursalId]);
 
-  // American Express (detalle por sabores)
-  const [showAmex, setShowAmex] = useState(false);
-  const [amexItems, setAmexItems] = useState({});   // { sabor: cantidad }
+  const [amexItems, setAmexItems] = useState({});
   const [amexTotal, setAmexTotal] = useState(0);
-
-  // Fecha
   const [fecha, setFecha] = useState(todayISO());
 
-  // Estados principales (persisten al cambiar de píls)
   const [arqueo, setArqueo] = useState([emptyArqueoCaja(), emptyArqueoCaja(), emptyArqueoCaja()]);
   const [cierre, setCierre] = useState([emptyCierreCaja(), emptyCierreCaja(), emptyCierreCaja()]);
   const [categorias, setCategorias] = useState(INIT_GASTO_CATEGORIAS);
@@ -190,10 +199,8 @@ export default function RegistrarCierre() {
   const [cajaChicaUsada, setCajaChicaUsada] = useState(0);
   const [faltantePagado, setFaltantePagado] = useState(0);
 
-  // Pedidos Ya
   const [pedidosYaCantidad, setPedidosYaCantidad] = useState(0);
 
-  // Cargar documento existente si aplica
   useEffect(() => {
     if (!editId) return;
     (async () => {
@@ -226,7 +233,7 @@ export default function RegistrarCierre() {
         const ax = d.extras?.americanExpress;
         if (ax && typeof ax === 'object') {
           setAmexItems(ax.items || {});
-          setAmexTotal(ax.total || 0);
+          setAmexTotal(n(ax.total));
         }
       } catch (e) {
         console.error(e);
@@ -236,21 +243,17 @@ export default function RegistrarCierre() {
 
   const [busy, setBusy] = useState(false);
 
-  // Modales
   const [showCatModal, setShowCatModal] = useState(false);
   const [showCajaChica, setShowCajaChica] = useState(false);
 
-  // Sucursal activa según hook (solo para nombre y fallback de caja chica)
   const activeFromHook = useMemo(
     () => sucursales.find((s) => s.id === activeSucursalId) || null,
     [sucursales, activeSucursalId]
   );
 
-  // Lo que tiene hoy la sucursal
   const cajaChicaActual =
     (activeSucursalDoc?.cajaChica ?? activeFromHook?.cajaChica) || 0;
 
-  // Si estoy viendo un cierre (view), intento usar el snapshot guardado en ese cierre
   const cajaChicaDisponibleUI = isViewing
     ? (originalDoc?.cajaChicaDisponibleAtSave ??
        originalDoc?.cajaChicaDisponible ??
@@ -259,7 +262,6 @@ export default function RegistrarCierre() {
 
   const totalAperturas = (arqueo || []).reduce((s, c) => s + (Number.isFinite(+c?.apertura) ? +c.apertura : 1000), 0);
 
-  // === EXTRAS (flags seguros) ===
   const truthy = (v) =>
     v === true || v === 1 || v === '1' || (typeof v === 'string' && v.toLowerCase() === 'true');
 
@@ -278,13 +280,9 @@ export default function RegistrarCierre() {
           a.americanExpress ??
           bx.americanExpress ??
           b.americanExpress ??
-          ax.amex ??
-          bx.amex ??
-          ax.american_express ??
-          bx.american_express ??
-          ax.ae ??
-          bx.ae ??
-          false
+          ax.amex ?? bx.amex ??
+          ax.american_express ?? bx.american_express ??
+          ax.ae ?? bx.ae ?? false
       );
 
     return { pedidosYa, americanExpress };
@@ -295,7 +293,29 @@ export default function RegistrarCierre() {
   const showPedidosYaBtn = _py;
   const showAmexBtn = _amex;
 
-  // Totales
+  const amexPrices = useMemo(() => {
+    const exA = activeSucursalDoc?.extras || {};
+    const exB = activeFromHook?.extras || {};
+    const fromDb =
+      exA.americanExpressPrices ||
+      activeSucursalDoc?.americanExpressPrices ||
+      exA.amexPrices ||
+      exB.americanExpressPrices ||
+      activeFromHook?.americanExpressPrices ||
+      exB.amexPrices ||
+      null;
+    return { ...AMEX_PRICES_DEFAULT, ...(fromDb || {}) };
+  }, [activeSucursalDoc, activeFromHook]);
+
+  useEffect(() => {
+    const total = AMEX_FLAVORS.reduce((sum, name) => {
+      const qty = n(amexItems?.[name]);
+      const price = amexPrices[name] ?? 0;
+      return sum + qty * price;
+    }, 0);
+    setAmexTotal(total);
+  }, [amexItems, amexPrices]);
+
   const { totals, flags } = useRegistrarCierreTotals({
     arqueo,
     cierre,
@@ -305,7 +325,6 @@ export default function RegistrarCierre() {
   });
   const { faltanteEfectivo, faltantePorGastos } = totals;
 
-  // Handlers
   const setArq = (idx, field, value) => {
     if (isViewing) return;
     setArqueo((prev) => {
@@ -387,40 +406,7 @@ export default function RegistrarCierre() {
     }
   };
 
-  const handlePedidosYa = async () => {
-    if (isViewing) return;
-    const { isConfirmed, value } = await Swal.fire({
-      title: 'Ingresar cantidad vendida en Pedidos Ya',
-      input: 'number',
-      inputValue: (Number.isFinite(pedidosYaCantidad) && pedidosYaCantidad >= 0) ? pedidosYaCantidad : '',
-      inputAttributes: { min: '0', step: '1', inputmode: 'numeric' },
-      showCancelButton: true,
-      confirmButtonText: 'Guardar',
-      cancelButtonText: 'Cancelar',
-      allowOutsideClick: false,
-      allowEscapeKey: true,
-      inputValidator: (val) => {
-        if (val === '' || val === null) return 'Ingresa un número entero';
-        if (!/^\d+$/.test(String(val))) return 'Solo enteros (0, 1, 2, …)';
-        return undefined;
-      },
-    });
-    if (isConfirmed) {
-      setPedidosYaCantidad(parseInt(value, 10));
-      await Swal.fire({ icon: 'success', title: 'Guardado', timer: 900, showConfirmButton: false });
-    }
-  };
-
-  const handleAmericanExpress = () => {
-    if (isViewing) return;
-    setShowAmex(true);
-  };
-
-  const onBack = () => navigate('/Finanzas/Ventas');
-
-  // Validaciones
   const validate = () => {
-    const activeNombre = activeSucursalDoc?.nombre ?? activeFromHook?.nombre;
     const activeId = activeSucursalDoc?.id ?? activeFromHook?.id;
 
     if (!activeId) {
@@ -463,10 +449,45 @@ export default function RegistrarCierre() {
         }
       }
 
-      const gastosListos = (gastos || []).map((g) => {
-        const { fileBlob, filePreview, ...rest } = g;
-        return { ...rest, fileUrl: '', fileName: '', fileMime: '' };
-      });
+      // === Subir adjuntos de gastos (si hay) ===
+      const storage = getStorage(); // usa la app por defecto
+      const folder = `comprobantes/${sucId}/${fecha}`;
+
+      const gastosListos = await Promise.all(
+        (gastos || []).map(async (g, i) => {
+          const { fileBlob, filePreview, ...rest } = g;
+          if (fileBlob) {
+            // nombre seguro (evita caracteres que rompen rutas)
+            const safeName = (g.fileName || fileBlob.name || `gasto_${i}`)
+              .replace(/[^\w.\-]+/g, '_'); // <- OJO al rango
+            const path = `${folder}/${Date.now()}_${i}_${safeName}`;
+            const fileRef = sRef(storage, path);
+            await uploadBytes(fileRef, fileBlob, {
+              contentType: g.fileMime || fileBlob.type || 'application/octet-stream',
+            });
+            const url = await getDownloadURL(fileRef);
+            return {
+              ...rest,
+              fileUrl: url,
+              fileName: safeName,
+              fileMime: g.fileMime || fileBlob.type || '',
+            };
+          }
+          // si no hay blob nuevo (edición), conserva lo existente
+          return {
+            ...rest,
+            fileUrl: g.fileUrl || '',
+            fileName: g.fileName || '',
+            fileMime: g.fileMime || '',
+          };
+        })
+      );
+
+      const actor = {
+        uid: auth.currentUser?.uid || null,
+        username: me.username || '',
+        email: auth.currentUser?.email || '',
+      };
 
       const payloadBase = {
         fecha,
@@ -503,7 +524,12 @@ export default function RegistrarCierre() {
 
         await Swal.fire({ icon: 'success', title: 'Actualizado', text: 'El cuadre se actualizó correctamente.', timer: 1600, showConfirmButton: false });
       } else {
-        await addDoc(cierresRef, { ...payloadBase, createdAt: serverTimestamp() });
+        await addDoc(cierresRef, {
+          ...payloadBase,
+          createdAt: serverTimestamp(),
+          username: actor.username,
+          createdBy: actor,
+        });
 
         const ajustePositivo = getTotalAjusteCajaChica(gastos);
         const delta = -n(cajaChicaUsada) + n(ajustePositivo);
@@ -522,7 +548,6 @@ export default function RegistrarCierre() {
     }
   };
 
-  /** ESTADO DE PESTAÑA ACTIVA (píls de secciones) */
   const [activeTab, setActiveTab] = useState(TABS.ARQUEO);
 
   const hideAdminButtonsCss = !isAdmin ? `
@@ -530,7 +555,6 @@ export default function RegistrarCierre() {
     .hide-pay  .rc-res-item .rc-btn.rc-btn-primary { display: none !important; }
   ` : '';
 
-  // ⬇️ El return temprano va DESPUÉS de todos los hooks declarados arriba
   if (!me.loaded) {
     return (
       <div className="rc-shell">
@@ -539,6 +563,12 @@ export default function RegistrarCierre() {
       </div>
     );
   }
+
+  const setAmexQty = (name, raw) => {
+    if (isViewing) return;
+    const v = Math.max(0, parseInt(raw ?? '0', 10) || 0);
+    setAmexItems((prev) => ({ ...prev, [name]: v }));
+  };
 
   return (
     <div className="rc-shell">
@@ -549,7 +579,6 @@ export default function RegistrarCierre() {
           <h1>Registrar cuadre {isEditingExisting ? '(editando)' : isViewing ? '(viendo)' : ''}</h1>
 
           <div className="rc-date" style={{ display: 'grid', gap: 8, gridTemplateColumns: '1fr 1fr', alignItems: 'end' }}>
-            {/* FECHA */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <label htmlFor="rc-fecha">Fecha</label>
               <input
@@ -562,7 +591,6 @@ export default function RegistrarCierre() {
               />
             </div>
 
-            {/* SELECT DE SUCURSAL */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <label htmlFor="rc-sucursal">Sucursal</label>
               <select
@@ -585,103 +613,43 @@ export default function RegistrarCierre() {
               </select>
             </div>
 
-            {/* ACCIONES */}
             <div className="rc-tabs-actions" style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
               {!isViewing && (
-                <>
-                  <button
-                    type="button"
-                    className="rc-btn rc-btn-accent"
-                    onClick={onSave}
-                    disabled={busy}
-                    title={isEditingExisting ? 'Actualizar cuadre' : 'Guardar cuadre'}
-                  >
-                    {busy ? 'Guardando…' : isEditingExisting ? 'Actualizar' : 'Guardar'}
-                  </button>
-                </>
+                <button
+                  type="button"
+                  className="rc-btn rc-btn-accent"
+                  onClick={onSave}
+                  disabled={busy}
+                  title={isEditingExisting ? 'Actualizar cuadre' : 'Guardar cuadre'}
+                >
+                  {busy ? 'Guardando…' : isEditingExisting ? 'Actualizar' : 'Guardar'}
+                </button>
               )}
             </div>
           </div>
         </div>
-
-        <div className="rc-actions">
-          <button type="button" className="rc-btn rc-btn-primary" onClick={onBack} disabled={busy} title="Regresar a Ventas">
-            Regresar a Ventas
-          </button>
-        </div>
       </div>
 
-      {/* PÍLS DE SECCIONES */}
       <div className="rc-tabs-row rc-tabs-attached">
         <div className="rc-tabs rc-tabs-browser" role="tablist" aria-label="Secciones">
-          <button
-            className={`rc-tab ${activeTab === TABS.ARQUEO ? 'active' : ''}`}
-            onClick={() => setActiveTab(TABS.ARQUEO)}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === TABS.ARQUEO}
-          >
-            Arqueo físico
-          </button>
+          <button className={`rc-tab ${activeTab === TABS.ARQUEO ? 'active' : ''}`} onClick={() => setActiveTab(TABS.ARQUEO)} type="button" role="tab" aria-selected={activeTab === TABS.ARQUEO}>Arqueo físico</button>
 
-          <button
-            className={`rc-tab ${activeTab === TABS.CIERRE ? 'active' : ''}`}
-            onClick={() => setActiveTab(TABS.CIERRE)}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === TABS.CIERRE}
-            disabled={!isAdmin}
-          >
-            Cierre de sistema
-          </button>
+          <button className={`rc-tab ${activeTab === TABS.CIERRE ? 'active' : ''}`} onClick={() => setActiveTab(TABS.CIERRE)} type="button" role="tab" aria-selected={activeTab === TABS.CIERRE} disabled={!isAdmin}>Cierre de sistema</button>
 
-          <button
-            className={`rc-tab ${activeTab === TABS.GASTOS ? 'active' : ''}`}
-            onClick={() => setActiveTab(TABS.GASTOS)}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === TABS.GASTOS}
-          >
-            Gastos
-          </button>
+          <button className={`rc-tab ${activeTab === TABS.GASTOS ? 'active' : ''}`} onClick={() => setActiveTab(TABS.GASTOS)} type="button" role="tab" aria-selected={activeTab === TABS.GASTOS}>Gastos</button>
 
           {showPedidosYaBtn && (
-            <button
-              className={`rc-tab ${activeTab === TABS.PY ? 'active' : ''}`}
-              onClick={() => setActiveTab(TABS.PY)}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === TABS.PY}
-            >
-              Pedidos Ya
-            </button>
+            <button className={`rc-tab ${activeTab === TABS.PY ? 'active' : ''}`} onClick={() => setActiveTab(TABS.PY)} type="button" role="tab" aria-selected={activeTab === TABS.PY}>Pedidos Ya</button>
           )}
 
           {showAmexBtn && (
-            <button
-              className={`rc-tab ${activeTab === TABS.AMEX ? 'active' : ''}`}
-              onClick={() => setActiveTab(TABS.AMEX)}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === TABS.AMEX}
-            >
-              American Express
-            </button>
+            <button className={`rc-tab ${activeTab === TABS.AMEX ? 'active' : ''}`} onClick={() => setActiveTab(TABS.AMEX)} type="button" role="tab" aria-selected={activeTab === TABS.AMEX}>American Express</button>
           )}
 
-          <button
-            className={`rc-tab ${activeTab === TABS.RESUMEN ? 'active' : ''}`}
-            onClick={() => setActiveTab(TABS.RESUMEN)}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === TABS.RESUMEN}
-          >
-            Resumen
-          </button>
+          <button className={`rc-tab ${activeTab === TABS.RESUMEN ? 'active' : ''}`} onClick={() => setActiveTab(TABS.RESUMEN)} type="button" role="tab" aria-selected={activeTab === TABS.RESUMEN}>Resumen</button>
         </div>
       </div>
 
-      {/* CONTENIDO POR SECCIÓN */}
       {activeTab === TABS.ARQUEO && (
         <div className="rc-grid">
           <ArqueoGrid
@@ -689,13 +657,6 @@ export default function RegistrarCierre() {
             setArq={setArq}
             cajaChicaDisponible={cajaChicaDisponibleUI}
             readOnly={isViewing}
-            extras={{
-              showPedidosYaBtn,
-              showAmexBtn,
-              onPedidosYa: handlePedidosYa,
-              onAmex: handleAmericanExpress,
-              disabled: busy || isViewing,
-            }}
           />
         </div>
       )}
@@ -733,20 +694,22 @@ export default function RegistrarCierre() {
         <section className="rc-card">
           <div className="rc-card-hd">
             <h3>Pedidos Ya</h3>
-            {!isViewing && (
-              <button
-                type="button"
-                className="rc-btn rc-btn-outline"
-                onClick={handlePedidosYa}
-                disabled={busy}
-                title="Ingresar cantidad vendida en Pedidos Ya"
-              >
-                Editar cantidad
-              </button>
-            )}
           </div>
-          <div className="rc-card-bd">
-            <p>Cantidad vendida: <strong>{Number(pedidosYaCantidad || 0)}</strong></p>
+          <div className="rc-card-bd" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <label className="rc-cell-label strong">Cantidad vendida</label>
+            <input
+              className="rc-input rc-no-spin rc-no-step"
+              type="number"
+              min="0"
+              step="1"
+              inputMode="numeric"
+              value={Number.isFinite(pedidosYaCantidad) ? pedidosYaCantidad : 0}
+              onChange={(e) => setPedidosYaCantidad(Math.max(0, parseInt(e.target.value || '0', 10) || 0))}
+              onWheel={blockWheel}
+              onKeyDown={blockArrows}
+              disabled={isViewing}
+              style={{ width: 140, textAlign: 'center' }}
+            />
           </div>
         </section>
       )}
@@ -754,21 +717,35 @@ export default function RegistrarCierre() {
       {activeTab === TABS.AMEX && showAmexBtn && (
         <section className="rc-card">
           <div className="rc-card-hd">
-            <h3>American Express</h3>
-            {!isViewing && (
-              <button
-                type="button"
-                className="rc-btn rc-btn-outline"
-                onClick={handleAmericanExpress}
-                disabled={busy}
-                title="Detalle American Express"
-              >
-                Gestionar detalle
-              </button>
-            )}
+            <h3>Venta American Express</h3>
           </div>
-          <div className="rc-card-bd">
-            <p>Total AMEX: <strong>Q {Number(amexTotal || 0).toFixed(2)}</strong></p>
+
+          <div className="amex-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            {AMEX_FLAVORS.map((name) => (
+              <div key={name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '4px 6px' }}>
+                <span style={{ fontWeight: 700, color: 'var(--slate)' }}>{name}</span>
+
+                <input
+                  className="rc-input rc-no-spin rc-no-step"
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputMode="numeric"
+                  value={n(amexItems?.[name]) || 0}
+                  onChange={(e) => setAmexQty(name, e.target.value)}
+                  onWheel={blockWheel}
+                  onKeyDown={blockArrows}
+                  disabled={isViewing}
+                  style={{ width: 68, textAlign: 'center', background: '#cfeee0', border: '1px solid #cfe8db', borderRadius: 12, fontWeight: 800 }}
+                  aria-label={`Cantidad ${name}`}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <b style={{ fontSize: 16 }}>Total</b>
+            <span style={{ fontWeight: 800 }}>Q {Number(amexTotal || 0).toFixed(2)}</span>
           </div>
         </section>
       )}
@@ -787,6 +764,7 @@ export default function RegistrarCierre() {
               showPedidosYa={showPedidosYaBtn}
               showAmex={showAmexBtn}
               totalAperturas={totalAperturas}
+              isAdmin={isAdmin}
             />
           </div>
 
@@ -809,7 +787,6 @@ export default function RegistrarCierre() {
         </>
       )}
 
-      {/* MODALES */}
       <CategoriasModal
         open={showCatModal}
         onClose={() => setShowCatModal(false)}
@@ -823,18 +800,6 @@ export default function RegistrarCierre() {
         cajaChicaDisponible={cajaChicaDisponibleUI}
         faltantePorGastos={faltantePorGastos}
         onApply={(monto) => { if (isViewing) return; setCajaChicaUsada((prev) => prev + monto); }}
-      />
-
-      <AmexModal
-        open={showAmex}
-        onClose={() => setShowAmex(false)}
-        initialItems={amexItems}
-        readOnly={isViewing}
-        onSave={({ items, total }) => {
-          setAmexItems(items);
-          setAmexTotal(total);
-          setShowAmex(false);
-        }}
       />
     </div>
   );

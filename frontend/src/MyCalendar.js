@@ -110,6 +110,16 @@ const MyCalendar = forwardRef(({ showAddButton = true }, ref) => {
     );
   }, [events]);
 
+  // Evita scroll del fondo cuando el modal está visible
+    useEffect(() => {
+      if (modalOpen) {
+        document.body.classList.add('modal-open');
+      } else {
+        document.body.classList.remove('modal-open');
+      }
+      return () => document.body.classList.remove('modal-open');
+    }, [modalOpen]);
+
   // Maneja cambios en inputs del modal
   const handleChange = field => e => {
     const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;

@@ -1,6 +1,7 @@
+// src/components/registrar-cierre/GastosList.jsx
 import React, { useState } from 'react';
 import Swal from 'sweetalert2';
-import { toMoney } from '../../utils/numbers';
+import { n, toMoney } from '../../utils/numbers';
 import AttachmentViewerModal from './AttachmentViewerModal';
 
 /* Ícono cámara/foto */
@@ -95,6 +96,17 @@ export default function GastosList({
     setGasto(i, 'fileUrl', '');
   };
 
+  const clearFile = (i) => {
+    setGasto(i, 'fileBlob', null);
+    setGasto(i, 'filePreview', '');
+    setGasto(i, 'fileMime', '');
+    setGasto(i, 'fileName', '');
+    setGasto(i, 'fileUrl', '');
+  };
+
+  // ⬇️ Total de gastos (se recalcula en render)
+  const totalGastos = (gastos || []).reduce((sum, g) => sum + n(g.cantidad), 0);
+
   return (
     <section className="rc-card">
       <div className="rc-card-hd" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -126,20 +138,28 @@ export default function GastosList({
       {/* ===== Tabla de gastos ===== */}
       <table className="rc-table rc-gastos-table">
         {/* prettier-ignore */}
-        <colgroup><col style={{width:'220px'}}/><col style={{width:'auto'}}/><col style={{width:'140px'}}/><col style={{width:'140px'}}/><col style={{width:'120px'}}/></colgroup>
+        <colgroup>
+          <col style={{width:'200px'}}/>
+          <col style={{width:'auto'}}/>
+          <col style={{width:'120px'}}/>
+          <col style={{width:'120px'}}/>
+          <col style={{width:'180px'}}/>{/* Comprobante */}
+          <col style={{width:'120px'}}/>{/* Acciones */}
+        </colgroup>
         <thead>
           <tr>
             <th style={{ textAlign: 'center' }}>Categoría</th>
             <th style={{ textAlign: 'center' }}>Descripción</th>
-            <th style={{ textAlign: 'center' }}>Ref</th>
+            <th style={{ textAlign: 'center' }}>No. de ref</th>
             <th style={{ textAlign: 'center' }}>Cantidad</th>
+            <th style={{ textAlign: 'center' }}>Comprobante</th>
             <th style={{ textAlign: 'center' }}>Acciones</th>
           </tr>
         </thead>
         <tbody>
           {gastos.length === 0 && (
             <tr>
-              <td colSpan={5} className="rc-empty">Sin gastos aún.</td>
+              <td colSpan={6} className="rc-empty">Sin gastos aún.</td>
             </tr>
           )}
 
@@ -147,10 +167,13 @@ export default function GastosList({
             const locked = !!g.locked;
             const disabled = readOnly || locked;
 
+            const hasFile = !!(g.filePreview || g.fileUrl);
+            const isPdf = (g.fileMime || '').includes('pdf');
+
             return (
               <tr key={i}>
                 {/* Categoría */}
-                <td>
+                <td data-label="Categoría">
                   <select
                     className="rc-input rc-select"
                     value={g.categoria}
@@ -165,7 +188,7 @@ export default function GastosList({
                 </td>
 
                 {/* Descripción */}
-                <td>
+                <td data-label="Descripción">
                   <input
                     className="rc-input rc-desc"
                     placeholder="Descripción"
@@ -179,7 +202,7 @@ export default function GastosList({
                 </td>
 
                 {/* Ref */}
-                <td>
+                <td data-label="No. de ref">
                   <input
                     className="rc-input"
                     placeholder="Ref"
@@ -192,23 +215,93 @@ export default function GastosList({
                   />
                 </td>
 
-                {/* Cantidad */}
-                <td>
+                {/* Cantidad (sin flechas/rueda) */}
+                <td data-label="Cantidad">
                   <input
-                    className="rc-input rc-qty"
-                    placeholder="Cantidad"
-                    inputMode="numeric"
-                    value={g.cantidad}
+                    className="rc-input rc-qty no-spin"
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    value={g.cantidad ?? ''}
                     onChange={(e) => setGasto(i, 'cantidad', e.target.value)}
-                    onKeyDown={(e) => handleEnterConfirm(i, e)}
+                    onKeyDown={(e) => {
+                      if (
+                        e.key === 'ArrowUp' ||
+                        e.key === 'ArrowDown' ||
+                        e.key === 'PageUp' ||
+                        e.key === 'PageDown'
+                      ) {
+                        e.preventDefault();
+                        return;
+                      }
+                      handleEnterConfirm(i, e);
+                    }}
+                    onWheel={(e) => { e.currentTarget.blur(); }}
                     disabled={disabled}
                     aria-label="Cantidad"
                     style={{ width: '100%', textAlign: 'center' }}
                   />
                 </td>
 
+                {/* Comprobante */}
+                <td data-label="Comprobante" style={{ textAlign: 'center' }}>
+                  <div style={{ display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {hasFile ? (
+                      <>
+                        <button
+                          type="button"
+                          className="rc-btn rc-btn-outline"
+                          onClick={() => openViewer(g.filePreview || g.fileUrl, g.fileMime, g.fileName)}
+                          title="Ver comprobante"
+                        >
+                          {isPdf ? <IcoPdf /> : <IcoPhoto />}
+                        </button>
+                        {!disabled && (
+                          <button
+                            type="button"
+                            className="rc-btn rc-btn-outline"
+                            onClick={() => handlePickFile(i)}
+                          >
+                            Cambiar
+                          </button>
+                        )}
+                        {!disabled && (
+                          <button
+                            type="button"
+                            className="rc-btn rc-btn-ghost"
+                            onClick={() => clearFile(i)}
+                            title="Quitar archivo"
+                          >
+                            Quitar
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      !disabled && (
+                        <button
+                          type="button"
+                          className="rc-btn rc-btn-outline"
+                          onClick={() => handlePickFile(i)}
+                        >
+                          Adjuntar
+                        </button>
+                      )
+                    )}
+
+                    {/* Input oculto */}
+                    <input
+                      id={`gasto-file-${i}`}
+                      type="file"
+                      accept="image/png,image/jpeg,application/pdf"
+                      onChange={(e) => handleFileChange(i, e)}
+                      style={{ display: 'none' }}
+                    />
+                  </div>
+                </td>
+
                 {/* Acciones */}
-                <td style={{ textAlign: 'center' }}>
+                <td data-label="Acciones" style={{ textAlign: 'center' }}>
                   {!readOnly && locked && (
                     <button
                       type="button"
@@ -235,9 +328,22 @@ export default function GastosList({
             );
           })}
         </tbody>
+
+        {/* Total de gastos */}
+        <tfoot>
+          <tr className="rc-gastos-total">
+            <td colSpan={4} style={{ textAlign: 'right', fontWeight: 800, color: 'var(--dark)' }}>
+              Total de gastos
+            </td>
+            <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--dark)' }}>
+              {toMoney(totalGastos)}
+            </td>
+            <td />
+          </tr>
+        </tfoot>
       </table>
 
-      {/* Acciones de lista: un solo botón visible siempre */}
+      {/* Acciones de lista */}
       {!readOnly && (
         <div className="rc-gastos-actions" style={{ marginTop: 10 }}>
           <button

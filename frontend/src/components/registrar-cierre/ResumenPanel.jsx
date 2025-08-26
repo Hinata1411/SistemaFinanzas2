@@ -1,10 +1,9 @@
 import React from 'react';
 import { toMoney } from '../../utils/numbers';
 
-
 export default function ResumenPanel({
-  totals = {},          
-  flags = {},           
+  totals = {},
+  flags = {},
   cajaChicaUsada = 0,
   onPagarFaltante,
   faltantePagado = 0,
@@ -15,6 +14,9 @@ export default function ResumenPanel({
   showAmex = false,
 
   totalAperturas = 0,
+
+  // 👇 nuevo
+  isAdmin = false,
 }) {
   const {
     totalArqueoEfectivoNeto = 0,
@@ -30,7 +32,7 @@ export default function ResumenPanel({
     faltanteEfectivo = 0,
 
     totalGeneral = 0,
-    totalArqueoEfectivo = 0, // compat si hiciera falta
+    totalArqueoEfectivo = 0, // compat
   } = totals;
 
   const {
@@ -48,60 +50,65 @@ export default function ResumenPanel({
     <section className="rc-card">
       <h3>Resumen</h3>
 
-      <div className="rc-resumen-grid">
-        {/* IZQUIERDA - Ventas Total Sistema */}
-        <div className="rc-res-col">
-          <div className="rc-res-title">Ventas Total Sistema</div>
+      <div
+        className="rc-resumen-grid"
+        style={!isAdmin ? { gridTemplateColumns: '1fr' } : undefined}
+      >
+        {/* IZQUIERDA - Ventas Total Sistema (solo admin) */}
+        {isAdmin && (
+          <div className="rc-res-col">
+            <div className="rc-res-title">Ventas Total Sistema</div>
 
-          <div className="rc-res-item">
-            <span>Efectivo</span>
-            <b>{toMoney(totalCierreEfectivo)}</b>
-          </div>
-          <div className="rc-res-item">
-            <span>Tarjeta</span>
-            <b>{toMoney(totalCierreTarjeta)}</b>
-          </div>
-          <div className="rc-res-item">
-            <span>A domicilio</span>
-            <b>{toMoney(totalCierreMotorista)}</b>
-          </div>
-          <div className="rc-res-item">
-            <span>Caja chica (usada)</span>
-            <b>{toMoney(cajaChicaUsada)}</b>
-          </div>
-
-          <div className={`rc-res-item ${diffEsPositivo ? 'ok' : 'bad'}`}>
-            <span>{diffLabel}</span>
-            <b>{toMoney(diffAbs)}</b>
-          </div>
-
-          {faltanteEfectivo > 0 && faltantePagado === 0 && (
             <div className="rc-res-item">
-              <button
-                type="button"
-                className="rc-btn rc-btn-primary"
-                onClick={onPagarFaltante}
-              >
-                Pagar faltante ({toMoney(faltanteEfectivo)})
-              </button>
+              <span>Efectivo</span>
+              <b>{toMoney(totalCierreEfectivo)}</b>
             </div>
-          )}
-
-          {faltantePagado > 0 && (
-            <div className="rc-res-item ok">
-              <span>Faltante pagado</span>
-              <b>{toMoney(faltantePagado)}</b>
+            <div className="rc-res-item">
+              <span>Tarjeta</span>
+              <b>{toMoney(totalCierreTarjeta)}</b>
             </div>
-          )}
-        </div>
+            <div className="rc-res-item">
+              <span>A domicilio</span>
+              <b>{toMoney(totalCierreMotorista)}</b>
+            </div>
+            <div className="rc-res-item">
+              <span>Caja chica (usada)</span>
+              <b>{toMoney(cajaChicaUsada)}</b>
+            </div>
 
-        {/* DERECHA - Control Administración */}
+            <div className={`rc-res-item ${diffEsPositivo ? 'ok' : 'bad'}`}>
+              <span>{diffLabel}</span>
+              <b>{toMoney(diffAbs)}</b>
+            </div>
+
+            {faltanteEfectivo > 0 && faltantePagado === 0 && (
+              <div className="rc-res-item">
+                <button
+                  type="button"
+                  className="rc-btn rc-btn-primary"
+                  onClick={onPagarFaltante}
+                >
+                  Pagar faltante ({toMoney(faltanteEfectivo)})
+                </button>
+              </div>
+            )}
+
+            {faltantePagado > 0 && (
+              <div className="rc-res-item ok">
+                <span>Faltante pagado</span>
+                <b>{toMoney(faltantePagado)}</b>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* DERECHA - Control Administración (visible para todos) */}
         <div className="rc-res-col">
           <div className="rc-res-title">Control Administración</div>
 
           <div className="rc-res-item">
             <span>Efectivo</span>
-            <b>{toMoney(efectivoAdmin)}</b> {/* 👈 NETO */}
+            <b>{toMoney(efectivoAdmin)}</b>
           </div>
           <div className="rc-res-item">
             <span>Tarjeta</span>
@@ -116,7 +123,6 @@ export default function ResumenPanel({
             <b>{toMoney(totalGastos)}</b>
           </div>
 
-          {/* Extras por sucursal */}
           {showPedidosYa && (
             <div className="rc-res-item">
               <span>Total Pedidos Ya</span>
@@ -132,7 +138,7 @@ export default function ResumenPanel({
         </div>
       </div>
 
-      {/* Total a depositar (ya viene calculado en el hook con NETO) */}
+      {/* Total a depositar */}
       <div className={`rc-total-deposit ${isDepositNegative ? 'bad' : ''}`}>
         <span className="money">
           <svg viewBox="0 0 24 24" aria-hidden="true">

@@ -1,10 +1,13 @@
+// src/DashboardLayout.jsx
 import React, { useEffect, useState } from 'react';
-import { Outlet, useNavigate, NavLink } from 'react-router-dom';
+import { Outlet, useNavigate, NavLink, useLocation } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import './DashboardLayout.css';
 
 function DashboardLayout({ userEmail, userRole }) {
   const navigate = useNavigate();
+  const location = useLocation();
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Email mostrado
@@ -18,6 +21,15 @@ function DashboardLayout({ userEmail, userRole }) {
 
   // Tema
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+
+  // Estados de submenús
+  const path = location.pathname.toLowerCase();
+  const registrarActive =
+    path.includes('/registrarcierre') || path.includes('/registrarpagos');
+  const historialActive = path.includes('/ventas') || path.includes('/historialpagos');
+
+  const [openRegistrar, setOpenRegistrar] = useState(registrarActive);
+  const [openHistorial, setOpenHistorial] = useState(historialActive);
 
   useEffect(() => {
     setRole(getRole());
@@ -93,6 +105,7 @@ function DashboardLayout({ userEmail, userRole }) {
 
         <nav id="sidebar-menu" className="menu-container">
           <ul className="menu">
+            {/* Finanzas (home) */}
             <li className="menu-item">
               <NavLink
                 to="/Finanzas"
@@ -104,35 +117,98 @@ function DashboardLayout({ userEmail, userRole }) {
               </NavLink>
             </li>
 
-             <li className="menu-item">
-              <NavLink
-                to="RegistrarCierre"
-                className={({ isActive }) => `menu-link ${isActive ? 'active' : ''}`}
+            {/* ===== Grupo: Registrar ===== */}
+            <li className={`menu-item group ${registrarActive ? 'active' : ''}`}>
+              <button
+                type="button"
+                className="menu-link group-toggle"
+                onClick={() => setOpenRegistrar((v) => !v)}
+                aria-expanded={openRegistrar}
               >
                 <img src="/factura.png" alt="" />
-                <span>Registrar Cuadre</span>
-              </NavLink>
+                <span>Registrar</span>
+                <i className={`bx ${openRegistrar ? 'bx-chevron-up' : 'bx-chevron-down'}`} />
+              </button>
+
+              {openRegistrar && (
+                <ul className="submenu">
+                  {/* Cuadres (viewer y admin) */}
+                  <li>
+                    <NavLink
+                      to="RegistrarCierre"
+                      className={({ isActive }) => `submenu-link ${isActive ? 'active' : ''}`}
+                    >
+                      <span>Cuadres</span>
+                    </NavLink>
+                  </li>
+
+                  {/* Pagos con efectivo (solo admin, como antes) */}
+                  {isAdmin && (
+                    <li>
+                      <NavLink
+                        to="RegistrarPagos"
+                        className={({ isActive }) => `submenu-link ${isActive ? 'active' : ''}`}
+                      >
+                        <span>Pagos con efectivo</span>
+                      </NavLink>
+                    </li>
+                  )}
+                </ul>
+              )}
             </li>
 
-            <li className="menu-item">
-              <NavLink
-                to="Ventas"
-                className={({ isActive }) => `menu-link ${isActive ? 'active' : ''}`}
-              >
-                <img src="/factura.png" alt="" />
-                <span>Historial</span>
-              </NavLink>
-            </li>
-
-            <li className="menu-item">
-              <NavLink
-                to="Sucursales"
-                className={({ isActive }) => `menu-link ${isActive ? 'active' : ''}`}
+            {/* ===== Grupo: Historial ===== */}
+            <li className={`menu-item group ${historialActive ? 'active' : ''}`}>
+              <button
+                type="button"
+                className="menu-link group-toggle"
+                onClick={() => setOpenHistorial((v) => !v)}
+                aria-expanded={openHistorial}
               >
                 <img src="/pizza3.png" alt="" />
-                <span>Sucursales</span>
-              </NavLink>
+                <span>Historial</span>
+                <i className={`bx ${openHistorial ? 'bx-chevron-up' : 'bx-chevron-down'}`} />
+              </button>
+
+              {openHistorial && (
+                <ul className="submenu">
+                  {/* Cuadres (viewer y admin) */}
+                  <li>
+                    <NavLink
+                      to="Ventas"
+                      className={({ isActive }) => `submenu-link ${isActive ? 'active' : ''}`}
+                    >
+                      <span>Cuadres</span>
+                    </NavLink>
+                  </li>
+
+                  {/* Pagos con efectivo (solo admin, como antes) */}
+                  {isAdmin && (
+                    <li>
+                      <NavLink
+                        to="HistorialPagos"
+                        className={({ isActive }) => `submenu-link ${isActive ? 'active' : ''}`}
+                      >
+                        <span>Pagos con efectivo</span>
+                      </NavLink>
+                    </li>
+                  )}
+                </ul>
+              )}
             </li>
+
+            {/* ===== Otros menús solo admin (igual que antes) ===== */}
+            {isAdmin && (
+              <li className="menu-item">
+                <NavLink
+                  to="Sucursales"
+                  className={({ isActive }) => `menu-link ${isActive ? 'active' : ''}`}
+                >
+                  <img src="/pizza3.png" alt="" />
+                  <span>Sucursales</span>
+                </NavLink>
+              </li>
+            )}
 
             {isAdmin && (
               <li className="menu-item">
@@ -148,10 +224,9 @@ function DashboardLayout({ userEmail, userRole }) {
           </ul>
         </nav>
 
-        {/* Footer del sidebar: cambiar tema + cerrar sesión */}
+        {/* Footer del sidebar: cerrar sesión */}
         <div className="sb-footer">
           <div className="footer-actions">
-           
             <button
               onClick={handleLogout}
               className="logout-button"
@@ -186,9 +261,13 @@ function DashboardLayout({ userEmail, userRole }) {
       <main className="admin-content">
         {/* Barra de usuario arriba */}
         <header className="userbar">
-
           <div className="theme">
-             <button type="button" className="theme-button" onClick={toggleTheme} title="Cambiar tema">
+            <button
+              type="button"
+              className="theme-button"
+              onClick={toggleTheme}
+              title="Cambiar tema"
+            >
               <i className={`bx ${theme === 'dark' ? 'bx-sun' : 'bx-moon'}`} />
               <span>{theme === 'dark' ? ' ' : ' '}</span>
             </button>
@@ -205,7 +284,6 @@ function DashboardLayout({ userEmail, userRole }) {
               <small>{email}</small>
             </div>
           </div>
-          
         </header>
 
         <div className="content-card">

@@ -125,13 +125,10 @@
 .modal-actions{ display:flex; justify-content:flex-end; gap:8px; }
 
 
-
-
 /* Responsive */
 @media (max-width: 900px){
   .ventas-kpis{ grid-template-columns: 1fr; }
 }
-
 
 
 /* Responsive */
@@ -141,4 +138,73 @@
   .footer-section{ grid-template-columns:1fr; }
 }
 
+/* ===== Ventas: responsive igual a HistorialPagos ===== */
 
+/* Scroll de seguridad en anchos medianos */
+.ventas-tabla-wrap { overflow-x: auto; }
+
+/* Evitar desbordes feos */
+.ventas-tabla td { overflow-wrap:anywhere; word-break:break-word; }
+
+/* Móvil: ocultar thead y convertir filas en cards */
+@media (max-width:760px){
+  /* Oculta el encabezado accesiblemente */
+  .ventas-tabla thead{
+    border:0; clip:rect(0 0 0 0); height:1px; margin:-1px; overflow:hidden;
+    padding:0; position:absolute; width:1px;
+  }
+
+  /* Tabla -> bloques */
+  .ventas-tabla,
+  .ventas-tabla tbody,
+  .ventas-tabla tr,
+  .ventas-tabla td{
+    display:block; width:100%;
+  }
+
+  /* Cada fila como “card” */
+  .ventas-tabla tr{
+    background:#fff;
+    margin:10px 0;
+    border:1px solid #e7e2d9;
+    border-radius:12px;
+    box-shadow: var(--shadow);
+    overflow:hidden;
+  }
+
+  /* Celdas con label a la izquierda */
+  .ventas-tabla td{
+    text-align:left;
+    border-top:1px solid #f0ece6;
+    padding:12px 14px 12px calc(14px + 140px); /* 140px = ancho del label */
+    position:relative;
+    min-height:44px;
+    color:var(--slate);
+  }
+  .ventas-tabla td:first-child{ border-top:none; }
+
+  /* Si el TD trae data-label, úsalo */
+  .ventas-tabla td::before{
+    content: attr(data-label);
+    position:absolute;
+    left:14px; top:50%;
+    transform: translateY(-50%);
+    font-weight:800; color:var(--dark);
+    width:130px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+
+  /* Fallback por posición si NO usas data-label (ajusta textos si tu orden cambia) */
+  .ventas-tabla td:nth-child(1)::before{ content:'Fecha'; }
+  .ventas-tabla td:nth-child(2)::before{ content:'Ubicación'; } /* o 'Sucursal' */
+  .ventas-tabla td:nth-child(3)::before{ content:'Cajas'; }      /* cambia si aplica */
+  .ventas-tabla td:nth-child(4)::before{ content:'Total sistema'; }
+  .ventas-tabla td:nth-child(5)::before{ content:'A depositar'; }
+  .ventas-tabla td:nth-child(6)::before{ content:'Acciones'; }
+
+  /* Acciones alineadas al inicio en móvil */
+  .ventas-tabla .acciones{ justify-content:flex-start; }
+}
+
+/* Alineación numérica opcional */
+.ventas-tabla td.text-right{ text-align:right; }

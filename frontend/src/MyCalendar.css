@@ -68,8 +68,54 @@
 .e-schedule .e-appointment:hover {
   opacity: 0.9;
 }
+/* ===== Fix modal/overlay por encima del calendario ===== */
+.modal-backdrop {
+  position: fixed;         /* cubre toda la ventana */
+  inset: 0;
+  background: rgba(0,0,0,.5);
+  z-index: 5000;           /* debajo del modal, encima de todo lo demás */
+}
 
-/* Si quieres mantener fondo rojo, úsalo; si no, coméntalo */
-/* .e-schedule {
-  background-color: #e10c0c;
-} */
+.modal.d-block {
+  position: fixed;         /* centrado en viewport */
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5010;           /* por encima del backdrop */
+}
+
+.modal-dialog {
+  width: min(720px, 96vw);
+  margin: 0;               /* lo centramos con flex del .modal */
+}
+
+.modal-content {
+  max-height: 90vh;        /* si es alta, que scrollee adentro */
+  overflow: auto;
+  border-radius: 12px;
+}
+
+/* El calendario y contenedores no deben sobrepasar al modal */
+.calendar-container,
+.home-calendar-card,
+.rbc-calendar {
+  position: relative;
+  z-index: 1;              /* bajo el 1050/1060 del modal */
+}
+
+/* Evitar scroll de fondo cuando el modal está abierto */
+.modal-open {
+  overflow: hidden;
+}
+
+.topbar,
+.navbar,
+.sidebar,
+.offcanvas,
+.home-calendar-card,
+.calendar-container,
+.rbc-calendar {
+  position: relative;
+  z-index: 1200;           /* muy por debajo del 5000 del modal */
+}

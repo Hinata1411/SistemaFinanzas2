@@ -62,9 +62,9 @@ export default function Finanzas() {
   const money = (n) =>
     new Intl.NumberFormat('es-GT', { style: 'currency', currency: 'GTQ', maximumFractionDigits: 2 }).format(n || 0);
 
-  // === Extractor robusto de “Total a depositar” ===
   const nnum = (v) => (typeof v === 'number' ? v : parseFloat(v || 0)) || 0;
 
+  // === Extractor robusto de “Total a depositar” ===
   const extractTotalADepositar = (d) => {
     const t = d?.totales || {};
 
@@ -157,7 +157,7 @@ export default function Finanzas() {
       }
     })();
     return () => { cancelled = true; };
-    // 👇 incluimos userSucursalId para que, si llega después de las sucursales, reevalúe selección
+  // 👇 incluimos userSucursalId para que, si llega después de las sucursales, reevalúe selección
   }, [isAdmin, userSucursalId]);
 
   // Si el perfil llega después y soy viewer, forzar selección a su sucursal
@@ -192,22 +192,25 @@ export default function Finanzas() {
 
       const hoy = todayISO();
 
-      // 1) Leer caja chica de todas las sucursales en paralelo
+      // 1) Leer caja chica + override kpiDepositos por sucursal
       const cajaPromises = sucIds.map(async (id) => {
         try {
           const s = await getDoc(doc(db, 'sucursales', id));
-          const caja = Number(s.exists() ? (s.data()?.cajaChica || 0) : 0);
-          return { id, caja };
+          const d = s.exists() ? (s.data() || {}) : {};
+          return {
+            id,
+            caja: Number(d.cajaChica || 0),
+            kpiOverride: typeof d.kpiDepositos === 'number' ? Number(d.kpiDepositos) : null,
+          };
         } catch {
-          return { id, caja: 0 };
+          return { id, caja: 0, kpiOverride: null };
         }
       });
 
-      // 2) Leer cierres y sumar "Total a depositar" (extractor) en paralelo
+      // 2) Leer cierres y sumar "Total a depositar" (solo si NO hay override)
       const ventasPromises = sucIds.map(async (id) => {
         try {
           const cierresRef = collection(db, 'cierres');
-          // fecha como YYYY-MM-DD; compare string funciona
           const qRef = query(cierresRef, where('sucursalId', '==', id), where('fecha', '<=', hoy));
           const snap = await getDocs(qRef);
           let ventas = 0;
@@ -225,17 +228,20 @@ export default function Finanzas() {
         Promise.all(ventasPromises),
       ]);
 
-      // Armar mapa por sucursal
       const map = {};
       let totalCaja = 0;
       let totalVentas = 0;
 
       sucIds.forEach((id) => {
-        const c = cajas.find(x => x.id === id)?.caja || 0;
-        const v = ventas.find(x => x.id === id)?.ventas || 0;
-        map[id] = { cajaChica: c, ventas: v };
-        totalCaja += c;
-        totalVentas += v;
+        const cx = cajas.find(x => x.id === id) || { caja: 0, kpiOverride: null };
+        const vv = ventas.find(x => x.id === id)?.ventas || 0;
+
+        const usedVentas = (cx.kpiOverride != null) ? cx.kpiOverride : vv;
+
+        map[id] = { cajaChica: cx.caja, ventas: usedVentas };
+
+        totalCaja += cx.caja;
+        totalVentas += usedVentas;
       });
 
       setKpiBySucursal(map);
@@ -289,7 +295,7 @@ export default function Finanzas() {
             id="branchSel"
             value={selectedSucursal}
             onChange={(e) => setSelectedSucursal(e.target.value)}
-            disabled={!isAdmin}  // ⬅️ viewer bloqueado
+            disabled={!isAdmin}  // viewer bloqueado
           >
             {branchOptions.map((s) => (
               <option key={s.id} value={s.id}>
