@@ -1,6 +1,7 @@
 // src/App.js
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
+
 import PrivateRoute from './PrivateRoute';
 import DashboardLayout from './DashboardLayout';
 import Finanzas from './Finanzas.js';
@@ -13,67 +14,63 @@ import { RequireAdmin } from './router/guards';
 import RegistrarPagos from './RegistrarPagos.jsx';
 import HistorialPagos from './HistorialPagos.jsx';
 
-function App() {
+export default function App() {
   return (
-    <Router>
-      <Routes>
-        {/* públicas */}
-        <Route path="/" element={<Login />} />
-        <Route path="/login" element={<Login />} />
+    <Routes>
+      {/* públicas */}
+      <Route path="/" element={<Login />} />
+      <Route path="/login" element={<Login />} />
 
-        {/* protegidas */}
+      {/* protegidas */}
+      <Route
+        path="/Finanzas"
+        element={
+          <PrivateRoute>
+            <DashboardLayout />
+          </PrivateRoute>
+        }
+      >
+        <Route index element={<Finanzas />} />
+        <Route path="RegistrarCierre" element={<RegistrarCierre />} />
+        <Route path="Ventas" element={<Ventas />} />
+
+        {/* solo ADMIN */}
         <Route
-          path="/Finanzas"
+          path="HistorialPagos"
           element={
-            <PrivateRoute>
-              <DashboardLayout />
-            </PrivateRoute>
+            <RequireAdmin>
+              <HistorialPagos />
+            </RequireAdmin>
           }
-        >
-          <Route index element={<Finanzas />} />
-          <Route path="RegistrarCierre" element={<RegistrarCierre />} />
-          <Route path="Ventas" element={<Ventas />} />
+        />
+        <Route
+          path="RegistrarPagos"
+          element={
+            <RequireAdmin>
+              <RegistrarPagos />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="Sucursales"
+          element={
+            <RequireAdmin>
+              <Sucursales />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="Usuarios"
+          element={
+            <RequireAdmin>
+              <Usuarios />
+            </RequireAdmin>
+          }
+        />
+      </Route>
 
-          {/* solo ADMIN puede entrar */}
-          <Route
-            path="HistorialPagos"
-            element={
-              <RequireAdmin>
-                <HistorialPagos/>
-              </RequireAdmin>
-            }
-          />
-          <Route
-            path="RegistrarPagos"
-            element={
-              <RequireAdmin>
-                <RegistrarPagos/>
-              </RequireAdmin>
-            }
-          />
-          <Route
-            path="Sucursales"
-            element={
-              <RequireAdmin>
-                <Sucursales />
-              </RequireAdmin>
-            }
-          />
-          <Route
-            path="Usuarios"
-            element={
-              <RequireAdmin>
-                <Usuarios />
-              </RequireAdmin>
-            }
-          />
-        </Route>
-
-        {/* fallback */}
-        <Route path="*" element={<Login />} />
-      </Routes>
-    </Router>
+      {/* fallback */}
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
   );
 }
-
-export default App;
