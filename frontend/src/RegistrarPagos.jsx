@@ -303,7 +303,7 @@ export default function RegistrarPagos() {
       const ready = await Promise.all(items.map(async (r, i) => {
         const { fileBlob, ...rest } = r;
         if (fileBlob) {
-          const safe = (r.fileName || fileBlob.name || `pago_${i}`).replace(/[^\w.\-]+/g, '_');
+          const safe = (r.fileName || fileBlob.name || `pago_${i}`).replace(/[^\w.-]+/g, '_');
           const path = `${folder}/${Date.now()}_${i}_${safe}`;
           const fileRef = sRef(storage, path);
           await uploadBytes(fileRef, fileBlob,
