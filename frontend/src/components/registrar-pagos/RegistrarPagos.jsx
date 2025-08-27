@@ -329,10 +329,34 @@ export default function RegistrarPagos() {
     setRow(i, 'fileUrl', '');
   };
 
-  const kpiDepositos = active ? Number(kpiDepositosBySuc[active] || 0) : 0;
-const cajaChicaDisponible = active ? Number(cajaChicaBySuc[active] || 0) : 0;
+  // Usa el snapshot del documento cuando estás viendo o editando ese mismo doc
+  const kpiDepositos = React.useMemo(() => {
+    if (!active) return 0;
+    const live = Number(kpiDepositosBySuc[active] || 0);
+    const isSameSucursal = originalDoc?.sucursalId === active;
+
+    if ((isViewing || isEditingExisting) && isSameSucursal) {
+      // Anchor KPI to the doc snapshot while viewing/editing
+      const snap = Number(
+        (originalDoc?.kpiDepositosAtSave ?? originalDoc?.sobranteParaManana ?? 0)
+      );
+      return Number.isFinite(snap) ? snap : live;
+    }
+    return live;
+  }, [
+    active,
+    kpiDepositosBySuc,
+    isViewing,
+    isEditingExisting,
+    originalDoc?.sucursalId,
+    originalDoc?.kpiDepositosAtSave,
+    originalDoc?.sobranteParaManana,
+  ]);
+
+  const cajaChicaDisponible = active ? Number(cajaChicaBySuc[active] || 0) : 0; // esta puede quedarse "viva"
 
 
+ 
   const sobranteBruto = kpiDepositos - totalUtilizado;
   const deficit = Math.min(0, sobranteBruto);
   const sobranteFinal = Math.max(0, sobranteBruto + (state.cajaChicaUsada || 0));
