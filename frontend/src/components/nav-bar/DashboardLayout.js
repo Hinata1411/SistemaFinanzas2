@@ -176,7 +176,7 @@ function DashboardLayout({ userEmail, userRole }) {
                   {/* Cuadres (viewer y admin) */}
                   <li>
                     <NavLink
-                      to="Ventas"
+                      to="HistorialCuadres"
                       className={({ isActive }) => `submenu-link ${isActive ? 'active' : ''}`}
                     >
                       <span>Cuadres</span>
