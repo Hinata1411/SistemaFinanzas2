@@ -456,7 +456,9 @@ export default function RegistrarPagos() {
         setCajaChicaBySuc(prev => ({ ...prev, [active]: Number(prev[active] || 0) + deltaCajaChica }));
         setKpiDepositosBySuc(prev => ({ ...prev, [active]: Number(sobranteParaManana) }));
 
-        await Swal.fire({ icon:'success', title:'Pagos guardados', timer:1400, showConfirmButton:false });
+         // ✅ Opción A: esperar el toast y luego redirigir
+        await Swal.fire({ icon:'success', title:'Pagos guardados', timer:1200, showConfirmButton:false });
+        navigate('/Finanzas/HistorialPagos');
       }
     } catch (e) {
       console.error(e);
