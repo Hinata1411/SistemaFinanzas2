@@ -135,7 +135,7 @@ export default function RegistrarPagos() {
         // KPI: base = sobrante del último pago + suma de cierres desde ese día hasta hoy
         const kpi = {};
         await Promise.all(arr.map(async (s) => {
-          // último pago
+          // último pago (como "checkpoint" de KPI)
           const pagosRef = collection(db, 'pagos');
           const qPago = query(
             pagosRef,
@@ -169,6 +169,7 @@ export default function RegistrarPagos() {
           let sumaDesdeUltimoPago = 0;
           cierresSnap.forEach(d => { sumaDesdeUltimoPago += extractTotalADepositar(d.data() || {}); });
 
+          // KPI actual = base + cierres acumulados desde el último pago
           kpi[s.id] = base + sumaDesdeUltimoPago;
         }));
 
