@@ -494,6 +494,9 @@ export default function RegistrarCierre() {
         email: auth.currentUser?.email || '',
       };
 
+      // 👉 BASE PARA EL KPI: total del cuadre (totalGeneral)
+      const kpiBase = Number(totals?.totalGeneral ?? 0);
+
       const payloadBase = {
         fecha,
         sucursalId: sucId,
@@ -516,8 +519,7 @@ export default function RegistrarCierre() {
         totales: { ...totals },
       };
 
-      // 👉 BASE PARA EL KPI: total del cuadre (totalGeneral)
-      const kpiBase = Number(totals?.totalGeneral ?? 0);
+      
 
       if (isEditingExisting) {
         await updateDoc(doc(db, 'cierres', editId), { ...payloadBase, updatedAt: serverTimestamp() });
