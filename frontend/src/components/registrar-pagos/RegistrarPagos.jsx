@@ -34,7 +34,7 @@ const extractTotalADepositar = (d) => {
                   d?.total_depositar ?? t?.totalADepositar ?? t?.total_a_depositar ??
                   t?.totalDepositar ?? t?.total_depositar ?? t?.depositoEfectivo ??
                   t?.efectivoParaDepositos ?? t?.efectivo_para_depositos ??
-                  t?.totalDeposito ?? t?.total_deposito ?? null;
+                  t?.totalDeposito ?? t?.total_deposito ?? t?.total_para_depositar ?? null;
   if (aliases != null && !isNaN(aliases)) {
     const val = nnum(aliases); if (val !== 0) return val;
   }
@@ -84,7 +84,7 @@ export default function RegistrarPagos() {
   // visor
   const [viewer, setViewer] = useState({ open:false, url:'', mime:'', name:'' });
 
-  // Para deltas al editar
+  // Para deltas al editar y snapshots
   const [originalDoc, setOriginalDoc] = useState(null);
 
   useEffect(() => {
@@ -106,7 +106,7 @@ export default function RegistrarPagos() {
     if (!me.loaded) return;
 
     (async () => {
-      // 1) Siempre deja sucursales cargadas aunque alguna consulta falle
+      // 1) Sucursales
       let arr = [];
       try {
         const qs = await getDocs(collection(db, 'sucursales'));
@@ -125,7 +125,6 @@ export default function RegistrarPagos() {
         }
       } catch (e) {
         console.error('Error cargando sucursales:', e);
-        // si falla, dejamos sucursales como estaban (no borramos las pills)
         return;
       }
 
@@ -140,6 +139,13 @@ export default function RegistrarPagos() {
       // 3) KPI robusto por sucursal: base (último pago) + cierres desde ese día
       const computeFor = async (sucId) => {
         try {
+          // Si estamos viendo/editando un pago existente de esta sucursal, usar snapshot/valor del doc
+          if (originalDoc && originalDoc.sucursalId === sucId) {
+            // Prioriza snapshot si existe; fallback a sobrante del doc
+            const snap = Number(originalDoc?.kpiDepositosAtSave ?? originalDoc?.sobranteParaManana ?? 0);
+            return snap;
+          }
+
           // último pago
           const pagosRef = collection(db, 'pagos');
           const qPago = query(
@@ -153,7 +159,7 @@ export default function RegistrarPagos() {
           const lastFechaPago = lastPago?.fecha || null;
           const base = Number(lastPago?.sobranteParaManana || 0);
 
-          // cierres desde > lastFechaPago hasta <= hoy
+          // cierres desde > lastFechaPago hasta <= hoy (con orderBy para permitir desigualdades)
           const cierresRef = collection(db, 'cierres');
           let qCierres;
           if (lastFechaPago) {
@@ -161,13 +167,15 @@ export default function RegistrarPagos() {
               cierresRef,
               where('sucursalId','==', sucId),
               where('fecha','>', lastFechaPago),
-              where('fecha','<=', hoy)
+              where('fecha','<=', hoy),
+              orderBy('fecha', 'asc')
             );
           } else {
             qCierres = query(
               cierresRef,
               where('sucursalId','==', sucId),
-              where('fecha','<=', hoy)
+              where('fecha','<=', hoy),
+              orderBy('fecha', 'asc')
             );
           }
           const cierresSnap = await getDocs(qCierres);
@@ -191,7 +199,8 @@ export default function RegistrarPagos() {
       setKpiDepositosBySuc(kpi);
       setCajaChicaBySuc(caja);
     })();
-  }, [me.loaded, editId]);
+  // agregamos originalDoc como dependencia para que, al precargar un pago, se refleje el snapshot
+  }, [me.loaded, editId, originalDoc]);
 
   // Inicializar pagosMap por sucursal
   useEffect(() => {
@@ -252,6 +261,15 @@ export default function RegistrarPagos() {
           copy[d.sucursalId].cajaChicaUsada = n(d.cajaChicaUsada);
           return copy;
         });
+
+        // Forzar que el KPI muestre lo que se guardó en este documento (snapshot)
+        const kpiVal = Number(d?.kpiDepositosAtSave ?? d?.sobranteParaManana ?? 0);
+        setKpiDepositosBySuc(prev => ({ ...prev, [d.sucursalId]: kpiVal }));
+
+        // Si guardaste snapshot de caja chica, úsalo para la UI en modo ver
+        if (typeof d?.cajaChicaDisponibleAtSave === 'number') {
+          setCajaChicaBySuc(prev => ({ ...prev, [d.sucursalId]: Number(d.cajaChicaDisponibleAtSave) }));
+        }
       } catch (e) {
         console.error(e);
         Swal.fire('Error', e?.message || 'No se pudo cargar el registro.', 'error');
@@ -445,6 +463,10 @@ export default function RegistrarPagos() {
 
       const actor = { uid: me.uid, username: me.username };
 
+      // --- snapshots que se deben guardar/mostrar en ver/editar ---
+      const kpiSnapshot = Number(kpiDepositos);              // lo que se está viendo en “Dinero para depósitos”
+      const cajaChicaSnapshot = Number(cajaChicaDisponible); // disponible al momento de guardar
+
       if (isEditingExisting) {
         const prevCaja = n(originalDoc?.cajaChicaUsada);
         const deltaCajaChica = -(cajaChicaUsada - prevCaja);
@@ -456,6 +478,9 @@ export default function RegistrarPagos() {
           totalUtilizado: totalUtilizadoCalc,
           cajaChicaUsada,
           sobranteParaManana,
+          // snapshots
+          kpiDepositosAtSave: kpiSnapshot,
+          cajaChicaDisponibleAtSave: cajaChicaSnapshot,
           updatedAt: serverTimestamp(),
           updatedBy: actor,
         });
@@ -464,6 +489,7 @@ export default function RegistrarPagos() {
           await updateDoc(doc(db, 'sucursales', active), { cajaChica: increment(deltaCajaChica) });
           setCajaChicaBySuc(prev => ({ ...prev, [active]: n(prev[active]) + deltaCajaChica }));
         }
+        // después de guardar, “Dinero para depósitos” pasa a ser el sobrante (nuevo base)
         await updateDoc(doc(db, 'sucursales', active), { kpiDepositos: Number(sobranteParaManana) });
         setKpiDepositosBySuc(prev => ({ ...prev, [active]: Number(sobranteParaManana) }));
 
@@ -481,6 +507,9 @@ export default function RegistrarPagos() {
           totalUtilizado: totalUtilizadoCalc,
           cajaChicaUsada,
           sobranteParaManana,
+          // snapshots
+          kpiDepositosAtSave: kpiSnapshot,
+          cajaChicaDisponibleAtSave: cajaChicaSnapshot,
           createdBy: actor,
           createdAt: serverTimestamp(),
         });
@@ -489,6 +518,7 @@ export default function RegistrarPagos() {
         if (deltaCajaChica !== 0) {
           await updateDoc(doc(db, 'sucursales', active), { cajaChica: increment(deltaCajaChica) });
         }
+        // después de guardar, “Dinero para depósitos” pasa a ser el sobrante (nuevo base)
         await updateDoc(doc(db, 'sucursales', active), { kpiDepositos: Number(sobranteParaManana) });
 
         setCajaChicaBySuc(prev => ({ ...prev, [active]: Number(prev[active] || 0) + deltaCajaChica }));
