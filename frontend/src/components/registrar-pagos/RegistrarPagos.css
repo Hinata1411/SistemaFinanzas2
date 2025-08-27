@@ -64,11 +64,14 @@
 }
 
 /* TABLA: ocupa todo el ancho */
-.registrar-pagos .rc-gastos-table rc-pagos-table {
+.registrar-pagos .rc-gastos-table,
+.registrar-pagos .rc-pagos-table,
+.registrar-pagos table.rc-gastos-table {
   width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
 }
+
 
 .registrar-pagos .rc-gastos-table th,
 .registrar-pagos .rc-gastos-table td {
