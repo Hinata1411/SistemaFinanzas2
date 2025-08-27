@@ -101,7 +101,7 @@ export const getCuadreDownloadName = (fecha, formatDate) => {
   const fechaLabel = typeof formatDate === 'function' ? formatDate(fecha) : (fecha || '');
   const base = `Cuadre - ${fechaLabel}`.trim();
   // Sanitizar para sistemas de archivos
-  return `${base}`.replace(/[^\w .\-]/g, '_') + '.pdf';
+  return `${base}`.replace(/[^\w .-]/g, '_') + '.pdf';
 };
 
 /* ===== Render principal ===== */
