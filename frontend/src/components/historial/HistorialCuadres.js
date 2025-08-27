@@ -12,7 +12,7 @@ import GroupDownloadModal from '../ventas/GroupDownloadModal';
 import { exportSingleCuadrePdf, exportGroupedPdf } from '../../pdf/exportadores';
 import '../ventas/Ventas.css';
 
-// ★ Usa exactamente las categorías/encabezados de tu HistorialCuadres:
+// ★ Encabezados EXACTOS que quieres ver también en móvil
 const HEADERS = [
   'Fecha',
   'Sucursal',
@@ -25,7 +25,7 @@ const HEADERS = [
   'Acciones'
 ];
 
-export default function Ventas() {
+export default function HistorialCuadres() {
   const navigate = useNavigate();
 
   // Perfil del usuario (rol + sucursal asignada si viewer)
@@ -138,8 +138,6 @@ export default function Ventas() {
       <header className="ventas-header">
         <h1>Historial de Cuadres</h1>
         <div className="ventas-actions">
-
-          {/* Descargar agrupado: solo admin */}
           {isAdmin && (
             <button
               className="btn btn-primary"
@@ -180,20 +178,18 @@ export default function Ventas() {
       </div>
 
       <VentasTable
-        headers={HEADERS}              // ★ pásale tus categorías
+        headers={HEADERS}              // ★ pasamos tus categorías
         cuadres={cuadres}
         sucursalesMap={sucursalesMap}
         onVer={handleVer}
         onEditar={handleEditar}
         onDescargar={handleDescargarPDF}
         onEliminar={handleEliminar}
-        // Flags para ocultar acciones cuando es viewer:
         canManage={canManage}
         canDownload={canDownload}
         isAdmin={isAdmin}
       />
 
-      {/* Modal descargas agrupadas solo admin */}
       {isAdmin && (
         <GroupDownloadModal
           visible={showGroup}
