@@ -101,7 +101,7 @@ export default function RegistrarPagos() {
     return () => unsub();
   }, []);
 
-  // Cargar sucursales + KPI (último pago + cierres desde entonces) + caja chica
+  // Cargar sucursales + KPI (jalando total a depositar desde 'cierres' como pides) + caja chica
   useEffect(() => {
     if (!me.loaded) return;
 
@@ -128,68 +128,67 @@ export default function RegistrarPagos() {
         return;
       }
 
-      const hoy = getTodayISO();
-
-      // 2) Caja chica desde el doc de sucursal (sin queries extra)
+      // 2) Caja chica directo desde el doc de sucursal
       const caja = {};
-      arr.forEach(s => {
-        caja[s.id] = Number(s?.cajaChica || 0);
-      });
+      arr.forEach(s => { caja[s.id] = Number(s?.cajaChica || 0); });
 
-      // 3) KPI robusto por sucursal: base (último pago) + cierres desde ese día
-      const computeFor = async (sucId) => {
+      // 3) Calcular “Dinero para depósitos”:
+      //    Suma de total a depositar de *todos los cierres de la sucursal* DESDE el último pago (exclusivo)
+      //    hasta la fecha seleccionada (inclusive). Si no hay pagos previos, suma todos los cierres hasta esa fecha.
+      //    Para evitar problemas de índices, traemos los cierres por sucursal y filtramos por fecha en cliente.
+      const computeDepositos = async (sucId) => {
         try {
-          // Si estamos viendo/editando un pago existente de esta sucursal, usar snapshot/valor del doc
-          if (originalDoc && originalDoc.sucursalId === sucId) {
-            // Prioriza snapshot si existe; fallback a sobrante del doc
-            const snap = Number(originalDoc?.kpiDepositosAtSave ?? originalDoc?.sobranteParaManana ?? 0);
-            return snap;
-          }
-
           // último pago
-          const pagosRef = collection(db, 'pagos');
-          const qPago = query(
-            pagosRef,
-            where('sucursalId', '==', sucId),
-            orderBy('fecha', 'desc'),
-            limit(1)
-          );
-          const pagoSnap = await getDocs(qPago);
-          const lastPago = pagoSnap.docs[0]?.data() || null;
-          const lastFechaPago = lastPago?.fecha || null;
-          const base = Number(lastPago?.sobranteParaManana || 0);
-
-          // cierres desde > lastFechaPago hasta <= hoy (con orderBy para permitir desigualdades)
-          const cierresRef = collection(db, 'cierres');
-          let qCierres;
-          if (lastFechaPago) {
-            qCierres = query(
-              cierresRef,
-              where('sucursalId','==', sucId),
-              where('fecha','>', lastFechaPago),
-              where('fecha','<=', hoy),
-              orderBy('fecha', 'asc')
+          let lastPagoFecha = null;
+          try {
+            const pagosRef = collection(db, 'pagos');
+            const qPago = query(
+              pagosRef,
+              where('sucursalId', '==', sucId),
+              orderBy('fecha', 'desc'),
+              limit(1)
             );
-          } else {
-            qCierres = query(
-              cierresRef,
-              where('sucursalId','==', sucId),
-              where('fecha','<=', hoy),
-              orderBy('fecha', 'asc')
-            );
+            const pagoSnap = await getDocs(qPago);
+            lastPagoFecha = pagoSnap.docs[0]?.data()?.fecha || null;
+          } catch (e) {
+            // si el índice no existe o falla, no importa; consideramos como si no hubiera pago
+            lastPagoFecha = null;
           }
-          const cierresSnap = await getDocs(qCierres);
-          let sumaDesdeUltimoPago = 0;
-          cierresSnap.forEach(d => { sumaDesdeUltimoPago += extractTotalADepositar(d.data() || {}); });
 
-          return base + sumaDesdeUltimoPago;
+          // si estamos viendo/edición de un pago existente de esta sucursal,
+          // mostrar lo que estaba guardado (snapshot) para que coincida con “ver” y “editar”.
+          if (originalDoc && originalDoc.sucursalId === sucId) {
+            const snapVal = Number(originalDoc?.kpiDepositosAtSave ?? originalDoc?.sobranteParaManana ?? 0);
+            return snapVal;
+          }
+
+          // Traer cierres por sucursal (sin filtros de fecha para evitar índices)
+          const cierresRef = collection(db, 'cierres');
+          const qC = query(cierresRef, where('sucursalId', '==', sucId));
+          const cierresSnap = await getDocs(qC);
+
+          const hastaFecha = fecha || getTodayISO();
+          let suma = 0;
+          cierresSnap.forEach(docu => {
+            const data = docu.data() || {};
+            const f = data?.fecha || '';
+            // incluir aquellos <= hastaFecha
+            const inRangeUpper = f && f <= hastaFecha;
+            // y si hay último pago, excluir f <= lastPagoFecha (debemos sumar *después* del último pago)
+            const afterLastPago = lastPagoFecha ? (f && f > lastPagoFecha) : true;
+            if (inRangeUpper && afterLastPago) {
+              suma += extractTotalADepositar(data);
+            }
+          });
+
+          return Number(suma || 0);
         } catch (e) {
           console.warn(`KPI fallo sucursal ${sucId}:`, e?.message || e);
           return 0;
         }
       };
 
-      const settled = await Promise.allSettled(arr.map(s => computeFor(s.id)));
+      const settled = await Promise.allSettled(arr.map(s => computeDepositos(s.id)));
       const kpi = {};
       settled.forEach((res, idx) => {
         const id = arr[idx].id;
@@ -199,8 +198,8 @@ export default function RegistrarPagos() {
       setKpiDepositosBySuc(kpi);
       setCajaChicaBySuc(caja);
     })();
-  // agregamos originalDoc como dependencia para que, al precargar un pago, se refleje el snapshot
-  }, [me.loaded, editId, originalDoc]);
+  // Dependemos también de 'fecha' (porque quieres que el cálculo sea hasta la fecha seleccionada) y de originalDoc
+  }, [me.loaded, editId, fecha, originalDoc]);
 
   // Inicializar pagosMap por sucursal
   useEffect(() => {
@@ -463,9 +462,9 @@ export default function RegistrarPagos() {
 
       const actor = { uid: me.uid, username: me.username };
 
-      // --- snapshots que se deben guardar/mostrar en ver/editar ---
-      const kpiSnapshot = Number(kpiDepositos);              // lo que se está viendo en “Dinero para depósitos”
-      const cajaChicaSnapshot = Number(cajaChicaDisponible); // disponible al momento de guardar
+      // snapshots visibles en ver/editar
+      const kpiSnapshot = Number(kpiDepositos);              // lo que se ve en “Dinero para depósitos”
+      const cajaChicaSnapshot = Number(cajaChicaDisponible); // disponible al guardar
 
       if (isEditingExisting) {
         const prevCaja = n(originalDoc?.cajaChicaUsada);
@@ -489,7 +488,7 @@ export default function RegistrarPagos() {
           await updateDoc(doc(db, 'sucursales', active), { cajaChica: increment(deltaCajaChica) });
           setCajaChicaBySuc(prev => ({ ...prev, [active]: n(prev[active]) + deltaCajaChica }));
         }
-        // después de guardar, “Dinero para depósitos” pasa a ser el sobrante (nuevo base)
+        // después de guardar, el KPI base de sucursal pasa a ser el sobrante calculado
         await updateDoc(doc(db, 'sucursales', active), { kpiDepositos: Number(sobranteParaManana) });
         setKpiDepositosBySuc(prev => ({ ...prev, [active]: Number(sobranteParaManana) }));
 
@@ -518,7 +517,7 @@ export default function RegistrarPagos() {
         if (deltaCajaChica !== 0) {
           await updateDoc(doc(db, 'sucursales', active), { cajaChica: increment(deltaCajaChica) });
         }
-        // después de guardar, “Dinero para depósitos” pasa a ser el sobrante (nuevo base)
+        // base KPI = sobrante para mañana
         await updateDoc(doc(db, 'sucursales', active), { kpiDepositos: Number(sobranteParaManana) });
 
         setCajaChicaBySuc(prev => ({ ...prev, [active]: Number(prev[active] || 0) + deltaCajaChica }));
