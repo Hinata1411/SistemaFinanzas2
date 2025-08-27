@@ -6,6 +6,7 @@
   --accent:#FF7A00;
   --cream:#FFF7ED;
   --slate:#1F2937;
+  --dark-2:#15824C;
 
   --radius:14px;
   --shadow:0 20px 60px rgba(0,0,0,.08);
@@ -81,7 +82,7 @@
 
 /* Encabezados RegistrarPagos: verde del tema y letras blancas */
 .registrar-pagos .rc-gastos-table thead th {
-  background: var(--dark);   /* verde del tema */
+  background: var(--dark-2);   /* verde del tema */
   color: #fff;                  /* texto blanco */
   font-weight: 800;
   text-align: center;
