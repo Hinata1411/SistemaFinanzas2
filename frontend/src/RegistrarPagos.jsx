@@ -5,7 +5,7 @@ import {
   collection, addDoc, getDoc, getDocs, query, where,
   doc, updateDoc, serverTimestamp, increment
 } from 'firebase/firestore';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import './RegistrarPagos.css';
 
@@ -52,6 +52,7 @@ const n = (v) => {
 // ====== Componente ======
 export default function RegistrarPagos() {
   const [sp] = useSearchParams();
+  const navigate = useNavigate();
   const editId = sp.get('id') || null;
   const mode = (sp.get('mode') || '').toLowerCase();
   const isViewing = mode === 'view';
@@ -445,7 +446,12 @@ export default function RegistrarPagos() {
         await updateDoc(doc(db, 'sucursales', active), { kpiDepositos: Number(sobranteParaManana) });
         setKpiDepositosBySuc(prev => ({ ...prev, [active]: Number(sobranteParaManana) }));
 
-        await Swal.fire({ icon:'success', title:'Pagos actualizados', timer:1400, showConfirmButton:false });
+       await Swal.fire({
+          icon: 'success',
+          title: 'Actualizado',
+          text: 'Los pagos se guardaron correctamente.'
+        });
+        navigate('/Finanzas/HistorialPagos');
       } else {
         await addDoc(collection(db, 'pagos'), {
           fecha,
