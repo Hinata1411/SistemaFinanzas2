@@ -32,6 +32,7 @@ const n = (v) => {
 function sumItems(items) {
   return (items || []).reduce((acc, it) => acc + n(it.monto), 0);
 }
+
 // --- Helpers para recomputar KPI --- //
 const toMillis = (tsLike) => {
   if (!tsLike) return 0;
@@ -49,71 +50,70 @@ const getKpiFromCuadre = (c) => {
 const getKpiFromPago = (p) =>
   Number(p?.sobranteParaManana ?? p?.kpiDepositosAtSave ?? 0);
 
-// Recalcular KPI mirando el doc más reciente entre pagos y cierres.
-// Si no hay ninguno, lo deja en 0.
+// ✅ Versión robusta
 const recomputeSucursalKPI = async (sucursalId) => {
   const candidatos = [];
+  const pagosRef = collection(db, 'pagos');
+  const cierresRef = collection(db, 'cierres');
+  const sucRef = doc(db, 'sucursales', sucursalId);
 
-  // Pagos recientes
-  try {
-    const q1 = query(
-      collection(db, 'pagos'),
-      where('sucursalId', '==', sucursalId),
-      orderBy('createdAt', 'desc'),
-      limit(1)
-    );
-    const s1 = await getDocs(q1);
-    s1.forEach(d => {
-      const p = d.data() || {};
-      candidatos.push({ ts: toMillis(p.createdAt || p.updatedAt || p.fecha), val: getKpiFromPago(p) });
+  const pushPago = (p) => {
+    if (!p) return;
+    candidatos.push({
+      ts: toMillis(p.createdAt || p.updatedAt || p.fecha),
+      val: getKpiFromPago(p),
     });
-  } catch {}
-  try {
-    const q2 = query(
-      collection(db, 'pagos'),
-      where('sucursalId', '==', sucursalId),
-      orderBy('fecha', 'desc'),
-      limit(1)
-    );
-    const s2 = await getDocs(q2);
-    s2.forEach(d => {
-      const p = d.data() || {};
-      candidatos.push({ ts: toMillis(p.createdAt || p.updatedAt || p.fecha), val: getKpiFromPago(p) });
+  };
+  const pushCierre = (c) => {
+    if (!c) return;
+    candidatos.push({
+      ts: toMillis(c.createdAt || c.updatedAt || c.fecha),
+      val: getKpiFromCuadre(c),
     });
-  } catch {}
+  };
 
-  // Cierres recientes
-  try {
-    const q3 = query(
-      collection(db, 'cierres'),
-      where('sucursalId', '==', sucursalId),
-      orderBy('createdAt', 'desc'),
-      limit(1)
-    );
-    const s3 = await getDocs(q3);
-    s3.forEach(d => {
-      const c = d.data() || {};
-      candidatos.push({ ts: toMillis(c.createdAt || c.updatedAt || c.fecha), val: getKpiFromCuadre(c) });
-    });
-  } catch {}
-  try {
-    const q4 = query(
-      collection(db, 'cierres'),
-      where('sucursalId', '==', sucursalId),
-      orderBy('fecha', 'desc'),
-      limit(1)
-    );
-    const s4 = await getDocs(q4);
-    s4.forEach(d => {
-      const c = d.data() || {};
-      candidatos.push({ ts: toMillis(c.createdAt || c.updatedAt || c.fecha), val: getKpiFromCuadre(c) });
-    });
-  } catch {}
+  const tryQuery = async (q, onDoc) => {
+    try {
+      const s = await getDocs(q);
+      s.forEach(d => onDoc(d.data() || {}));
+      return true;
+    } catch (e) {
+      console.warn('recomputeSucursalKPI query failed:', e?.code, e?.message);
+      return false;
+    }
+  };
 
-  const best = candidatos.sort((a,b) => (b.ts||0) - (a.ts||0))[0];
+  // 1) Preferido: orderBy + limit(1)
+  const anyPreferredWorked = (await Promise.all([
+    tryQuery(query(pagosRef,  where('sucursalId','==',sucursalId), orderBy('createdAt','desc'), limit(1)), pushPago),
+    tryQuery(query(pagosRef,  where('sucursalId','==',sucursalId), orderBy('fecha','desc'),     limit(1)), pushPago),
+    tryQuery(query(cierresRef, where('sucursalId','==',sucursalId), orderBy('createdAt','desc'), limit(1)), pushCierre),
+    tryQuery(query(cierresRef, where('sucursalId','==',sucursalId), orderBy('fecha','desc'),     limit(1)), pushCierre),
+  ])).some(Boolean);
+
+  // 2) Fallback: sin orderBy, ordenamos en cliente (no requiere índices)
+  if (!anyPreferredWorked || candidatos.length === 0) {
+    try {
+      const sPagos   = await getDocs(query(pagosRef,  where('sucursalId','==',sucursalId)));
+      const sCierres = await getDocs(query(cierresRef, where('sucursalId','==',sucursalId)));
+      sPagos.forEach(d => pushPago(d.data() || {}));
+      sCierres.forEach(d => pushCierre(d.data() || {}));
+    } catch (e) {
+      console.warn('recomputeSucursalKPI fallback failed:', e?.code, e?.message);
+    }
+  }
+
+  // 3) Si no hay candidatos, NO tocar KPI (evita ponerlo en 0)
+  if (candidatos.length === 0) {
+    console.warn('recomputeSucursalKPI: sin candidatos; KPI se mantiene igual.');
+    return;
+  }
+
+  const best = candidatos.sort((a,b) => (b.ts||0)-(a.ts||0))[0];
   const newKpi = Number(best?.val || 0);
-  await updateDoc(doc(db, 'sucursales', sucursalId), { kpiDepositos: newKpi });
+  await updateDoc(sucRef, { kpiDepositos: newKpi });
 };
+
 
 export default function Pagos() {
   const navigate = useNavigate();
@@ -607,6 +607,7 @@ export default function Pagos() {
                     totalUtilizado,
                     sobranteParaManana: newSobrante,
                   });
+                  await recomputeSucursalKPI(editor.doc.sucursalId);
                   await Swal.fire({ icon:'success', title:'Pago actualizado', timer:1200, showConfirmButton:false });
                   setEditor({ open:false, doc:null, items:[] });
                   refetch();
