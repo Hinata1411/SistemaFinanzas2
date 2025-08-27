@@ -101,7 +101,7 @@ export default function RegistrarPagos() {
     return () => unsub();
   }, []);
 
-  // Cargar sucursales + KPI (jalando total a depositar desde 'cierres' como pides) + caja chica
+  // Cargar sucursales + KPI (desde sucursales.kpiDepositos) + caja chica
   useEffect(() => {
     if (!me.loaded) return;
 
@@ -132,75 +132,29 @@ export default function RegistrarPagos() {
       const caja = {};
       arr.forEach(s => { caja[s.id] = Number(s?.cajaChica || 0); });
 
-      // 3) Calcular “Dinero para depósitos”:
-      //    Suma de total a depositar de *todos los cierres de la sucursal* DESDE el último pago (exclusivo)
-      //    hasta la fecha seleccionada (inclusive). Si no hay pagos previos, suma todos los cierres hasta esa fecha.
-      //    Para evitar problemas de índices, traemos los cierres por sucursal y filtramos por fecha en cliente.
-      const computeDepositos = async (sucId) => {
-        try {
-          // último pago
-          let lastPagoFecha = null;
-          try {
-            const pagosRef = collection(db, 'pagos');
-            const qPago = query(
-              pagosRef,
-              where('sucursalId', '==', sucId),
-              orderBy('fecha', 'desc'),
-              limit(1)
-            );
-            const pagoSnap = await getDocs(qPago);
-            lastPagoFecha = pagoSnap.docs[0]?.data()?.fecha || null;
-          } catch (e) {
-            // si el índice no existe o falla, no importa; consideramos como si no hubiera pago
-            lastPagoFecha = null;
-          }
-
-          // si estamos viendo/edición de un pago existente de esta sucursal,
-          // mostrar lo que estaba guardado (snapshot) para que coincida con “ver” y “editar”.
-          if (originalDoc && originalDoc.sucursalId === sucId) {
-            const snapVal = Number(originalDoc?.kpiDepositosAtSave ?? originalDoc?.sobranteParaManana ?? 0);
-            return snapVal;
-          }
-
-          // Traer cierres por sucursal (sin filtros de fecha para evitar índices)
-          const cierresRef = collection(db, 'cierres');
-          const qC = query(cierresRef, where('sucursalId', '==', sucId));
-          const cierresSnap = await getDocs(qC);
-
-          const hastaFecha = fecha || getTodayISO();
-          let suma = 0;
-          cierresSnap.forEach(docu => {
-            const data = docu.data() || {};
-            const f = data?.fecha || '';
-            // incluir aquellos <= hastaFecha
-            const inRangeUpper = f && f <= hastaFecha;
-            // y si hay último pago, excluir f <= lastPagoFecha (debemos sumar *después* del último pago)
-            const afterLastPago = lastPagoFecha ? (f && f > lastPagoFecha) : true;
-            if (inRangeUpper && afterLastPago) {
-              suma += extractTotalADepositar(data);
-            }
-          });
-
-          return Number(suma || 0);
-        } catch (e) {
-          console.warn(`KPI fallo sucursal ${sucId}:`, e?.message || e);
-          return 0;
-        }
-      };
-
-      const settled = await Promise.allSettled(arr.map(s => computeDepositos(s.id)));
+      // 3) KPI por sucursal:
+      //    SI estás viendo/editando un pago => respeta el snapshot guardado en el pago (kpiDepositosAtSave || sobranteParaManana).
+      //    EN CASO CONTRARIO => toma sucursales.kpiDepositos (que es el último "sobrante para mañana" persistido).
       const kpi = {};
-      settled.forEach((res, idx) => {
-        const id = arr[idx].id;
-        kpi[id] = res.status === 'fulfilled' ? Number(res.value || 0) : 0;
+      arr.forEach(s => {
+        if (originalDoc && originalDoc.sucursalId === s.id) {
+          kpi[s.id] = Number(originalDoc?.kpiDepositosAtSave ?? originalDoc?.sobranteParaManana ?? 0);
+        } else {
+          kpi[s.id] = Number(s?.kpiDepositos || 0);
+        }
       });
+
+      // Si guardaste snapshot de caja chica, úsalo para la UI en modo ver/editar
+      if (originalDoc && originalDoc.sucursalId && typeof originalDoc?.cajaChicaDisponibleAtSave === 'number') {
+        caja[originalDoc.sucursalId] = Number(originalDoc.cajaChicaDisponibleAtSave);
+      }
 
       setKpiDepositosBySuc(kpi);
       setCajaChicaBySuc(caja);
     })();
-  // Dependemos también de 'fecha' (porque quieres que el cálculo sea hasta la fecha seleccionada) y de originalDoc
-  }, [me.loaded, editId, fecha, originalDoc]);
-
+    // Nota: KPI persistente por sucursal, no depende de 'fecha'
+  }, [me.loaded, editId, originalDoc]);
+  
   // Inicializar pagosMap por sucursal
   useEffect(() => {
     if (!sucursales.length) return;
