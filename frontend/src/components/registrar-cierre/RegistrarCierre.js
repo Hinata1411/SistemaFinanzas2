@@ -519,7 +519,6 @@ export default function RegistrarCierre() {
         totales: { ...totals },
       };
 
-      
 
       if (isEditingExisting) {
         await updateDoc(doc(db, 'cierres', editId), { ...payloadBase, updatedAt: serverTimestamp() });
