@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import Swal from 'sweetalert2';
 import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { db } from './../../firebase';
 
 export default function CategoriasModal({
   open,

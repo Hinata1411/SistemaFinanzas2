@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { db } from './../firebase';
 
 export function useSucursales() {
   const [sucursales, setSucursales] = useState([]);

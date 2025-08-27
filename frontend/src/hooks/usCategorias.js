@@ -1,7 +1,7 @@
 // src/hooks/useCategorias.js
 import { useEffect, useMemo, useState } from 'react';
 import { doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
-import { db } from '../services/firebaseConfig'; // ajusta la ruta si es necesario
+import { db } from './../../firebase';
 
 const docRefFromPath = (path) => {
   const parts = String(path).split('/').filter(Boolean);

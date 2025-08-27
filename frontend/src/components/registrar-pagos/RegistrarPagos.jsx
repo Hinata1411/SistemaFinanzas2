@@ -12,7 +12,7 @@ import './RegistrarPagos.css';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 
-import { auth, db } from '../../services/firebase';
+import { auth, db } from './../../firebase';
 import { todayISO as getTodayISO } from '../../utils/dates';
 
 import CategoriasModal from '../registrar-cierre/CategoriasModal';

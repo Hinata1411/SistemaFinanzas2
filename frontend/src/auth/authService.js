@@ -1,7 +1,7 @@
 // src/auth/authService.js
-import { auth } from '../services/firebase';
+import { auth } from '../firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { db } from '../services/firebase';
+import { db } from './../firebase';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 
 // Base del API (usa proxy /api en Netlify si no hay env)

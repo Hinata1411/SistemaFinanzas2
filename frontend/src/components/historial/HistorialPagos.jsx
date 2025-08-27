@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import './HistorialPagos.css';
 
-import { auth, db } from '../../services/firebase';
+import { auth, db } from './../../firebase';
 import { getTodayLocalISO as getTodayLocalISO_ventas } from '../../utils/dates';
 import { exportDepositosPdf, exportPagosGroupedPdf } from '../../pdf/exportadoresPagos'; 
 
