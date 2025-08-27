@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import {
   doc, getDoc, collection, getDocs,
-  query, where, orderBy, limit, writeBatch
+  query, where, orderBy, limit, writeBatch, updateDoc
 } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '../../services/firebase';
@@ -42,6 +42,74 @@ const getKpiFromCuadre = (c) => {
   const raw = c?.totales?.totalGeneral;
   const v = typeof raw === 'number' ? raw : parseFloat(raw || 0);
   return Number.isFinite(v) ? v : 0;
+};
+
+const getKpiFromPago = (p) =>
+  Number(p?.sobranteParaManana ?? p?.kpiDepositosAtSave ?? 0);
+
+const recomputeSucursalKPI = async (sucursalId) => {
+  const candidatos = [];
+
+  // Pago más reciente (por createdAt y por fecha, por si faltan campos/índices)
+  try {
+    const q1 = query(
+      collection(db, 'pagos'),
+      where('sucursalId', '==', sucursalId),
+      orderBy('createdAt', 'desc'),
+      limit(1)
+    );
+    const s1 = await getDocs(q1);
+    s1.forEach(d => {
+      const p = d.data() || {};
+      candidatos.push({ ts: toMillis(p.createdAt || p.updatedAt || p.fecha), val: getKpiFromPago(p) });
+    });
+  } catch {}
+  try {
+    const q2 = query(
+      collection(db, 'pagos'),
+      where('sucursalId', '==', sucursalId),
+      orderBy('fecha', 'desc'),
+      limit(1)
+    );
+    const s2 = await getDocs(q2);
+    s2.forEach(d => {
+      const p = d.data() || {};
+      candidatos.push({ ts: toMillis(p.createdAt || p.updatedAt || p.fecha), val: getKpiFromPago(p) });
+    });
+  } catch {}
+
+  // Cuadre más reciente (por createdAt y por fecha)
+  try {
+    const q3 = query(
+      collection(db, 'cierres'),
+      where('sucursalId', '==', sucursalId),
+      orderBy('createdAt', 'desc'),
+      limit(1)
+    );
+    const s3 = await getDocs(q3);
+    s3.forEach(d => {
+      const c = d.data() || {};
+      candidatos.push({ ts: toMillis(c.createdAt || c.updatedAt || c.fecha), val: getKpiFromCuadre(c) });
+    });
+  } catch {}
+  try {
+    const q4 = query(
+      collection(db, 'cierres'),
+      where('sucursalId', '==', sucursalId),
+      orderBy('fecha', 'desc'),
+      limit(1)
+    );
+    const s4 = await getDocs(q4);
+    s4.forEach(d => {
+      const c = d.data() || {};
+      candidatos.push({ ts: toMillis(c.createdAt || c.updatedAt || c.fecha), val: getKpiFromCuadre(c) });
+    });
+  } catch {}
+
+  const best = candidatos.sort((a,b) => (b.ts||0) - (a.ts||0))[0];
+  const newKpi = Number(best?.val || 0);
+
+  await updateDoc(doc(db, 'sucursales', sucursalId), { kpiDepositos: newKpi });
 };
 
 export default function HistorialCuadres() {
@@ -107,24 +175,22 @@ export default function HistorialCuadres() {
   };
 
   //Eliminar registro
-  const handleEliminar = async (id) => {
+    const handleEliminar = async (id) => {
     if (!canManage) {
       Swal.fire('Solo lectura', 'No tienes permisos para eliminar.', 'info');
       return;
     }
 
     const confirmar = await Swal.fire({
-      title: '¿Eliminar cuadre?',
-      text: 'Esta acción no se puede deshacer.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Sí, eliminar',
-      cancelButtonText: 'Cancelar',
+      title:'¿Eliminar registro?',
+      text:'Esta acción no se puede deshacer.',
+      icon:'warning',
+      showCancelButton:true
     });
     if (!confirmar.isConfirmed) return;
 
     try {
-      // 1) Leemos el cuadre para saber sucursal y fecha/createdAt
+      // Lee el cuadre para saber sucursal
       const cierreRef = doc(db, 'cierres', id);
       const cierreSnap = await getDoc(cierreRef);
       if (!cierreSnap.exists()) {
@@ -133,79 +199,15 @@ export default function HistorialCuadres() {
       }
       const cierre = cierreSnap.data() || {};
       const sucursalId = cierre.sucursalId;
-      const cierreMs = toMillis(cierre.createdAt || cierre.updatedAt || cierre.fecha);
 
-      // 2) ¿Hay un PAGO más reciente que este cuadre para esa sucursal?
-      //    Si sí, NO tocamos el KPI (queda gobernado por pagos).
-      let nextKpi = null; // null => no tocar KPI
-      let hayPagoMasReciente = false;
-      try {
-        const pagosQ = query(
-          collection(db, 'pagos'),
-          where('sucursalId', '==', sucursalId),
-          orderBy('createdAt', 'desc'),
-          limit(1)
-        );
-        const pagosSnap = await getDocs(pagosQ);
-        if (!pagosSnap.empty) {
-          const pago = pagosSnap.docs[0].data() || {};
-          const pagoMs = toMillis(pago.createdAt || pago.updatedAt || pago.fecha);
-          hayPagoMasReciente = pagoMs > cierreMs;
-        }
-      } catch (e) {
-        // si falla la consulta, asumimos que NO hay pago más reciente y seguiremos con cierres
-        hayPagoMasReciente = false;
-      }
-
-      // 3) Si NO hay pago más reciente, el KPI debe quedar en el “siguiente” cuadre más nuevo
-      //    (o 0 si este era el único)
-      if (!hayPagoMasReciente) {
-        try {
-          const cierresQ = query(
-            collection(db, 'cierres'),
-            where('sucursalId', '==', sucursalId),
-            orderBy('createdAt', 'desc'),
-            limit(2)
-          );
-          const cierresSnap = await getDocs(cierresQ);
-          const docs = cierresSnap.docs;
-
-          if (!docs.length) {
-            // raro, pero por seguridad
-            nextKpi = 0;
-          } else if (docs[0].id === id) {
-            // borras el más reciente
-            if (docs.length > 1) {
-              const second = docs[1].data() || {};
-              nextKpi = getKpiFromCuadre(second);
-            } else {
-              // era el único cuadre
-              nextKpi = 0;
-            }
-          } else {
-            // no es el más reciente => no tocar KPI
-            nextKpi = null;
-          }
-        } catch (e) {
-          // si falla, al menos dejar en 0
-          nextKpi = 0;
-        }
-      } else {
-        nextKpi = null; // hay pago más reciente => KPI ya está definido por pagos, no mover
-      }
-
-      // 4) Ejecutar en batch: borrar cuadre + (opcional) actualizar KPI
+      // Borra y luego recalcula KPI
       const batch = writeBatch(db);
-      const sucRef = doc(db, 'sucursales', sucursalId);
-
       batch.delete(cierreRef);
-      if (nextKpi !== null && Number.isFinite(nextKpi)) {
-        batch.update(sucRef, { kpiDepositos: Number(nextKpi) });
-      }
-
       await batch.commit();
 
-      await Swal.fire({ icon: 'success', title: 'Cuadre eliminado', timer: 1200, showConfirmButton: false });
+      await recomputeSucursalKPI(sucursalId);
+
+      await Swal.fire('Eliminado', 'El registro ha sido eliminado.', 'success');
       await refetch();
     } catch (e) {
       console.error(e);

@@ -33,6 +33,88 @@ function sumItems(items) {
   return (items || []).reduce((acc, it) => acc + n(it.monto), 0);
 }
 
+const toMillis = (tsLike) => {
+  if (!tsLike) return 0;
+  if (typeof tsLike?.toDate === 'function') return tsLike.toDate().getTime();
+  if (typeof tsLike?.seconds === 'number') return tsLike.seconds * 1000;
+  const d = new Date(tsLike);
+  return isNaN(d) ? 0 : d.getTime();
+};
+
+const getKpiFromCuadre = (c) => {
+  const raw = c?.totales?.totalGeneral;
+  const v = typeof raw === 'number' ? raw : parseFloat(raw || 0);
+  return Number.isFinite(v) ? v : 0;
+};
+const getKpiFromPago = (p) =>
+  Number(p?.sobranteParaManana ?? p?.kpiDepositosAtSave ?? 0);
+
+// Recalcular KPI mirando el doc más reciente entre pagos y cierres.
+// Si no hay ninguno, lo deja en 0.
+const recomputeSucursalKPI = async (sucursalId) => {
+  const candidatos = [];
+
+  // Pagos recientes
+  try {
+    const q1 = query(
+      collection(db, 'pagos'),
+      where('sucursalId', '==', sucursalId),
+      orderBy('createdAt', 'desc'),
+      limit(1)
+    );
+    const s1 = await getDocs(q1);
+    s1.forEach(d => {
+      const p = d.data() || {};
+      candidatos.push({ ts: toMillis(p.createdAt || p.updatedAt || p.fecha), val: getKpiFromPago(p) });
+    });
+  } catch {}
+  try {
+    const q2 = query(
+      collection(db, 'pagos'),
+      where('sucursalId', '==', sucursalId),
+      orderBy('fecha', 'desc'),
+      limit(1)
+    );
+    const s2 = await getDocs(q2);
+    s2.forEach(d => {
+      const p = d.data() || {};
+      candidatos.push({ ts: toMillis(p.createdAt || p.updatedAt || p.fecha), val: getKpiFromPago(p) });
+    });
+  } catch {}
+
+  // Cierres recientes
+  try {
+    const q3 = query(
+      collection(db, 'cierres'),
+      where('sucursalId', '==', sucursalId),
+      orderBy('createdAt', 'desc'),
+      limit(1)
+    );
+    const s3 = await getDocs(q3);
+    s3.forEach(d => {
+      const c = d.data() || {};
+      candidatos.push({ ts: toMillis(c.createdAt || c.updatedAt || c.fecha), val: getKpiFromCuadre(c) });
+    });
+  } catch {}
+  try {
+    const q4 = query(
+      collection(db, 'cierres'),
+      where('sucursalId', '==', sucursalId),
+      orderBy('fecha', 'desc'),
+      limit(1)
+    );
+    const s4 = await getDocs(q4);
+    s4.forEach(d => {
+      const c = d.data() || {};
+      candidatos.push({ ts: toMillis(c.createdAt || c.updatedAt || c.fecha), val: getKpiFromCuadre(c) });
+    });
+  } catch {}
+
+  const best = candidatos.sort((a,b) => (b.ts||0) - (a.ts||0))[0];
+  const newKpi = Number(best?.val || 0);
+  await updateDoc(doc(db, 'sucursales', sucursalId), { kpiDepositos: newKpi });
+};
+
 export default function Pagos() {
   const navigate = useNavigate();
 
@@ -139,7 +221,6 @@ export default function Pagos() {
     navigate(`/Finanzas/RegistrarPagos?id=${row.id}&mode=edit`);
   };
 
-  // id = id del documento en 'pagos' que vas a eliminar
   const handleEliminar = async (id) => {
     const confirmar = await Swal.fire({
       title: '¿Eliminar pago?',
@@ -152,87 +233,39 @@ export default function Pagos() {
     if (!confirmar.isConfirmed) return;
 
     try {
-      // 1) Lee el doc para saber sucursal y lo usado de caja chica
+      // 1) Lee el pago para saber sucursal y caja chica usada
       const pagoRef = doc(db, 'pagos', id);
       const pagoSnap = await getDoc(pagoRef);
       if (!pagoSnap.exists()) {
         await Swal.fire('No encontrado', 'El pago ya no existe.', 'info');
         return;
       }
-      const pago = pagoSnap.data();
+      const pago = pagoSnap.data() || {};
       const sucursalId = pago.sucursalId;
       const cajaChicaUsada = Number(pago.cajaChicaUsada || 0);
 
-      // 2) ¿Es el más reciente de la sucursal?
-      //    Si sí: KPI = sobrante del siguiente más nuevo; si NO existe siguiente => KPI = 0.
-      //    Si no es el más reciente: NO tocar KPI.
-      let nextKpiForSucursal = null; // null => no tocar KPI
-      try {
-        const pagosQ = query(
-          collection(db, 'pagos'),
-          where('sucursalId', '==', sucursalId),
-          orderBy('createdAt', 'desc'),
-          limit(2)
-        );
-        const pagosSnap = await getDocs(pagosQ);
-        const docs = pagosSnap.docs; // top 2, en orden más nuevo -> siguiente
-
-        if (!docs.length) {
-          // No hay nada (raro si el que vamos a borrar existe), pon 0 por seguridad
-          nextKpiForSucursal = 0;
-        } else if (docs[0].id === id) {
-          // El que borramos es el más nuevo
-          if (docs.length > 1) {
-            const second = docs[1].data();
-            nextKpiForSucursal = Number(
-              second.sobranteParaManana ??
-              second.kpiDepositosAtSave ?? 0
-            );
-          } else {
-            // Era el ÚNICO pago: deja el KPI en 0
-            nextKpiForSucursal = 0;
-          }
-        } else {
-          // No es el más reciente => no toques el KPI
-          nextKpiForSucursal = null;
-        }
-      } catch (e) {
-        // Si falla la consulta (índice, etc.), al menos deja KPI en 0 si este era el único.
-        nextKpiForSucursal = 0;
-      }
-
-      // 3) Aplica todo en batch
+      // 2) Borra y devuelve caja chica en batch
       const batch = writeBatch(db);
       const sucRef = doc(db, 'sucursales', sucursalId);
 
-      // 3.1) Elimina el pago
       batch.delete(pagoRef);
-
-      // 3.2) Devuelve a caja chica lo que consumió este pago
       if (cajaChicaUsada !== 0) {
         batch.update(sucRef, { cajaChica: increment(cajaChicaUsada) });
       }
-
-      // 3.3) Actualiza KPI si corresponde
-      if (nextKpiForSucursal !== null && Number.isFinite(nextKpiForSucursal)) {
-        batch.update(sucRef, { kpiDepositos: Number(nextKpiForSucursal) });
-      }
-
       await batch.commit();
+
+      // 3) Recalcula KPI mirando pagos/cierres restantes
+      await recomputeSucursalKPI(sucursalId);
 
       await Swal.fire({ icon: 'success', title: 'Pago eliminado', timer: 1200, showConfirmButton: false });
 
-      // refresca UI local
       setPagos(prev => prev.filter(p => p.id !== id));
       await refetch();
-
     } catch (e) {
       console.error(e);
       Swal.fire('Error', e?.message || 'No se pudo eliminar.', 'error');
     }
   };
-
-
 
   // UI
   if (!me.loaded) {
