@@ -12,7 +12,7 @@ import './HistorialPagos.css';
 import { auth, db } from '../../services/firebase';
 import { getTodayLocalISO as getTodayLocalISO_ventas } from '../../utils/dates';
 import { exportDepositosPdf, exportPagosGroupedPdf } from '../../pdf/exportadoresPagos'; 
-import GroupDownloadModal from '../ventas/GroupDownloadModal'; // ⬅️ agregado
+import GroupDownloadModal from '../ventas/GroupDownloadModal';
 
 // Compatibilidad
 const getTodayLocalISO = getTodayLocalISO_ventas || (() => {
@@ -37,8 +37,8 @@ function sumItems(items) {
 // --- Helpers para recomputar KPI --- //
 const toMillis = (tsLike) => {
   if (!tsLike) return 0;
-  if (typeof tsLike?.toDate === 'function') return tsLike.toDate().getTime(); // Firestore Timestamp
-  if (typeof tsLike?.seconds === 'number') return tsLike.seconds * 1000;      // Timestamp-like
+  if (typeof tsLike?.toDate === 'function') return tsLike.toDate().getTime();
+  if (typeof tsLike?.seconds === 'number') return tsLike.seconds * 1000;
   const d = new Date(tsLike);
   return Number.isNaN(d.getTime()) ? 0 : d.getTime();
 };
@@ -84,7 +84,6 @@ const recomputeSucursalKPI = async (sucursalId) => {
     }
   };
 
-  // 1) Preferido: orderBy + limit(1)
   const anyPreferredWorked = (await Promise.all([
     tryQuery(query(pagosRef,  where('sucursalId','==',sucursalId), orderBy('createdAt','desc'), limit(1)), pushPago),
     tryQuery(query(pagosRef,  where('sucursalId','==',sucursalId), orderBy('fecha','desc'),     limit(1)), pushPago),
@@ -92,7 +91,6 @@ const recomputeSucursalKPI = async (sucursalId) => {
     tryQuery(query(cierresRef, where('sucursalId','==',sucursalId), orderBy('fecha','desc'),     limit(1)), pushCierre),
   ])).some(Boolean);
 
-  // 2) Fallback: sin orderBy, ordenamos en cliente (no requiere índices)
   if (!anyPreferredWorked || candidatos.length === 0) {
     try {
       const sPagos   = await getDocs(query(pagosRef,  where('sucursalId','==',sucursalId)));
@@ -104,7 +102,6 @@ const recomputeSucursalKPI = async (sucursalId) => {
     }
   }
 
-  // 3) Si no hay candidatos, NO tocar KPI (evita ponerlo en 0)
   if (candidatos.length === 0) {
     console.warn('recomputeSucursalKPI: sin candidatos; KPI se mantiene igual.');
     return;
@@ -114,7 +111,6 @@ const recomputeSucursalKPI = async (sucursalId) => {
   const newKpi = Number(best?.val || 0);
   await updateDoc(sucRef, { kpiDepositos: newKpi });
 };
-
 
 export default function Pagos() {
   const navigate = useNavigate();
@@ -139,7 +135,7 @@ export default function Pagos() {
   const [viewer, setViewer] = useState({ open:false, doc:null });
   const [editor, setEditor] = useState({ open:false, doc:null, items:[] });
 
-  // ⬇️ Estado para el modal de descarga agrupada (igual que en HistorialCuadres)
+  // Modal agrupado (igual que HistorialCuadres)
   const [showGroup, setShowGroup] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
 
@@ -148,7 +144,8 @@ export default function Pagos() {
       if (!user) { setMe({ loaded:true, role:'viewer', sucursalId:null }); return; }
       try {
         const snap = await getDoc(doc(db, 'usuarios', user.uid));
-        const data = snap.exists() ? data = snap.data() : {};
+        // 🔧 FIX ESLint: no reasignar ni usar antes de definir
+        const data = snap.exists() ? snap.data() : {};
         setMe({ loaded:true, role: data.role || 'viewer', sucursalId: data.sucursalId || null });
       } catch {
         setMe({ loaded:true, role:'viewer', sucursalId:null });
@@ -295,8 +292,8 @@ export default function Pagos() {
         <div className="ventas-actions">
           <button
             className="btn btn-primary"
-            onClick={async () => {
-              // ⬇️ Igual que en HistorialCuadres: abrir modal con todos preseleccionados
+            onClick={() => {
+              // Abrir modal con todos preseleccionados
               setSelectedIds(pagos.map(p => p.id));
               setShowGroup(true);
             }}
@@ -405,7 +402,7 @@ export default function Pagos() {
         )}
       </div>
 
-      {/* Viewer Modal (conservado por si lo usas en otros flujos) */}
+      {/* Viewer Modal */}
       {viewer.open && viewer.doc && (
         <div className="modal-overlay">
           <div className="modal">
@@ -451,7 +448,7 @@ export default function Pagos() {
         </div>
       )}
 
-      {/* Editor Modal (conservado, pero ya no se usa al navegar a RegistrarPagos) */}
+      {/* Editor Modal */}
       {editor.open && editor.doc && (
         <div className="modal-overlay">
           <div className="modal" >
@@ -613,11 +610,11 @@ export default function Pagos() {
         </div>
       )}
 
-      {/* ⬇️ Modal para descarga agrupada (idéntico patrón que HistorialCuadres) */}
+      {/* Modal para descarga agrupada */}
       {isAdmin && (
         <GroupDownloadModal
           visible={showGroup}
-          cuadres={pagos} // reutilizamos la misma prop; el modal solo lista/selecciona y llama onDownload
+          cuadres={pagos}
           sucursalesMap={sucursalesMap}
           selectedIds={selectedIds}
           onToggleAll={() =>
