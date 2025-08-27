@@ -33,7 +33,6 @@ yarn-debug.log*
 yarn-error.log*
 
 # === Configuración específica del proyecto (si contiene datos sensibles) ===
-firebase.js
 firebaseAdmin.js
 auth.js
 

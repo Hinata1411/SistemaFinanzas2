@@ -14,7 +14,7 @@ import {
   increment,
 } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
-import { db, auth } from './../../firebase';
+import { db, auth } from '../../services/firebase';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import './RegistrarCierre.css';

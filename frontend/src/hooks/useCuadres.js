@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
-import { db } from './../firebase';
+import { db } from './../services/firebase';
 
 export function useCuadres({ fecha, sucursalId }) {
   const [cuadres, setCuadres] = useState([]);

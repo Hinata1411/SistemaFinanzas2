@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
-import { db, auth } from './../../firebase';
+import { db, auth } from '../../services/firebase';
 
 import { useCuadres } from '../../hooks/useCuadres';
 import { getTodayLocalISO, formatDate } from '../../utils/dates';
