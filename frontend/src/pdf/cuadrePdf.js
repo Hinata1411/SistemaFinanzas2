@@ -56,21 +56,30 @@ export const calcCuadreMetrics = (c) => {
 };
 
 /* ===== Encabezado y footer ===== */
+/**
+ * Muestra título "Cuadre - {Sucursal}" y debajo, a la izquierda,
+ * "Fecha: {fecha formateada}".
+ */
 export const addHeader = (pdf, { title, fecha, sucursal, formatDate }) => {
   const w = pdf.internal.pageSize.getWidth();
   pdf.setFillColor(245, 248, 252);
   pdf.rect(0, 0, w, 66, 'F');
 
+  const sucNom = (sucursal || '—').toString();
+  const computedTitle = title ?? `Cuadre - ${sucNom}`;
+  const fechaLabel = typeof formatDate === 'function' ? formatDate(fecha) : (fecha || '');
+
   pdf.setFont('helvetica', 'bold');
   pdf.setTextColor(33, 37, 41);
   pdf.setFontSize(18);
-  pdf.text(title, 40, 32);
+  pdf.text(computedTitle, 40, 32);
 
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(11);
   pdf.setTextColor(90, 90, 90);
-  pdf.text(`Fecha: ${formatDate(fecha)}`, 40, 50);
-  pdf.text(`Sucursal: ${sucursal}`, w - 40, 50, { align: 'right' });
+  // Solo fecha, alineada a la izquierda bajo el título:
+  if (fechaLabel) pdf.text(`Fecha: ${fechaLabel}`, 40, 50);
+  // Nota: ya NO mostramos la sucursal a la derecha: el nombre va en el título.
 };
 
 export const addFooterPageNumbers = (pdf) => {
@@ -85,12 +94,22 @@ export const addFooterPageNumbers = (pdf) => {
   }
 };
 
+/**
+ * Helper opcional para generar el nombre de descarga: "Cuadre - {fecha}.pdf"
+ */
+export const getCuadreDownloadName = (fecha, formatDate) => {
+  const fechaLabel = typeof formatDate === 'function' ? formatDate(fecha) : (fecha || '');
+  const base = `Cuadre - ${fechaLabel}`.trim();
+  // Sanitizar para sistemas de archivos
+  return `${base}`.replace(/[^\w .\-]/g, '_') + '.pdf';
+};
+
 /* ===== Render principal ===== */
 export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate, options = {}) => {
   const { showPedidosYa: optPY = false, showAmex: optAmex = false } = options;
 
+  // Encabezado con el nuevo formato (sin title explícito para usar "Cuadre - {Sucursal}")
   addHeader(pdf, {
-    title: 'Cuadre de ventas',
     fecha: c.fecha,
     sucursal: sucursalNombre || '—',
     formatDate,

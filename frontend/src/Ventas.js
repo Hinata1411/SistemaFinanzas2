@@ -198,7 +198,7 @@ export default function Ventas() {
           onDownload={() => {
             const docs = cuadres.filter(c => selectedIds.includes(c.id));
             if (!docs.length) return Swal.fire('Selecciona al menos un registro','','warning');
-            const nombre = `Ventas_Agrupadas_${fechaFiltro || 'todas'}`;
+            const nombre = `Cuadre-${fechaFiltro || 'todas'}`;
             exportGroupedPdf(docs, sucursalesMap, nombre, formatDate);
             setShowGroup(false);
           }}
