@@ -552,7 +552,7 @@ export default function RegistrarPagos() {
               <button
                 type="button"
                 className="rc-btn rc-btn-primary rc-btn-lg"
-                onClick={handleDescargarAgrupado}
+                 onClick={() => exportDepositosPdf(row, sucursalesMap[row.sucursalId])}
                 title="Descargar PDF agrupado por fecha (todas las sucursales)"
               >
                 Descargar PDF Agrupado
