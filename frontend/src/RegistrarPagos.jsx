@@ -17,7 +17,7 @@ import { todayISO as getTodayISO } from './utils/dates';
 
 import CategoriasModal from './components/registrar-cierre/CategoriasModal';
 import AttachmentViewerModal from './components/registrar-cierre/AttachmentViewerModal';
-import { exportPagosGroupedPdf } from './pdf/exportadoresPagos'; // <-- NUEVO
+import { exportPagosGroupedPdf } from './pdf/exportadoresPagos'; // <-- usando jsPDF puro
 
 // ====== Helpers ======
 const money = (v) =>
@@ -193,7 +193,7 @@ export default function RegistrarPagos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sucursales.length]);
 
-  // === Precarga cuando venimos de HistorialPagos: ?id=<doc>&mode=<view|edit> ===
+  // Precarga cuando venimos de HistorialPagos: ?id=<doc>&mode=<view|edit>
   useEffect(() => {
     if (!editId) return;
     (async () => {
@@ -210,13 +210,12 @@ export default function RegistrarPagos() {
         setActiveSucursalId(d.sucursalId || null);
         setFecha(d.fecha || getTodayISO());
 
-        // Asegurar que exista el slot para esa sucursal
+        // Asegurar slot
         setPagosMap(prev => {
           const copy = { ...prev };
           if (!copy[d.sucursalId]) {
             copy[d.sucursalId] = { items: [], cajaChicaUsada: 0 };
           }
-          // Cargar items en el mapa; blobs nulos (se vuelven a subir si se cambian)
           copy[d.sucursalId].items = (Array.isArray(d.items) ? d.items : []).map(it => ({
             descripcion: it.descripcion || '',
             monto: n(it.monto),
@@ -239,21 +238,21 @@ export default function RegistrarPagos() {
     })();
   }, [editId]);
 
-  // === Derivados y HOOKS antes de cualquier return temprano ===
+  // Derivados
   const active = activeSucursalId;
   const suc = (sucursales.find(s => s.id === active) || {});
   const currentBranchLabel = suc.ubicacion || suc.nombre || suc.id || '—';
   const state = pagosMap[active] || { items:[], cajaChicaUsada:0 };
   const readOnly = isViewing;
 
-  // Mapa de sucursales para etiquetas en exportación (ubicación > nombre > id)
+  // Mapa para etiquetas (ubicación > nombre > id)
   const sucursalesMap = useMemo(() => {
     const m = {};
     (sucursales || []).forEach(s => { m[s.id] = s.ubicacion || s.nombre || s.id; });
     return m;
   }, [sucursales]);
 
-  // ✅ Hook en orden estable y antes de returns
+  // Total utilizado
   const totalUtilizado = useMemo(
     () =>
       (state.items || []).reduce(
@@ -266,12 +265,10 @@ export default function RegistrarPagos() {
   if (!me.loaded) {
     return <div className="rc-tab-empty">Cargando permisos…</div>;
   }
-  // Permisos: si es "view", cualquiera puede ver; si es edición o nuevo y no eres admin, bloquear.
   if (!isAdmin && !isViewing) {
     return <div className="rc-tab-empty">Solo administradores</div>;
   }
 
-  // Igual que en Finanzas: etiqueta por ubicación (fallback)
   const branchLabel = (s) => s?.ubicacion || s?.nombre || s?.id || '—';
 
   const setRow = (i, field, val) => {
@@ -332,20 +329,18 @@ export default function RegistrarPagos() {
       return;
     }
 
-    // Si ya había un preview previo, libéralo para evitar leaks
     try {
       const prev = (pagosMap[active]?.items || [])[i]?.filePreview;
       if (prev) URL.revokeObjectURL(prev);
     } catch {}
 
-    // Crea SIEMPRE un preview local (sirve para imagen y PDF)
     const preview = URL.createObjectURL(file);
 
     setRow(i, 'fileBlob', file);
-    setRow(i, 'filePreview', preview);   // <-- ESTE FALTABA
+    setRow(i, 'filePreview', preview);
     setRow(i, 'fileName', file.name);
     setRow(i, 'fileMime', file.type);
-    setRow(i, 'fileUrl', '');            // limpiamos URL remota si se reemplaza el archivo
+    setRow(i, 'fileUrl', '');
   };
 
   const clearFile = (i) => {
@@ -438,7 +433,6 @@ export default function RegistrarPagos() {
       const storage = getStorage();
       const folder = `pagos/${active}/${fecha}`;
 
-      // Subir adjuntos si hay blob; conservar si solo hay URL
       const ready = await Promise.all(items.map(async (r, i) => {
         const { fileBlob, filePreview, ...rest } = r;
         if (fileBlob) {
@@ -453,7 +447,6 @@ export default function RegistrarPagos() {
         return { ...rest };
       }));
 
-      // Recalcular totales
       const totalUtilizadoCalc = ready.reduce((s, it) => s + n(it.monto), 0);
       const cajaChicaUsada = n(state.cajaChicaUsada || 0);
       const sobranteParaManana = Math.max(0, (kpiDepositos - totalUtilizadoCalc) + cajaChicaUsada);
@@ -461,9 +454,8 @@ export default function RegistrarPagos() {
       const actor = { uid: me.uid, username: me.username };
 
       if (isEditingExisting) {
-        // Delta caja chica
         const prevCaja = n(originalDoc?.cajaChicaUsada);
-        const deltaCajaChica = -(cajaChicaUsada - prevCaja); // si usas más ahora, restamos más a caja
+        const deltaCajaChica = -(cajaChicaUsada - prevCaja);
 
         await updateDoc(doc(db, 'pagos', editId), {
           fecha,
@@ -476,7 +468,6 @@ export default function RegistrarPagos() {
           updatedBy: actor,
         });
 
-        // Ajustar caja chica y kpiDepositos
         if (deltaCajaChica !== 0) {
           await updateDoc(doc(db, 'sucursales', active), { cajaChica: increment(deltaCajaChica) });
           setCajaChicaBySuc(prev => ({ ...prev, [active]: n(prev[active]) + deltaCajaChica }));
@@ -486,7 +477,6 @@ export default function RegistrarPagos() {
 
         await Swal.fire({ icon:'success', title:'Pagos actualizados', timer:1400, showConfirmButton:false });
       } else {
-        // Guardar documento de pagos (nuevo)
         await addDoc(collection(db, 'pagos'), {
           fecha,
           sucursalId: active,
@@ -498,15 +488,12 @@ export default function RegistrarPagos() {
           createdAt: serverTimestamp(),
         });
 
-        // Descontar caja chica en sucursal
         const deltaCajaChica = -cajaChicaUsada;
         if (deltaCajaChica !== 0) {
           await updateDoc(doc(db, 'sucursales', active), { cajaChica: increment(deltaCajaChica) });
         }
-        // Override kpi para hoy
         await updateDoc(doc(db, 'sucursales', active), { kpiDepositos: Number(sobranteParaManana) });
 
-        // Actualizar estados locales (refrescar caja y kpi en esta vista)
         setCajaChicaBySuc(prev => ({ ...prev, [active]: Number(prev[active] || 0) + deltaCajaChica }));
         setKpiDepositosBySuc(prev => ({ ...prev, [active]: Number(sobranteParaManana) }));
 
@@ -552,7 +539,7 @@ export default function RegistrarPagos() {
               <button
                 type="button"
                 className="rc-btn rc-btn-primary rc-btn-lg"
-                 onClick={() => exportDepositosPdf(row, sucursalesMap[row.sucursalId])}
+                onClick={handleDescargarAgrupado}
                 title="Descargar PDF agrupado por fecha (todas las sucursales)"
               >
                 Descargar PDF Agrupado
@@ -616,7 +603,6 @@ export default function RegistrarPagos() {
         <div className="rc-card-hd"><h3>Asignar pagos</h3></div>
 
         <table className="rc-table rc-gastos-table rc-pagos-table">
-          {/* colgroup opcional (lo oculta el responsive <860px) */}
           <colgroup>
             <col style={{width:'140px'}}/>{/* Categoría */}
             <col style={{width:'140px'}}/>{/* Descripción */}
@@ -761,7 +747,6 @@ export default function RegistrarPagos() {
               <td style={{ fontWeight:800, textAlign:'right', color:'var(--dark)' }}>
                 {money(totalUtilizado)}
               </td>
-              {/* resto vacío */}
               <td colSpan={4}></td>
             </tr>
 
