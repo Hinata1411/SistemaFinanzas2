@@ -235,16 +235,15 @@ const handleEliminar = async (id) => {
 
     await Swal.fire({ icon: 'success', title: 'Pago eliminado', timer: 1200, showConfirmButton: false });
 
-    // 4) Refresca tu lista/UI (si tienes un hook tipo usePagos o similar)
-    //    Por ejemplo:
-    // await refetchPagos();
-    // o filtra el estado local:
-    // setPagos(prev => prev.filter(p => p.id !== id));
+    // Refresca la tabla local
+
+    setPagos(prev => prev.filter(p => p.id !== id));
+    await refetch();
 
   } catch (e) {
     console.error(e);
     Swal.fire('Error', e?.message || 'No se pudo eliminar.', 'error');
-  } await refetch(); 
+  } 
 }; 
 
   // UI

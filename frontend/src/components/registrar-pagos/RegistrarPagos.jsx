@@ -80,59 +80,56 @@ export default function RegistrarPagos() {
     return () => unsub();
   }, []);
 
-  // Cargar sucursales + KPI (desde sucursales.kpiDepositos) + caja chica
+  // Cargar sucursales + KPI + caja chica EN TIEMPO REAL
   useEffect(() => {
     if (!me.loaded) return;
 
-    (async () => {
-      // 1) Sucursales
-      let arr = [];
-      try {
-        const qs = await getDocs(collection(db, 'sucursales'));
-        arr = qs.docs.map((snap) => {
-          const d = snap.data() || {};
-          return {
-            id: snap.id,
-            nombre: d.nombre || d.name || snap.id,
-            ubicacion: d.ubicacion || d.location || '',
-            ...d,
-          };
-        });
-        setSucursales(arr);
-        if (!editId) {
-          setActiveSucursalId(prev => prev || arr[0]?.id || null);
-        }
-      } catch (e) {
-        console.error('Error cargando sucursales:', e);
-        return;
+    const colRef = collection(db, 'sucursales');
+    const unsub = onSnapshot(colRef, (qs) => {
+      // 1) Mapeo de sucursales
+      const arr = qs.docs.map((snap) => {
+        const d = snap.data() || {};
+        return {
+          id: snap.id,
+          nombre: d.nombre || d.name || snap.id,
+          ubicacion: d.ubicacion || d.location || '',
+          ...d,
+        };
+      });
+      setSucursales(arr);
+
+      if (!editId) {
+        setActiveSucursalId(prev => prev || arr[0]?.id || null);
       }
 
-      // 2) Caja chica directo desde el doc de sucursal
+      // 2) Caja chica + KPI desde el doc de sucursal (siempre en vivo)
       const caja = {};
-      arr.forEach(s => { caja[s.id] = Number(s?.cajaChica || 0); });
-
-      // 3) KPI por sucursal:
-      //    SI estás viendo/editando un pago => respeta el snapshot guardado en el pago (kpiDepositosAtSave || sobranteParaManana).
-      //    EN CASO CONTRARIO => toma sucursales.kpiDepositos (que es el último "sobrante para mañana" persistido).
-      const kpi = {};
+      const kpi  = {};
       arr.forEach(s => {
-        if (originalDoc && originalDoc.sucursalId === s.id) {
-          kpi[s.id] = Number(originalDoc?.kpiDepositosAtSave ?? originalDoc?.sobranteParaManana ?? 0);
-        } else {
-          kpi[s.id] = Number(s?.kpiDepositos || 0);
-        }
+        caja[s.id] = Number(s?.cajaChica || 0);
+        kpi[s.id]  = Number(s?.kpiDepositos || 0);
       });
 
-      // Si guardaste snapshot de caja chica, úsalo para la UI en modo ver/editar
-      if (originalDoc && originalDoc.sucursalId && typeof originalDoc?.cajaChicaDisponibleAtSave === 'number') {
-        caja[originalDoc.sucursalId] = Number(originalDoc.cajaChicaDisponibleAtSave);
+      // 3) Si vienes a VER un documento (mode=view), respeta el snapshot guardado SOLO para esa sucursal
+      //    (Si estás editando, mejor usar el KPI vivo para que refleje cambios posteriores, p.ej. al borrar pagos/cuadres)
+      if (isViewing && originalDoc?.sucursalId) {
+        const sid = originalDoc.sucursalId;
+        kpi[sid] = Number(originalDoc?.kpiDepositosAtSave ?? originalDoc?.sobranteParaManana ?? 0);
+        if (typeof originalDoc?.cajaChicaDisponibleAtSave === 'number') {
+          caja[sid] = Number(originalDoc.cajaChicaDisponibleAtSave);
+        }
       }
 
       setKpiDepositosBySuc(kpi);
       setCajaChicaBySuc(caja);
-    })();
-    // Nota: KPI persistente por sucursal, no depende de 'fecha'
-  }, [me.loaded, editId, originalDoc]);
+    }, (err) => {
+      console.error('onSnapshot sucursales:', err);
+    });
+
+    return () => unsub();
+    // Importante: dependencias que realmente cambian el comportamiento del efecto
+  }, [me.loaded, editId, isViewing, originalDoc?.sucursalId, originalDoc?.kpiDepositosAtSave, originalDoc?.sobranteParaManana, originalDoc?.cajaChicaDisponibleAtSave]);
+
   
   // Inicializar pagosMap por sucursal
   useEffect(() => {
