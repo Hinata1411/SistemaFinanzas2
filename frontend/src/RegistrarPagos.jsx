@@ -524,7 +524,14 @@ export default function RegistrarPagos() {
     <div className="rc-shell registrar-pagos">
       <div className="rc-header">
         <div className="rc-header-left">
-          <h1>Registrar Pagos {headerSuffix && <span>{headerSuffix}</span>}</h1>
+          <h1>
+            Registrar Pagos {headerSuffix && <span>{headerSuffix}</span>}
+            {active && (
+              <small style={{ marginLeft: 8, fontWeight: 400, fontSize: 14, color: 'var(--muted)' }}>
+                · {currentBranchLabel}
+              </small>
+            )}
+          </h1>
 
           <div className="rc-date" style={{ display:'grid', gap:8, gridTemplateColumns:'1fr 1fr', alignItems:'end' }}>
             {/* FECHA */}
