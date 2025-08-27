@@ -3,12 +3,6 @@ const admin = require('firebase-admin');
 admin.initializeApp();
 const db = admin.firestore();
 
-// Antes tenías algo como:
-// exports.sendScheduledNotifications = functions.pubsub
-//   .schedule('every 1 minutes')
-//   .timeZone('UTC')
-//   .onRun(async (context) => { … });
-
 // Para probar localmente, crea una función HTTP:
 exports.testSendNotifications = functions.https.onRequest(async (req, res) => {
   const now = admin.firestore.Timestamp.fromDate(new Date());

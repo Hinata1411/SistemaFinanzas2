@@ -14,23 +14,23 @@ import {
   increment,
 } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
-import { db, auth } from './firebase';
+import { db, auth } from '../../services/firebase';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
-import './components/registrar-cierre/RegistrarCierre.css';
+import './RegistrarCierre.css';
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-import { todayISO } from './utils/dates';
-import { n } from './utils/numbers';
-import { useSucursales } from './hooks/useSucursales';
-import { useRegistrarCierreTotals } from './hooks/useRegistrarCierreTotals';
+import { todayISO } from '../../utils/dates';
+import { n } from '../../utils/numbers';
+import { useSucursales } from '../../hooks/useSucursales';
+import { useRegistrarCierreTotals } from '../../hooks/useRegistrarCierreTotals';
 
-import ArqueoGrid from './components/registrar-cierre/ArqueoGrid';
-import CierreGrid from './components/registrar-cierre/CierreGrid';
-import GastosList from './components/registrar-cierre/GastosList';
-import ResumenPanel from './components/registrar-cierre/ResumenPanel';
-import CajaChicaModal from './components/registrar-cierre/CajaChicaModal';
-import CategoriasModal from './components/registrar-cierre/CategoriasModal';
+import ArqueoGrid from './ArqueoGrid';
+import CierreGrid from './CierreGrid';
+import GastosList from './GastosList';
+import ResumenPanel from './ResumenPanel';
+import CajaChicaModal from './CajaChicaModal';
+import CategoriasModal from './CategoriasModal';
 
 const isAjusteCajaChica = (name) =>
   (name || '').toString().trim().toLowerCase() === 'ajuste de caja chica';

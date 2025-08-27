@@ -1,6 +1,6 @@
 // src/MyNotifications.jsx
 import React, { useEffect, useState } from 'react';
-import { messaging, getToken, onMessage } from './firebase';
+import { messaging, getToken, onMessage } from '../../firebase';
 
 export default function MyNotifications() {
   const [token, setToken] = useState('');

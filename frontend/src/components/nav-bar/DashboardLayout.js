@@ -99,9 +99,10 @@ function DashboardLayout({ userEmail, userRole }) {
           </button>
 
           <div className="brand">
-            <img src="/Logosinfondo.png" alt="American Pizza" />
+            <img src="img/Logosinfondo.png" alt="American Pizza" />
           </div>
         </div>
+
 
         <nav id="sidebar-menu" className="menu-container">
           <ul className="menu">
@@ -112,7 +113,7 @@ function DashboardLayout({ userEmail, userRole }) {
                 end
                 className={({ isActive }) => `menu-link ${isActive ? 'active' : ''}`}
               >
-                <img src="/casa.png" alt="" />
+                <img src="img/casa.png" alt="" />
                 <span>Finanzas</span>
               </NavLink>
             </li>
@@ -125,7 +126,7 @@ function DashboardLayout({ userEmail, userRole }) {
                 onClick={() => setOpenRegistrar((v) => !v)}
                 aria-expanded={openRegistrar}
               >
-                <img src="/factura.png" alt="" />
+                <img src="img/factura.png" alt="" />
                 <span>Registrar</span>
                 <i className={`bx ${openRegistrar ? 'bx-chevron-up' : 'bx-chevron-down'}`} />
               </button>
@@ -165,7 +166,7 @@ function DashboardLayout({ userEmail, userRole }) {
                 onClick={() => setOpenHistorial((v) => !v)}
                 aria-expanded={openHistorial}
               >
-                <img src="/pizza3.png" alt="" />
+                <img src="img/pizza3.png" alt="" />
                 <span>Historial</span>
                 <i className={`bx ${openHistorial ? 'bx-chevron-up' : 'bx-chevron-down'}`} />
               </button>
@@ -204,7 +205,7 @@ function DashboardLayout({ userEmail, userRole }) {
                   to="Sucursales"
                   className={({ isActive }) => `menu-link ${isActive ? 'active' : ''}`}
                 >
-                  <img src="/pizza3.png" alt="" />
+                  <img src="img/pizza3.png" alt="" />
                   <span>Sucursales</span>
                 </NavLink>
               </li>
@@ -216,7 +217,7 @@ function DashboardLayout({ userEmail, userRole }) {
                   to="Usuarios"
                   className={({ isActive }) => `menu-link ${isActive ? 'active' : ''}`}
                 >
-                  <img src="/agregaru.png" alt="" />
+                  <img src="img/agregaru.png" alt="" />
                   <span>Usuarios</span>
                 </NavLink>
               </li>
@@ -278,7 +279,7 @@ function DashboardLayout({ userEmail, userRole }) {
             </button>
           </div>
           <div className="user-chip">
-            <img src="/perfilusuario.png" alt="perfil-usuario" />
+            <img src="img/perfilusuario.png" alt="perfil-usuario" />
             <div className="meta">
               <strong>{email.split('@')[0] || 'Usuario'}</strong>
               <small>{email}</small>
@@ -295,3 +296,4 @@ function DashboardLayout({ userEmail, userRole }) {
 }
 
 export default DashboardLayout;
+

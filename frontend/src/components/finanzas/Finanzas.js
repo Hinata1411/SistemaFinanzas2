@@ -2,8 +2,8 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { collection, getDocs, getDoc, doc, query, where } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
-import { db, auth } from './firebase';
-import MyCalendar from './MyCalendar';
+import { db, auth } from '../../services/firebase';
+import MyCalendar from '../calendario/MyCalendar';
 import './Finanzas.css';
 
 /* ========= Helpers estables (fuera del componente) ========= */

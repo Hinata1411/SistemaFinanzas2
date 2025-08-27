@@ -4,14 +4,14 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
-import { db, auth } from './firebase';
+import { db, auth } from '../../services/firebase';
 
-import { useCuadres } from './hooks/useCuadres';
-import { getTodayLocalISO, formatDate } from './utils/dates';
-import VentasTable from './components/ventas/VentasTable';
-import GroupDownloadModal from './components/ventas/GroupDownloadModal';
-import { exportSingleCuadrePdf, exportGroupedPdf } from './pdf/exportadores';
-import './components/ventas/Ventas.css';
+import { useCuadres } from '../../hooks/useCuadres';
+import { getTodayLocalISO, formatDate } from '../../utils/dates';
+import VentasTable from '../ventas/HistorialCuadreTable';
+import GroupDownloadModal from '../ventas/GroupDownloadModal';
+import { exportSingleCuadrePdf, exportGroupedPdf } from '../../pdf/exportadores';
+import '../ventas/Ventas.css';
 
 export default function Ventas() {
   const navigate = useNavigate();

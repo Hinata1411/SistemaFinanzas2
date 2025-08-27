@@ -503,7 +503,7 @@ body{
   -webkit-appearance: none !important;
   margin: 0 !important;
 }
-@media (max-width: 480px){
+@media (max-width: 500px){
   .rc-col-hd > div:last-child .rc-input{ width: 96px !important; }
 }
 
@@ -588,4 +588,18 @@ body{
 .sidebar,
 .menu-container{
   overflow-x: hidden !important;
+}
+
+/* === A 350px o menos: ocultar email en la userbar === */
+@media (max-width: 370px){
+  .userbar .user-chip { min-width: 0; }        /* permite encoger el chip */
+  .userbar .meta { overflow: hidden; }         /* habilita elipsis */
+  .userbar .meta small { display: none !important; } /* oculta email */
+  .userbar .meta strong{
+    display: block;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;                   /* elipsis para nombres largos */
+  }
 }

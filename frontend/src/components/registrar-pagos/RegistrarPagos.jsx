@@ -12,11 +12,11 @@ import './RegistrarPagos.css';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 
-import { auth, db } from './firebase';
-import { todayISO as getTodayISO } from './utils/dates';
+import { auth, db } from '../../services/firebase';
+import { todayISO as getTodayISO } from '../../utils/dates';
 
-import CategoriasModal from './components/registrar-cierre/CategoriasModal';
-import AttachmentViewerModal from './components/registrar-cierre/AttachmentViewerModal';
+import CategoriasModal from '../registrar-cierre/CategoriasModal';
+import AttachmentViewerModal from '../registrar-cierre/AttachmentViewerModal';
 
 // ====== Helpers ======
 const money = (v) =>
