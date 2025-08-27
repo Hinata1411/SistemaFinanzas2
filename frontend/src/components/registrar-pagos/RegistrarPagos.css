@@ -60,21 +60,36 @@
 
 .registrar-pagos .rc-gastos-table th,
 .registrar-pagos .rc-gastos-table td {
+  border: 1px solid #e7e2d9;
+  padding: 10px 12px;
+  vertical-align: middle;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  vertical-align: middle;
 }
 
-/* ===== Encabezados de tabla (vista normal) ===== */
+/* Encabezados RegistrarPagos: verde del tema y letras blancas */
 .registrar-pagos .rc-gastos-table thead th {
-  background: var(--primary);  /* usa tu variable de verde */
-  color: #fff;                 /* texto blanco */
+  background: var(--primary);   /* verde del tema */
+  color: #fff;                  /* texto blanco */
   font-weight: 800;
   text-align: center;
   padding: 10px 12px;
-  border: 1px solid #e7e2d9;
+  border: 1px solid #e7e2d9;    /* mismo borde que el resto del sistema */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
+/* Redondeo superior del header (look consistente) */
+.registrar-pagos .rc-gastos-table thead th:first-child {
+  border-top-left-radius: 12px;
+}
+.registrar-pagos .rc-gastos-table thead th:last-child {
+  border-top-right-radius: 12px;
+}
+
+
 
 /* Descripción izquierda, resto centrado */
 .registrar-pagos .rc-gastos-table td:nth-child(2) .rc-input {
