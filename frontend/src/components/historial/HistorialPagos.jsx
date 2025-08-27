@@ -2,8 +2,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
-  collection, doc, getDoc, getDocs, deleteDoc, increment,
-  query, where, updateDoc, orderBy, limit, getDocs, writeBatch
+  collection, doc, getDoc, getDocs, increment,
+  query, where, updateDoc, orderBy, limit, writeBatch
 } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
@@ -244,8 +244,8 @@ const handleEliminar = async (id) => {
   } catch (e) {
     console.error(e);
     Swal.fire('Error', e?.message || 'No se pudo eliminar.', 'error');
-  }
-};
+  } await refetch(); 
+}; 
 
   // UI
   if (!me.loaded) {
@@ -362,7 +362,7 @@ const handleEliminar = async (id) => {
                         <button
                           className="btn-min danger"
                           type="button"
-                          onClick={()=>handleEliminar(p)}
+                          onClick={()=>handleEliminar(p.id)}
                           disabled={!isAdmin}
                           title={isAdmin ? '' : 'Solo admin'}
                         >
