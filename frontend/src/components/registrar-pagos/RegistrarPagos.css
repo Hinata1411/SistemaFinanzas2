@@ -63,7 +63,7 @@
   gap: 6px;
 }
 
-/* TABLA: ocupa todo el ancho */
+/* TABLA: ocupa todo el ancho (selector corregido) */
 .registrar-pagos .rc-gastos-table,
 .registrar-pagos .rc-pagos-table,
 .registrar-pagos table.rc-gastos-table {
@@ -71,7 +71,6 @@
   table-layout: fixed;
   border-collapse: collapse;
 }
-
 
 .registrar-pagos .rc-gastos-table th,
 .registrar-pagos .rc-gastos-table td {
@@ -103,8 +102,6 @@
 .registrar-pagos .rc-gastos-table thead th:last-child {
   border-top-right-radius: 12px;
 }
-
-
 
 /* Descripción izquierda, resto centrado */
 .registrar-pagos .rc-gastos-table td:nth-child(2) .rc-input {
@@ -143,7 +140,7 @@
 
 /* ==== Responsive tabla pagos ==== */
 @media (max-width: 860px) {
-  .registrar-pagos .rc-gastos-legend { display: none; }
+ .registrar-pagos .rc-gastos-legend { grid-template-columns: var(--pagos-cols); }
 
   .registrar-pagos .rc-gastos-table,
   .registrar-pagos .rc-gastos-table tbody,
