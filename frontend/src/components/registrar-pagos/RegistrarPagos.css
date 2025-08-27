@@ -1,22 +1,86 @@
-/* ===== SOLO RegistrarPagos (usa el mismo estilo que Gastos) ===== */
+/* ===== SOLO RegistrarPagos (usa el mismo estilo que Gastos, full width) ===== */
 
-/* Título limpio */
-.registrar-pagos .rc-card-hd h3 { margin: 0; }
+:root {
+  --pagos-cols: 220px 1fr 140px 140px 160px 120px; /* ajusta según tus columnas */
+}
 
-/* Alinear columnas como en Gastos */
-.registrar-pagos .rc-gastos-table td:nth-child(1) .rc-input { /* Descripción */
+.registrar-pagos .rc-card-hd h3 {
+  margin: 0;
+}
+
+/* Leyenda de la tabla (alineada y centrada) */
+.registrar-pagos .rc-gastos-legend {
+  display: grid;
+  grid-template-columns: var(--pagos-cols);
+  align-items: center;
+  text-align: center;
+  margin: 2px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  min-height: 22px;
+}
+.registrar-pagos .rc-gastos-legend span { white-space: nowrap; }
+
+/* Filas uniformes */
+.registrar-pagos .rc-gasto-row {
+  display: grid;
+  grid-template-columns: var(--pagos-cols);
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+}
+
+.registrar-pagos .rc-gasto-row .rc-input,
+.registrar-pagos .rc-gasto-row .rc-select {
+  width: 100% !important;
+  max-width: none !important;
+  display: block;
+  box-sizing: border-box;
+}
+
+/* Alineaciones */
+.registrar-pagos .rc-gasto-row .rc-desc { text-align: left; }
+.registrar-pagos .rc-gasto-row input[aria-label="Referencia"],
+.registrar-pagos .rc-gasto-row .rc-qty { text-align: center; }
+
+/* Acciones centradas */
+.registrar-pagos .rc-gasto-row > div:last-child {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* TABLA: ocupa todo el ancho */
+.registrar-pagos .rc-gastos-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.registrar-pagos .rc-gastos-table th,
+.registrar-pagos .rc-gastos-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.registrar-pagos .rc-gastos-table thead th {
+  text-align: center;
+  color: #6b7280;
+  font-weight: 700;
+}
+
+/* Descripción izquierda, resto centrado */
+.registrar-pagos .rc-gastos-table td:nth-child(2) .rc-input {
   text-align: left;
-  font-weight: 500;
 }
-.registrar-pagos .rc-gastos-table td:nth-child(2) .rc-input { /* Monto */
-  text-align: center;
-  font-weight: 800;
-}
-.registrar-pagos .rc-gastos-table td:nth-child(3) .rc-input { /* Ref */
+.registrar-pagos .rc-gastos-table td:not(:nth-child(2)) .rc-input {
   text-align: center;
 }
 
-/* Comprobante: botones en fila, centrados (con wrap si hace falta) */
+/* Comprobante en fila con wrap */
 .registrar-pagos .rc-gastos-table .img-cell > div {
   display: flex;
   align-items: center;
@@ -24,37 +88,77 @@
   gap: 8px;
   flex-wrap: wrap;
 }
-.registrar-pagos .rc-gastos-table .img-cell .rc-btn {
-  min-height: 36px;
-  padding: 6px 12px;
-  border-radius: 10px;
-  white-space: nowrap;
-}
 
-/* Acciones centradas */
-.registrar-pagos .rc-gastos-table td:nth-child(6) {
-  text-align: center;
-}
-
-/* Footer como en Gastos */
+/* Footer */
 .registrar-pagos .rc-gastos-table tfoot td {
   background: #fafafa;
   border: 1px solid #e7e2d9;
   border-radius: 12px;
 }
 
-/* Mantén el fix de spinners si no lo tienes global */
-.registrar-pagos .no-spin[type="number"]{
-  appearance: textfield;
-  -moz-appearance: textfield;
-  -webkit-appearance: none;
+/* ==== Responsive Fix: pills de sucursales siempre visibles ==== */
+.registrar-pagos .rc-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin; /* en vez de none, para que usuario pueda desplazar */
 }
-.registrar-pagos .no-spin::-webkit-outer-spin-button,
-.registrar-pagos .no-spin::-webkit-inner-spin-button{
-  -webkit-appearance: none;
-  margin: 0;
-}
+.registrar-pagos .rc-tabs::-webkit-scrollbar { height: 6px; }
 
-/* Evitar wrap/colapso de las pills de sucursal */
-.rc-tabs { overflow-x: auto; white-space: nowrap; }
-.rc-tabs .rc-tab { flex: 0 0 auto; }
+/* ==== Responsive tabla pagos ==== */
+@media (max-width: 860px) {
+  .registrar-pagos .rc-gastos-legend { display: none; }
+
+  .registrar-pagos .rc-gastos-table,
+  .registrar-pagos .rc-gastos-table tbody,
+  .registrar-pagos .rc-gastos-table tr,
+  .registrar-pagos .rc-gastos-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .registrar-pagos .rc-gastos-table tr {
+    margin: 10px 0;
+    border: 1px solid #e7e2d9;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .registrar-pagos .rc-gastos-table td {
+    position: relative;
+    border: none;
+    border-top: 1px solid #f0ece6;
+    padding: 12px 14px 12px calc(14px + 140px);
+    min-height: 48px;
+    text-align: left;
+  }
+  .registrar-pagos .rc-gastos-table td:first-child { border-top: none; }
+
+  .registrar-pagos .rc-gastos-table td::before {
+    content: attr(data-label);
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 130px;
+    font-weight: 800;
+    color: var(--dark);
+  }
+
+  /* Footer: total en bloque */
+  .registrar-pagos .rc-gastos-table tfoot,
+  .registrar-pagos .rc-gastos-table tfoot tr,
+  .registrar-pagos .rc-gastos-table tfoot td {
+    display: block;
+    width: 100%;
+  }
+  .registrar-pagos .rc-gastos-table tfoot td {
+    margin-top: 6px;
+    padding: 12px 14px;
+    text-align: right;
+    font-weight: 800;
+  }
+}
