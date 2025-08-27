@@ -329,29 +329,23 @@ export default function RegistrarPagos() {
     setRow(i, 'fileUrl', '');
   };
 
-  // Usa el snapshot del documento cuando estás viendo o editando ese mismo doc
-  const kpiDepositos = React.useMemo(() => {
+  // KPI que se muestra en la UI. En edición/visualización del MISMO doc, se ancla al snapshot guardado.
+  const getKpiDepositosUI = () => {
     if (!active) return 0;
     const live = Number(kpiDepositosBySuc[active] || 0);
     const isSameSucursal = originalDoc?.sucursalId === active;
 
     if ((isViewing || isEditingExisting) && isSameSucursal) {
-      // Anchor KPI to the doc snapshot while viewing/editing
       const snap = Number(
-        (originalDoc?.kpiDepositosAtSave ?? originalDoc?.sobranteParaManana ?? 0)
+        originalDoc?.kpiDepositosAtSave ?? originalDoc?.sobranteParaManana ?? 0
       );
       return Number.isFinite(snap) ? snap : live;
     }
     return live;
-  }, [
-    active,
-    kpiDepositosBySuc,
-    isViewing,
-    isEditingExisting,
-    originalDoc?.sucursalId,
-    originalDoc?.kpiDepositosAtSave,
-    originalDoc?.sobranteParaManana,
-  ]);
+  };
+
+  const kpiDepositos = getKpiDepositosUI();
+
 
   const cajaChicaDisponible = active ? Number(cajaChicaBySuc[active] || 0) : 0; // esta puede quedarse "viva"
 
@@ -426,19 +420,18 @@ export default function RegistrarPagos() {
         return { ...rest };
       }));
 
-      const totalUtilizadoCalc = ready.reduce((s, it) => s + n(it.monto), 0);
-      const cajaChicaUsada = n(state.cajaChicaUsada || 0);
+      // Usa la misma base que ves en pantalla (anclada al snapshot si estás editando ese doc)
+      const kpiBase = getKpiDepositosUI();
 
-      // KPI mostrado en UI (dinero para depósitos) - se usa para snapshot y cálculo de sobrante
-      const kpiDepositos = active ? Number(kpiDepositosBySuc[active] || 0) : 0;
-
-      const sobranteParaManana = Math.max(0, (kpiDepositos - totalUtilizadoCalc) + cajaChicaUsada);
-
-      const actor = { uid: me.uid, username: me.username };
+      const sobranteParaManana = Math.max(0, (kpiBase - totalUtilizadoCalc) + cajaChicaUsada);
 
       // snapshots visibles en ver/editar
-      const kpiSnapshot = Number(kpiDepositos);              // lo que se ve en “Dinero para depósitos”
+      const kpiSnapshot = kpiBase; // lo que se ve en “Dinero para depósitos”
       const cajaChicaSnapshot = active ? Number(cajaChicaBySuc[active] || 0) : 0; // disponible al guardar
+
+      const totalUtilizadoCalc = ready.reduce((s, it) => s + n(it.monto), 0);
+      const cajaChicaUsada = n(state.cajaChicaUsada || 0);
+      const actor = { uid: me.uid, username: me.username };
 
       if (isEditingExisting) {
         const prevCaja = n(originalDoc?.cajaChicaUsada);
