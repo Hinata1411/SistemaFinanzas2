@@ -52,7 +52,7 @@
 }
 
 /* TABLA: ocupa todo el ancho */
-.registrar-pagos .rc-gastos-table {
+.registrar-pagos .rc-gastos-table rc-pagos-table {
   width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
@@ -70,7 +70,7 @@
 
 /* Encabezados RegistrarPagos: verde del tema y letras blancas */
 .registrar-pagos .rc-gastos-table thead th {
-  background: var(--primary);   /* verde del tema */
+  background: var(--dark);   /* verde del tema */
   color: #fff;                  /* texto blanco */
   font-weight: 800;
   text-align: center;
