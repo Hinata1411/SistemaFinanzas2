@@ -17,7 +17,6 @@ import { todayISO as getTodayISO } from './utils/dates';
 
 import CategoriasModal from './components/registrar-cierre/CategoriasModal';
 import AttachmentViewerModal from './components/registrar-cierre/AttachmentViewerModal';
-import { exportPagosGroupedPdf } from './pdf/exportadoresPagos'; // <-- usando jsPDF puro
 
 // ====== Helpers ======
 const money = (v) =>
@@ -240,17 +239,8 @@ export default function RegistrarPagos() {
 
   // Derivados
   const active = activeSucursalId;
-  const suc = (sucursales.find(s => s.id === active) || {});
-  const currentBranchLabel = suc.ubicacion || suc.nombre || suc.id || '—';
   const state = pagosMap[active] || { items:[], cajaChicaUsada:0 };
   const readOnly = isViewing;
-
-  // Mapa para etiquetas (ubicación > nombre > id)
-  const sucursalesMap = useMemo(() => {
-    const m = {};
-    (sucursales || []).forEach(s => { m[s.id] = s.ubicacion || s.nombre || s.id; });
-    return m;
-  }, [sucursales]);
 
   // Total utilizado
   const totalUtilizado = useMemo(
@@ -398,29 +388,6 @@ export default function RegistrarPagos() {
   const openViewer = (url, mime, name) => setViewer({ open:true, url, mime:mime||'', name:name||'' });
   const closeViewer = () => setViewer({ open:false, url:'', mime:'', name:'' });
 
-  // Descargar PDF AGRUPADO por fecha (todas las sucursales del día seleccionado)
-  const handleDescargarAgrupado = async () => {
-    try {
-      if (!fecha) {
-        await Swal.fire('Fecha', 'Selecciona una fecha válida', 'info');
-        return;
-      }
-      const snap = await getDocs(query(
-        collection(db, 'pagos'),
-        where('fecha', '==', fecha)
-      ));
-      const docs = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
-      if (!docs.length) {
-        await Swal.fire('Sin registros', 'No hay pagos en esa fecha.', 'info');
-        return;
-      }
-      exportPagosGroupedPdf(docs, sucursalesMap, `Pagos_Agrupados_${fecha}`);
-    } catch (e) {
-      console.error(e);
-      Swal.fire('Error', e?.message || 'No se pudo generar el PDF.', 'error');
-    }
-  };
-
   // Guardar nuevo o actualizar existente
   const onSave = async () => {
     try {
@@ -439,8 +406,11 @@ export default function RegistrarPagos() {
           const safe = (r.fileName || fileBlob.name || `pago_${i}`).replace(/[^\w.-]+/g, '_');
           const path = `${folder}/${Date.now()}_${i}_${safe}`;
           const fileRef = sRef(storage, path);
-          await uploadBytes(fileRef, fileBlob,
-            { contentType: r.fileMime || fileBlob.type || 'application/octet-stream' });
+          await uploadBytes(
+            fileRef,
+            fileBlob,
+            { contentType: r.fileMime || fileBlob.type || 'application/octet-stream' }
+          );
           const url = await getDownloadURL(fileRef);
           return { ...rest, fileUrl:url, fileName:safe, fileMime:(r.fileMime || fileBlob.type || '') };
         }
@@ -512,7 +482,7 @@ export default function RegistrarPagos() {
       <div className="rc-header">
         <div className="rc-header-left">
           <h1>
-            Registrar Pagos {headerSuffix && <span>{headerSuffix}</span>}
+            Registrar Pagos
             {active && (
               <small style={{ marginLeft: 8, fontWeight: 400, fontSize: 14, color: 'var(--muted)' }}>
                 · {currentBranchLabel}
@@ -535,16 +505,6 @@ export default function RegistrarPagos() {
 
             {/* Acciones */}
             <div className="rc-tabs-actions" style={{ gridColumn:'1 / -1', display:'flex', gap:8, flexWrap:'wrap', marginTop:8 }}>
-              {/* Botón grande de PDF agrupado por fecha */}
-              <button
-                type="button"
-                className="rc-btn rc-btn-primary rc-btn-lg"
-                onClick={handleDescargarAgrupado}
-                title="Descargar PDF agrupado por fecha (todas las sucursales)"
-              >
-                Descargar PDF Agrupado
-              </button>
-
               {!readOnly && (
                 <button type="button" className="rc-btn rc-btn-accent" onClick={onSave}>
                   {isEditingExisting ? 'Actualizar pagos' : 'Guardar pagos'}
