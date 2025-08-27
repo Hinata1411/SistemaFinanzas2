@@ -32,13 +32,13 @@ const n = (v) => {
 function sumItems(items) {
   return (items || []).reduce((acc, it) => acc + n(it.monto), 0);
 }
-
+// --- Helpers para recomputar KPI --- //
 const toMillis = (tsLike) => {
   if (!tsLike) return 0;
-  if (typeof tsLike?.toDate === 'function') return tsLike.toDate().getTime();
-  if (typeof tsLike?.seconds === 'number') return tsLike.seconds * 1000;
+  if (typeof tsLike?.toDate === 'function') return tsLike.toDate().getTime(); // Firestore Timestamp
+  if (typeof tsLike?.seconds === 'number') return tsLike.seconds * 1000;      // Timestamp-like
   const d = new Date(tsLike);
-  return isNaN(d) ? 0 : d.getTime();
+  return Number.isNaN(d.getTime()) ? 0 : d.getTime();
 };
 
 const getKpiFromCuadre = (c) => {
@@ -222,6 +222,10 @@ export default function Pagos() {
   };
 
   const handleEliminar = async (id) => {
+     if (!isAdmin) {
+      await Swal.fire('Solo lectura', 'No tienes permisos para eliminar.', 'info');
+      return;
+    }
     const confirmar = await Swal.fire({
       title: '¿Eliminar pago?',
       text: 'Esta acción no se puede deshacer.',

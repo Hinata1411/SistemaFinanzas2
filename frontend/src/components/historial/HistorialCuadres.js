@@ -28,78 +28,74 @@ const HEADERS = [
   'Acciones'
 ];
 
-// Convierte Timestamp|Date|string a milisegundos
+// Convierte Timestamp|Date|string a ms
 const toMillis = (tsLike) => {
   if (!tsLike) return 0;
   if (typeof tsLike?.toDate === 'function') return tsLike.toDate().getTime(); // Firestore Timestamp
-  if (typeof tsLike?.seconds === 'number') return tsLike.seconds * 1000;
+  if (typeof tsLike?.seconds === 'number') return tsLike.seconds * 1000;      // Timestamp-like
   const d = new Date(tsLike);
-  return isNaN(d) ? 0 : d.getTime();
+  return Number.isNaN(d.getTime()) ? 0 : d.getTime();
 };
-
-// Valor base del cuadre para KPI (preferimos totales.totalGeneral)
+// Valor base del cuadre (prefiere totales.totalGeneral)
 const getKpiFromCuadre = (c) => {
   const raw = c?.totales?.totalGeneral;
   const v = typeof raw === 'number' ? raw : parseFloat(raw || 0);
   return Number.isFinite(v) ? v : 0;
 };
 
+// Valor base desde un pago (sobrante o snapshot)
 const getKpiFromPago = (p) =>
   Number(p?.sobranteParaManana ?? p?.kpiDepositosAtSave ?? 0);
 
+// Lee el doc MÁS RECIENTE entre pagos y cierres de una sucursal y fija el KPI.
+// Si no hay nada => 0.
 const recomputeSucursalKPI = async (sucursalId) => {
   const candidatos = [];
 
-  // Pago más reciente (por createdAt y por fecha, por si faltan campos/índices)
   try {
-    const q1 = query(
+    const s1 = await getDocs(query(
       collection(db, 'pagos'),
       where('sucursalId', '==', sucursalId),
       orderBy('createdAt', 'desc'),
       limit(1)
-    );
-    const s1 = await getDocs(q1);
+    ));
     s1.forEach(d => {
       const p = d.data() || {};
       candidatos.push({ ts: toMillis(p.createdAt || p.updatedAt || p.fecha), val: getKpiFromPago(p) });
     });
   } catch {}
   try {
-    const q2 = query(
+    const s2 = await getDocs(query(
       collection(db, 'pagos'),
       where('sucursalId', '==', sucursalId),
       orderBy('fecha', 'desc'),
       limit(1)
-    );
-    const s2 = await getDocs(q2);
+    ));
     s2.forEach(d => {
       const p = d.data() || {};
       candidatos.push({ ts: toMillis(p.createdAt || p.updatedAt || p.fecha), val: getKpiFromPago(p) });
     });
   } catch {}
 
-  // Cuadre más reciente (por createdAt y por fecha)
   try {
-    const q3 = query(
+    const s3 = await getDocs(query(
       collection(db, 'cierres'),
       where('sucursalId', '==', sucursalId),
       orderBy('createdAt', 'desc'),
       limit(1)
-    );
-    const s3 = await getDocs(q3);
+    ));
     s3.forEach(d => {
       const c = d.data() || {};
       candidatos.push({ ts: toMillis(c.createdAt || c.updatedAt || c.fecha), val: getKpiFromCuadre(c) });
     });
   } catch {}
   try {
-    const q4 = query(
+    const s4 = await getDocs(query(
       collection(db, 'cierres'),
       where('sucursalId', '==', sucursalId),
       orderBy('fecha', 'desc'),
       limit(1)
-    );
-    const s4 = await getDocs(q4);
+    ));
     s4.forEach(d => {
       const c = d.data() || {};
       candidatos.push({ ts: toMillis(c.createdAt || c.updatedAt || c.fecha), val: getKpiFromCuadre(c) });
@@ -108,7 +104,6 @@ const recomputeSucursalKPI = async (sucursalId) => {
 
   const best = candidatos.sort((a,b) => (b.ts||0) - (a.ts||0))[0];
   const newKpi = Number(best?.val || 0);
-
   await updateDoc(doc(db, 'sucursales', sucursalId), { kpiDepositos: newKpi });
 };
 
@@ -176,44 +171,44 @@ export default function HistorialCuadres() {
 
   //Eliminar registro
     const handleEliminar = async (id) => {
-    if (!canManage) {
-      Swal.fire('Solo lectura', 'No tienes permisos para eliminar.', 'info');
-      return;
-    }
-
-    const confirmar = await Swal.fire({
-      title:'¿Eliminar registro?',
-      text:'Esta acción no se puede deshacer.',
-      icon:'warning',
-      showCancelButton:true
-    });
-    if (!confirmar.isConfirmed) return;
-
-    try {
-      // Lee el cuadre para saber sucursal
-      const cierreRef = doc(db, 'cierres', id);
-      const cierreSnap = await getDoc(cierreRef);
-      if (!cierreSnap.exists()) {
-        await Swal.fire('No encontrado', 'El cuadre ya no existe.', 'info');
+      if (!canManage) {
+        Swal.fire('Solo lectura', 'No tienes permisos para eliminar.', 'info');
         return;
       }
-      const cierre = cierreSnap.data() || {};
-      const sucursalId = cierre.sucursalId;
 
-      // Borra y luego recalcula KPI
-      const batch = writeBatch(db);
-      batch.delete(cierreRef);
-      await batch.commit();
+      const confirmar = await Swal.fire({
+        title:'¿Eliminar registro?',
+        text:'Esta acción no se puede deshacer.',
+        icon:'warning',
+        showCancelButton:true
+      });
+      if (!confirmar.isConfirmed) return;
 
-      await recomputeSucursalKPI(sucursalId);
+      try {
+        // 1) Lee el cuadre para saber sucursal
+        const cierreRef = doc(db, 'cierres', id);
+        const cierreSnap = await getDoc(cierreRef);
+        if (!cierreSnap.exists()) {
+          await Swal.fire('No encontrado', 'El cuadre ya no existe.', 'info');
+          return;
+        }
+        const cierre = cierreSnap.data() || {};
+        const sucursalId = cierre.sucursalId;
 
-      await Swal.fire('Eliminado', 'El registro ha sido eliminado.', 'success');
-      await refetch();
-    } catch (e) {
-      console.error(e);
-      Swal.fire('Error', e?.message || 'No se pudo eliminar.', 'error');
-    }
-  };
+        // 2) Borra y luego recalcula KPI
+        const batch = writeBatch(db);
+        batch.delete(cierreRef);
+        await batch.commit();
+
+        await recomputeSucursalKPI(sucursalId);
+
+        await Swal.fire('Eliminado', 'El registro ha sido eliminado.', 'success');
+        await refetch();
+      } catch (e) {
+        console.error(e);
+        Swal.fire('Error', e?.message || 'No se pudo eliminar.', 'error');
+      }
+    };
 
   // PDFs
   const handleDescargarPDF = (c) => {

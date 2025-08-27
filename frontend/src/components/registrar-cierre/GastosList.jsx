@@ -150,8 +150,8 @@ export default function GastosList({
           <tr>
             <th style={{ textAlign: 'center' }}>Categoría</th>
             <th style={{ textAlign: 'center' }}>Descripción</th>
-             <th style={{ textAlign: 'center' }}>No. de ref</th>
             <th style={{ textAlign: 'center' }}>Cantidad</th>
+            <th style={{ textAlign: 'center' }}>No. de ref</th>
             <th style={{ textAlign: 'center' }}>Comprobante</th>
             <th style={{ textAlign: 'center' }}>Acciones</th>
           </tr>

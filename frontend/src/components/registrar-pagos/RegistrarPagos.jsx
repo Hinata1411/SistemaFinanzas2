@@ -206,6 +206,21 @@ export default function RegistrarPagos() {
     })();
   }, [editId]);
 
+  useEffect(() => {
+    return () => {
+      // revoca todos los previews que estén en memoria
+      Object.values(pagosMap).forEach(suc => {
+        (suc?.items || []).forEach(it => {
+          if (it?.filePreview) {
+            try { URL.revokeObjectURL(it.filePreview); } catch {}
+          }
+        });
+      });
+    };
+  }, [pagosMap]);
+
+
+
   // Derivados
   const active = activeSucursalId;
   const state = pagosMap[active] || { items:[], cajaChicaUsada:0 };
@@ -314,8 +329,9 @@ export default function RegistrarPagos() {
     setRow(i, 'fileUrl', '');
   };
 
-  const kpiDepositos = Number(kpiDepositosBySuc[active] || 0);
-  const cajaChicaDisponible = Number(cajaChicaBySuc[active] || 0);
+  const kpiDepositos = active ? Number(kpiDepositosBySuc[active] || 0) : 0;
+const cajaChicaDisponible = active ? Number(cajaChicaBySuc[active] || 0) : 0;
+
 
   const sobranteBruto = kpiDepositos - totalUtilizado;
   const deficit = Math.min(0, sobranteBruto);

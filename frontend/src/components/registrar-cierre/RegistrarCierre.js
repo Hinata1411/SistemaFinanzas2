@@ -211,7 +211,7 @@ export default function RegistrarCierre() {
         setOriginalDoc(d);
 
         setActiveSucursalId(d.sucursalId || null);
-        setFecha(d.fecha || todayISO);
+        setFecha(d.fecha || todayISO());
 
         const arqNorm = normalizeArqueo(d.arqueo);
         setArqueo(arqNorm);
@@ -504,6 +504,7 @@ export default function RegistrarCierre() {
         categorias,
         cajaChicaUsada,
         faltantePagado,
+        kpiDepositosAtSave: kpiBase,
         cajaChicaDisponibleAtSave: originalDoc?.cajaChicaDisponibleAtSave ?? cajaChicaActual,
         extras: {
           pedidosYaCantidad: Number.isFinite(pedidosYaCantidad) ? parseInt(pedidosYaCantidad, 10) : 0,
@@ -514,6 +515,9 @@ export default function RegistrarCierre() {
         },
         totales: { ...totals },
       };
+
+      // 👉 BASE PARA EL KPI: total del cuadre (totalGeneral)
+      const kpiBase = Number(totals?.totalGeneral ?? 0);
 
       if (isEditingExisting) {
         await updateDoc(doc(db, 'cierres', editId), { ...payloadBase, updatedAt: serverTimestamp() });
@@ -526,6 +530,9 @@ export default function RegistrarCierre() {
         if (deltaCaja !== 0) {
           await updateDoc(doc(db, 'sucursales', sucId), { cajaChica: increment(deltaCaja) });
         }
+
+        // deja el KPI de la sucursal igual al total del cuadre editado
+        await updateDoc(doc(db, 'sucursales', sucId), { kpiDepositos: kpiBase });
 
         await Swal.fire({ icon: 'success', title: 'Actualizado', text: 'El cuadre se actualizó correctamente.', timer: 1600, showConfirmButton: false });
       } else {
@@ -541,7 +548,7 @@ export default function RegistrarCierre() {
         if (delta !== 0) {
           await updateDoc(doc(db, 'sucursales', sucId), { cajaChica: increment(delta) });
         }
-
+        await updateDoc(doc(db, 'sucursales', sucId), { kpiDepositos: kpiBase });
         await Swal.fire({ icon: 'success', title: 'Guardado', text: 'El cuadre se guardó correctamente.', timer: 1600, showConfirmButton: false });
       }
       navigate('/Finanzas/HistorialCuadres');
