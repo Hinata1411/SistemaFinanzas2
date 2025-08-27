@@ -17,6 +17,7 @@ import { todayISO as getTodayISO } from './utils/dates';
 
 import CategoriasModal from './components/registrar-cierre/CategoriasModal';
 import AttachmentViewerModal from './components/registrar-cierre/AttachmentViewerModal';
+import { exportPagosGroupedPdf } from './pdf/exportadoresPagos'; // <-- NUEVO
 
 // ====== Helpers ======
 const money = (v) =>
@@ -244,6 +245,13 @@ export default function RegistrarPagos() {
   const state = pagosMap[active] || { items:[], cajaChicaUsada:0 };
   const readOnly = isViewing;
 
+  // Mapa de sucursales para etiquetas en exportación (ubicación > nombre > id)
+  const sucursalesMap = useMemo(() => {
+    const m = {};
+    (sucursales || []).forEach(s => { m[s.id] = s.ubicacion || s.nombre || s.id; });
+    return m;
+  }, [sucursales]);
+
   // ✅ Hook en orden estable y antes de returns
   const totalUtilizado = useMemo(
     () =>
@@ -283,7 +291,7 @@ export default function RegistrarPagos() {
       const arr = [...(m[active]?.items || [])].map(x => ({ ...x, locked:true }));
       arr.push({
         descripcion:'', monto:'', ref:'', categoria: categorias[0] || 'Varios',
-      fileBlob:null, filePreview:'', fileUrl:'', fileName:'', fileMime:'', locked:false
+        fileBlob:null, filePreview:'', fileUrl:'', fileName:'', fileMime:'', locked:false
       });
       m[active] = { ...(m[active]||{}), items: arr };
       return m;
@@ -393,6 +401,29 @@ export default function RegistrarPagos() {
 
   const openViewer = (url, mime, name) => setViewer({ open:true, url, mime:mime||'', name:name||'' });
   const closeViewer = () => setViewer({ open:false, url:'', mime:'', name:'' });
+
+  // Descargar PDF AGRUPADO por fecha (todas las sucursales del día seleccionado)
+  const handleDescargarAgrupado = async () => {
+    try {
+      if (!fecha) {
+        await Swal.fire('Fecha', 'Selecciona una fecha válida', 'info');
+        return;
+      }
+      const snap = await getDocs(query(
+        collection(db, 'pagos'),
+        where('fecha', '==', fecha)
+      ));
+      const docs = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
+      if (!docs.length) {
+        await Swal.fire('Sin registros', 'No hay pagos en esa fecha.', 'info');
+        return;
+      }
+      exportPagosGroupedPdf(docs, sucursalesMap, `Pagos_Agrupados_${fecha}`);
+    } catch (e) {
+      console.error(e);
+      Swal.fire('Error', e?.message || 'No se pudo generar el PDF.', 'error');
+    }
+  };
 
   // Guardar nuevo o actualizar existente
   const onSave = async () => {
@@ -509,6 +540,16 @@ export default function RegistrarPagos() {
 
             {/* Acciones */}
             <div className="rc-tabs-actions" style={{ gridColumn:'1 / -1', display:'flex', gap:8, flexWrap:'wrap', marginTop:8 }}>
+              {/* Botón grande de PDF agrupado por fecha */}
+              <button
+                type="button"
+                className="rc-btn rc-btn-primary rc-btn-lg"
+                onClick={handleDescargarAgrupado}
+                title="Descargar PDF agrupado por fecha (todas las sucursales)"
+              >
+                Descargar PDF Agrupado
+              </button>
+
               {!readOnly && (
                 <button type="button" className="rc-btn rc-btn-accent" onClick={onSave}>
                   {isEditingExisting ? 'Actualizar pagos' : 'Guardar pagos'}
@@ -545,10 +586,6 @@ export default function RegistrarPagos() {
       {/* KPI compacto */}
       <section className="rc-card" style={{ marginTop: 8 }}>
         <div className="rc-card-bd" style={{ display:'flex', gap:18, alignItems:'center', flexWrap:'wrap' }}>
-          <div>
-            <div className="kpi-title">Sucursal</div>
-            <div className="kpi-value" style={{ color:'var(--dark)' }}>{branchLabel(suc)}</div>
-          </div>
           <div>
             <div className="kpi-title">Dinero para depósitos</div>
             <div className="kpi-value">{money(kpiDepositos)}</div>

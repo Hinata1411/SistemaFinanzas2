@@ -34,6 +34,8 @@ export default function GastosList({
   cajaChicaDisponible,
   faltantePorGastos,
   readOnly = false,
+  /** ⬇️ NUEVO: controla si se muestra la columna Categoría */
+  isAdmin = false,
 }) {
   const showCajaChicaBtn = !readOnly && Number(faltantePorGastos) > 0;
 
@@ -107,6 +109,9 @@ export default function GastosList({
   // ⬇️ Total de gastos (se recalcula en render)
   const totalGastos = (gastos || []).reduce((sum, g) => sum + n(g.cantidad), 0);
 
+  // ⬇️ Cantidad de columnas según rol
+  const COLS = isAdmin ? 6 : 5;
+
   return (
     <section className="rc-card">
       <div className="rc-card-hd" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -123,7 +128,8 @@ export default function GastosList({
           </button>
         )}
 
-        {showCategoriasBtn && (
+        {/* Si quieres que el botón de "Categorías" sea solo admin, descomenta la condición isAdmin */}
+        {(showCategoriasBtn /* && isAdmin */) && (
           <button
             type="button"
             className="rc-btn rc-btn-outline"
@@ -137,18 +143,18 @@ export default function GastosList({
 
       {/* ===== Tabla de gastos ===== */}
       <table className="rc-table rc-gastos-table">
-        {/* prettier-ignore */}
         <colgroup>
-          <col style={{width:'200px'}}/>
-          <col style={{width:'auto'}}/>
-          <col style={{width:'140px'}}/>
-          <col style={{width:'200px'}}/>
-          <col style={{width:'180px'}}/>{/* Comprobante */}
-          <col style={{width:'120px'}}/>{/* Acciones */}
+          {/* ADMIN: columna Categoría solo si isAdmin */}
+          {isAdmin && <col style={{ width: '200px' }} />}
+          <col style={{ width: 'auto' }} />
+          <col style={{ width: '140px' }} />
+          <col style={{ width: '200px' }} />
+          <col style={{ width: '180px' }} />{/* Comprobante */}
+          <col style={{ width: '120px' }} />{/* Acciones */}
         </colgroup>
         <thead>
           <tr>
-            <th style={{ textAlign: 'center' }}>Categoría</th>
+            {isAdmin && <th style={{ textAlign: 'center' }}>Categoría</th>}
             <th style={{ textAlign: 'center' }}>Descripción</th>
             <th style={{ textAlign: 'center' }}>Cantidad</th>
             <th style={{ textAlign: 'center' }}>No. de ref</th>
@@ -159,7 +165,7 @@ export default function GastosList({
         <tbody>
           {gastos.length === 0 && (
             <tr>
-              <td colSpan={6} className="rc-empty">Sin gastos aún.</td>
+              <td colSpan={COLS} className="rc-empty">Sin gastos aún.</td>
             </tr>
           )}
 
@@ -172,20 +178,22 @@ export default function GastosList({
 
             return (
               <tr key={i}>
-                {/* Categoría */}
-                <td data-label="Categoría">
-                  <select
-                    className="rc-input rc-select"
-                    value={g.categoria}
-                    onChange={(e) => setGasto(i, 'categoria', e.target.value)}
-                    disabled={disabled}
-                    aria-label="Categoría"
-                  >
-                    {categorias.map((cat) => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
-                </td>
+                {/* Categoría — solo admin */}
+                {isAdmin && (
+                  <td data-label="Categoría">
+                    <select
+                      className="rc-input rc-select"
+                      value={g.categoria}
+                      onChange={(e) => setGasto(i, 'categoria', e.target.value)}
+                      disabled={disabled}
+                      aria-label="Categoría"
+                    >
+                      {categorias.map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </td>
+                )}
 
                 {/* Descripción */}
                 <td data-label="Descripción">
@@ -329,18 +337,19 @@ export default function GastosList({
           })}
         </tbody>
 
-        {/* Total de gastos */}
+        {/* Total de gastos (alineado tanto con 6 como con 5 columnas) */}
         <tfoot>
           <tr className="rc-gastos-total">
-            <td /> {/* primera columna vacía */}
+            {/* Si hay columna de Categoría, dejamos una celda vacía para alinear */}
+            {isAdmin && <td />}
             <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--dark)' }}>
               Total de gastos
             </td>
             <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--dark)' }}>
               {toMoney(totalGastos)}
             </td>
-            <td /> {/* las demás columnas vacías */}
-            <td />
+            {/* Completa el resto de columnas vacías */}
+            {Array.from({ length: (isAdmin ? 3 : 2) }).map((_, k) => <td key={k} />)}
           </tr>
         </tfoot>
       </table>

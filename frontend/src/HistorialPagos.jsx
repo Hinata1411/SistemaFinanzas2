@@ -1,4 +1,4 @@
-//src/HistorialPagos.jsx
+// src/HistorialPagos.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
@@ -11,16 +11,18 @@ import './HistorialPagos.css';
 
 import { auth, db } from './firebase';
 import { getTodayLocalISO as getTodayLocalISO_ventas } from './utils/dates';
+import { exportDepositosPdf, exportPagosGroupedPdf } from './pdf/exportadoresPagos'; // exportadores
 
-// En Ventas usas getTodayLocalISO; aquí lo replico por compatibilidad:
+// Compatibilidad
 const getTodayLocalISO = getTodayLocalISO_ventas || (() => {
   const d = new Date();
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
   return d.toISOString().slice(0,10);
 });
 
-const fmtQ = (val) => (typeof val === 'number' ? val : parseFloat(val || 0))
-  .toLocaleString('es-GT', { style: 'currency', currency: 'GTQ' });
+const fmtQ = (val) =>
+  (typeof val === 'number' ? val : parseFloat(val || 0))
+    .toLocaleString('es-GT', { style: 'currency', currency: 'GTQ' });
 
 const n = (v) => {
   const x = typeof v === 'number' ? v : parseFloat(v || 0);
@@ -32,7 +34,7 @@ function sumItems(items) {
 }
 
 export default function Pagos() {
-  const navigate = useNavigate(); // Hook de navegación
+  const navigate = useNavigate();
 
   // Perfil del usuario
   const [me, setMe] = useState({ loaded:false, role:'viewer', sucursalId:null });
@@ -50,7 +52,7 @@ export default function Pagos() {
   const [pagos, setPagos] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Modales (conservados pero ya no indispensables)
+  // (conservados para viewer/editor modal de soporte)
   const [viewer, setViewer] = useState({ open:false, doc:null });
   const [editor, setEditor] = useState({ open:false, doc:null, items:[] });
 
@@ -75,10 +77,7 @@ export default function Pagos() {
         const qs = await getDocs(collection(db, 'sucursales'));
         const arr = qs.docs.map(d => {
           const data = d.data() || {};
-          const ubicacion =
-            data.ubicacion ??
-            data['ubicación'] ??      // por si está guardado con tilde
-            '';
+          const ubicacion = data.ubicacion ?? data['ubicación'] ?? '';
           return {
             id: d.id,
             ...data,
@@ -87,8 +86,6 @@ export default function Pagos() {
           };
         });
         setSucursalesList(arr);
-
-        // Map para mostrar etiquetas en UI: ubicación primero, si no, nombre
         const m = {};
         arr.forEach(s => { m[s.id] = s.ubicacion || s.nombre; });
         setSucursalesMap(m);
@@ -112,7 +109,7 @@ export default function Pagos() {
       if (currentSucursalValue && currentSucursalValue !== 'all') {
         conditions.push(where('sucursalId','==',currentSucursalValue));
       }
-      let qRef = query(col, ...conditions, orderBy('fecha','desc'));
+      const qRef = query(col, ...conditions, orderBy('fecha','desc'));
       const snap = await getDocs(qRef);
       const rows = snap.docs.map(d => ({ id:d.id, ...(d.data()||{}) }));
       setPagos(rows);
@@ -132,71 +129,26 @@ export default function Pagos() {
 
   const uiSucursalesList = useMemo(() => {
     if (!me.loaded) return [];
-    return isAdmin
-      ? sucursalesList
-      : sucursalesList.filter(s => s.id === me.sucursalId);
+    return isAdmin ? sucursalesList : sucursalesList.filter(s => s.id === me.sucursalId);
   }, [sucursalesList, me, isAdmin]);
 
-  // Acciones → Navegar a RegistrarPagos con id y modo
-  const handleVer = (row) => {
-    navigate(`/Finanzas/RegistrarPagos?id=${row.id}&mode=view`);
-  };
+  // Acciones → ir a RegistrarPagos
+  const handleVer = (row) => navigate(`/Finanzas/RegistrarPagos?id=${row.id}&mode=view`);
   const handleEditar = async (row) => {
-    if (!isAdmin) {
-      await Swal.fire('Solo lectura', 'No tienes permisos para editar.', 'info');
-      return;
-    }
+    if (!isAdmin) { await Swal.fire('Solo lectura', 'No tienes permisos para editar.', 'info'); return; }
     navigate(`/Finanzas/RegistrarPagos?id=${row.id}&mode=edit`);
-  };
-  const closeEditor = () => setEditor({ open:false, doc:null, items:[] });
-
-  const handleSaveEditor = async () => {
-    try {
-      const docId = editor.doc.id;
-      const newItems = editor.items.map(it => ({
-        descripcion: it.descripcion || '',
-        monto: n(it.monto),
-        ref: it.ref || '',
-        categoria: it.categoria || 'Varios',
-        fileUrl: it.fileUrl || '',
-        fileName: it.fileName || '',
-        fileMime: it.fileMime || '',
-      }));
-      const totalUtilizado = sumItems(newItems);
-      const prevTotal = n(editor.doc.totalUtilizado || 0);
-      const prevSobrante = n(editor.doc.sobranteParaManana || 0);
-      const delta = totalUtilizado - prevTotal;
-      const newSobrante = prevSobrante - delta;
-
-      await updateDoc(doc(db, 'pagos', docId), {
-        items: newItems,
-        totalUtilizado,
-        sobranteParaManana: newSobrante,
-      });
-      await Swal.fire({ icon:'success', title:'Pago actualizado', timer:1200, showConfirmButton:false });
-      closeEditor();
-      refetch();
-    } catch (e) {
-      console.error(e);
-      Swal.fire('Error', e.message || 'No se pudo actualizar.', 'error');
-    }
   };
 
   const handleEliminar = async (row) => {
-    if (!isAdmin) {
-      await Swal.fire('Solo lectura', 'No tienes permisos para eliminar.', 'info');
-      return;
-    }
+    if (!isAdmin) { await Swal.fire('Solo lectura', 'No tienes permisos para eliminar.', 'info'); return; }
     const confirmar = await Swal.fire({
-      title:'¿Eliminar registro?',
-      text:'Esta acción no se puede deshacer.',
-      icon:'warning',
-      showCancelButton:true
+      title:'¿Eliminar registro?', text:'Esta acción no se puede deshacer.',
+      icon:'warning', showCancelButton:true
     });
     if (!confirmar.isConfirmed) return;
 
     try {
-      // === Revertir efectos en la sucursal antes de borrar ===
+      // Revertir impacto en sucursal
       const sucId = row.sucursalId;
       const sucRef = doc(db, 'sucursales', sucId);
       const sucSnap = await getDoc(sucRef);
@@ -209,16 +161,12 @@ export default function Pagos() {
       const currentKpi = n(sucData.kpiDepositos);
       const currentCaja = n(sucData.cajaChica);
 
-      const nextKpi = currentKpi + addBackDepositos;
-      const nextCaja = currentCaja + cajaChicaUsada;
-
       await updateDoc(sucRef, {
-        kpiDepositos: nextKpi,
-        cajaChica: nextCaja,
+        kpiDepositos: currentKpi + addBackDepositos,
+        cajaChica: currentCaja + cajaChicaUsada,
       });
 
       await deleteDoc(doc(db, 'pagos', row.id));
-
       await Swal.fire('Eliminado', 'El registro ha sido eliminado y los saldos fueron revertidos.', 'success');
       refetch();
     } catch (e) {
@@ -231,12 +179,8 @@ export default function Pagos() {
   if (!me.loaded) {
     return (
       <div className="ventas-shell">
-        <header className="ventas-header">
-          <h1>Pagos</h1>
-        </header>
-        <div className="empty">
-          Cargando perfil…
-        </div>
+        <header className="ventas-header"><h1>Pagos</h1></header>
+        <div className="empty">Cargando perfil…</div>
       </div>
     );
   }
@@ -245,16 +189,43 @@ export default function Pagos() {
     <div className="ventas-shell">
       <header className="ventas-header">
         <h1>Pagos</h1>
+
+        {/* Exportación agrupada (según filtros actuales) */}
+        <div className="ventas-actions">
+          <button
+            className="btn btn-primary"
+            onClick={async () => {
+              try {
+                const conditions = [];
+                if (fechaFiltro) conditions.push(where('fecha','==', fechaFiltro));
+                if (currentSucursalValue && currentSucursalValue !== 'all') {
+                  conditions.push(where('sucursalId','==', currentSucursalValue));
+                }
+                const snap = await getDocs(query(collection(db,'pagos'), ...conditions));
+                const docs = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
+                if (!docs.length) {
+                  await Swal.fire('Sin registros', 'No hay pagos para exportar con los filtros actuales.', 'info');
+                  return;
+                }
+                await exportPagosGroupedPdf(docs, sucursalesMap, `Pagos_Agrupados_${fechaFiltro || 'todas'}`);
+              } catch (e) {
+                console.error(e);
+                Swal.fire('Error', e?.message || 'No se pudo generar el PDF.', 'error');
+              }
+            }}
+            title="Descargar PDF agrupado por los filtros actuales"
+          >
+            Descargar PDF Agrupado
+          </button>
+        </div>
       </header>
 
+      {/* Filtros */}
       <div className="ventas-filtros">
         <div className="filtro">
           <label>Sucursal:</label>
           {isAdmin ? (
-            <select
-              value={currentSucursalValue}
-              onChange={(e)=> setSucursalFiltro(e.target.value)}
-            >
+            <select value={currentSucursalValue} onChange={(e)=> setSucursalFiltro(e.target.value)}>
               <option value="all">Todas</option>
               {sucursalesList.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
             </select>
@@ -272,15 +243,14 @@ export default function Pagos() {
         </div>
       </div>
 
-      <section className="rc-card">
-        <div className="rc-card-hd"><h3>Pagos registrados</h3></div>
-
+      {/* Tabla con estilos de Ventas */}
+      <div className="ventas-tabla-wrap">
         {loading ? (
-          <div className="rc-empty">Cargando…</div>
+          <div className="empty">Cargando…</div>
         ) : pagos.length === 0 ? (
-          <div className="rc-empty">Sin registros</div>
+          <div className="empty">Sin registros</div>
         ) : (
-          <table className="rc-table">
+          <table className="ventas-tabla">
             <thead>
               <tr>
                 <th>Fecha</th>
@@ -297,35 +267,47 @@ export default function Pagos() {
                 const total = n(p.totalUtilizado ?? sumItems(p.items));
                 const sob = n(p.sobranteParaManana);
                 const count = (p.items || []).length;
+
                 return (
                   <tr key={p.id}>
-                    <td>{p.fecha || '—'}</td>
-                    <td>{sucNom}</td>
-                    <td>{count}</td>
-                    <td>{fmtQ(total)}</td>
-                    <td>{fmtQ(sob)}</td>
-                    <td>
-                      <button className="rc-btn rc-btn-outline" type="button" onClick={()=>handleVer(p)}>Ver</button>
-                      {' '}
-                      <button
-                        className="rc-btn rc-btn-accent"
-                        type="button"
-                        onClick={()=>handleEditar(p)}
-                        disabled={!isAdmin}
-                        title={isAdmin ? '' : 'Solo admin'}
-                      >
-                        Editar
-                      </button>
-                      {' '}
-                      <button
-                        className="rc-btn rc-btn-ghost"
-                        type="button"
-                        onClick={()=>handleEliminar(p)}
-                        disabled={!isAdmin}
-                        title={isAdmin ? '' : 'Solo admin'}
-                      >
-                        Eliminar
-                      </button>
+                    <td data-label="Fecha">{p.fecha || '—'}</td>
+                    <td data-label="Sucursal">{sucNom}</td>
+                    <td data-label="Items">{count}</td>
+                    <td data-label="Total utilizado" className="text-right">{fmtQ(total)}</td>
+                    <td data-label="Sobrante p/ mañana" className="text-right">{fmtQ(sob)}</td>
+                    <td data-label="Acciones">
+                      <div className="acciones">
+                        <button className="btn-min" type="button" onClick={()=>handleVer(p)}>Ver</button>
+                        <button
+                          className="btn-min"
+                          type="button"
+                          onClick={()=>handleEditar(p)}
+                          disabled={!isAdmin}
+                          title={isAdmin ? '' : 'Solo admin'}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          className="btn-min danger"
+                          type="button"
+                          onClick={()=>handleEliminar(p)}
+                          disabled={!isAdmin}
+                          title={isAdmin ? '' : 'Solo admin'}
+                        >
+                          Eliminar
+                        </button>
+                        {/* Descargar depósitos: solo Descripción y Cantidad */}
+                        <button
+                          className="btn-min"
+                          type="button"
+                          title="Descargar depósitos (Descripción y Cantidad)"
+                          onClick={() => {
+                            exportDepositosPdf(p, sucNom, `Depositos_${sucNom}_${p.fecha || ''}`);
+                          }}
+                        >
+                          Descargar depósitos
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -333,7 +315,7 @@ export default function Pagos() {
             </tbody>
           </table>
         )}
-      </section>
+      </div>
 
       {/* Viewer Modal (conservado por si lo usas en otros flujos) */}
       {viewer.open && viewer.doc && (
@@ -347,7 +329,7 @@ export default function Pagos() {
               <div>
                 <strong>Fecha:</strong> {viewer.doc.fecha || '—'} · <strong>Sucursal:</strong> {sucursalesMap[viewer.doc.sucursalId] || viewer.doc.sucursalId || '—'}
               </div>
-              <table className="rc-table">
+              <table className="ventas-tabla">
                 <thead>
                   <tr>
                     <th>Descripción</th>
@@ -387,7 +369,7 @@ export default function Pagos() {
           <div className="modal" >
             <div className="modal-hd">
               <h3>Editar pagos</h3>
-              <button className="rc-btn rc-btn-ghost" onClick={closeEditor}>✕</button>
+              <button className="rc-btn rc-btn-ghost" onClick={()=>setEditor({ open:false, doc:null, items:[] })}>✕</button>
             </div>
             <div className="modal-bd">
               <div>
@@ -486,9 +468,7 @@ export default function Pagos() {
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td colSpan={6}>
-                      Total: {fmtQ(sumItems(editor.items))}
-                    </td>
+                    <td colSpan={6}>Total: {fmtQ(sumItems(editor.items))}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -496,20 +476,49 @@ export default function Pagos() {
                 <button
                   className="rc-btn rc-btn-outline"
                   type="button"
-                  onClick={()=>{
-                    setEditor(prev => ({ ...prev, items: [...prev.items, { descripcion:'', monto:'', ref:'', categoria:'Varios', fileUrl:'', fileName:'', fileMime:'' }] }));
-                  }}
+                  onClick={()=>setEditor(prev => ({
+                    ...prev,
+                    items: [...prev.items, { descripcion:'', monto:'', ref:'', categoria:'Varios', fileUrl:'', fileName:'', fileMime:'' }]
+                  }))}
                 >
                   + Agregar item
                 </button>
               </div>
-              <div>
-                * La edición de adjuntos se realiza desde <em>Registrar Pagos</em> al volver a cargar el soporte (esta vista no reemplaza archivos).
-              </div>
+              <div>* La edición de adjuntos se realiza desde <em>Registrar Pagos</em>.</div>
             </div>
             <div className="modal-ft">
-              <button className="rc-btn" onClick={closeEditor}>Cancelar</button>
-              <button className="rc-btn rc-btn-primary" onClick={handleSaveEditor}>Guardar cambios</button>
+              <button className="rc-btn" onClick={()=>setEditor({ open:false, doc:null, items:[] })}>Cancelar</button>
+              <button className="rc-btn rc-btn-primary" onClick={async ()=>{
+                try {
+                  const docId = editor.doc.id;
+                  const newItems = editor.items.map(it => ({
+                    descripcion: it.descripcion || '',
+                    monto: n(it.monto),
+                    ref: it.ref || '',
+                    categoria: it.categoria || 'Varios',
+                    fileUrl: it.fileUrl || '',
+                    fileName: it.fileName || '',
+                    fileMime: it.fileMime || '',
+                  }));
+                  const totalUtilizado = sumItems(newItems);
+                  const prevTotal = n(editor.doc.totalUtilizado || 0);
+                  const prevSobrante = n(editor.doc.sobranteParaManana || 0);
+                  const delta = totalUtilizado - prevTotal;
+                  const newSobrante = prevSobrante - delta;
+
+                  await updateDoc(doc(db, 'pagos', docId), {
+                    items: newItems,
+                    totalUtilizado,
+                    sobranteParaManana: newSobrante,
+                  });
+                  await Swal.fire({ icon:'success', title:'Pago actualizado', timer:1200, showConfirmButton:false });
+                  setEditor({ open:false, doc:null, items:[] });
+                  refetch();
+                } catch (e) {
+                  console.error(e);
+                  Swal.fire('Error', e.message || 'No se pudo actualizar.', 'error');
+                }
+              }}>Guardar cambios</button>
             </div>
           </div>
         </div>

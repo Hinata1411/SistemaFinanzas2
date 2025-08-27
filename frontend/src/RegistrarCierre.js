@@ -260,6 +260,11 @@ export default function RegistrarCierre() {
        cajaChicaActual)
     : cajaChicaActual;
 
+    // Guarda categorías por sucursal en: sucursales/{id}/config/categorias_gastos
+    const persistDocPath = activeSucursalId
+      ? `sucursales/${activeSucursalId}/config/categorias_gastos`
+      : null;
+
   const totalAperturas = (arqueo || []).reduce((s, c) => s + (Number.isFinite(+c?.apertura) ? +c.apertura : 1000), 0);
 
   const truthy = (v) =>
@@ -801,7 +806,8 @@ export default function RegistrarCierre() {
         open={showCatModal}
         onClose={() => setShowCatModal(false)}
         categorias={categorias}
-        onChangeCategorias={handleChangeCategorias}
+        onChangeCategorias={handleChangeCategorias}  // mantiene gastos referenciados si renombrás o eliminás
+        persistDocPath={persistDocPath}
       />
 
       <CajaChicaModal

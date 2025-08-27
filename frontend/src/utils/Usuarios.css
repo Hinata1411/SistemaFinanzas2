@@ -169,7 +169,16 @@
   margin-inline: auto;         /* centra el formulario dentro de la card */
 }
 
-/* Evita desbordes de inputs en pantallas chicas */
+/* Form registro (2 columnas por defecto) */
+.form-usuario{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap:12px;
+  max-width: 900px;          /* opcional: ancho legible */
+  margin-inline: auto;       /* centra el formulario dentro de la card */
+}
+
+/* Evita desbordes de inputs */
 .form-usuario .form-row{ min-width: 0; }
 .form-usuario .form-row input,
 .form-usuario .form-row select{
@@ -181,11 +190,18 @@
   grid-column: 1 / -1;
   display:flex;
   gap:8px;
-  justify-content:flex-end;    /* en desktop queda a la derecha */
+  justify-content:flex-end;  /* en desktop a la derecha */
 }
 
-/* En móvil, botón a todo lo ancho */
+/* Responsive: 1 columna en móvil */
 @media (max-width: 760px){
-  .form-actions{ justify-content: stretch; }
-  .form-actions .btn{ width:100%; }
+  .form-usuario{
+    grid-template-columns: 1fr;   /* apilar */
+  }
+  .form-actions{ 
+    justify-content: stretch; 
+  }
+  .form-actions .btn{ 
+    width:100%;                    /* botones a todo lo ancho en móvil */
+  }
 }

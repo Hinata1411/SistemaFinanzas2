@@ -1,7 +1,18 @@
 // src/components/registrar-cierre/CategoriasModal.jsx
 import React, { useState } from 'react';
+import Swal from 'sweetalert2';
+import { doc, setDoc } from 'firebase/firestore';
+import { db } from '../../firebase';
 
-export default function CategoriasModal({ open, onClose, categorias, onChangeCategorias }) {
+export default function CategoriasModal({
+  open,
+  onClose,
+  categorias,
+  onChangeCategorias,
+  /** 🔒 Ruta del documento en Firestore donde se guardará el array de categorías.
+   *  Ej: "companies/ABC/config/categorias_gastos" */
+  persistDocPath = null,
+}) {
   const [editIdx, setEditIdx] = useState(null);
   const [editName, setEditName] = useState('');
   const [addMode, setAddMode] = useState(false);
@@ -9,22 +20,57 @@ export default function CategoriasModal({ open, onClose, categorias, onChangeCat
 
   if (!open) return null;
 
+  // Helper: docRef desde ruta tipo "a/b/c/d"
+  const docRefFromPath = (path) => {
+    if (!path) return null;
+    const parts = String(path).split('/').filter(Boolean);
+    return doc(db, ...parts);
+  };
+
+  const persistCategorias = async (arr) => {
+    if (!persistDocPath) return; // si no se pasó ruta, solo actualiza UI
+    const ref = docRefFromPath(persistDocPath);
+    try {
+      await setDoc(
+        ref,
+        { categorias: arr, updatedAt: Date.now() },
+        { merge: true }
+      );
+    } catch (err) {
+      console.error('Error guardando categorías:', err);
+      throw err;
+    }
+  };
+
   const startEdit = (i) => {
     setEditIdx(i);
     setEditName(categorias[i]);
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (editIdx === null) return;
-    const name = editName.trim();
+    const name = (editName || '').trim();
     if (!name) return alert('Ingresa un nombre.');
     if (categorias.some((c, idx) => idx !== editIdx && c.toLowerCase() === name.toLowerCase())) {
       return alert('Ya existe una categoría con ese nombre.');
     }
+
+    const before = categorias.slice();
     const updated = categorias.map((c, i) => (i === editIdx ? name : c));
+
+    // Optimistic UI
     onChangeCategorias(updated, categorias[editIdx], name);
-    setEditIdx(null);
-    setEditName('');
+
+    try {
+      await persistCategorias(updated);
+      setEditIdx(null);
+      setEditName('');
+      Swal.fire({ icon: 'success', title: 'Categoría actualizada', timer: 900, showConfirmButton: false });
+    } catch {
+      // rollback
+      onChangeCategorias(before, name, categorias[editIdx]);
+      alert('No se pudo guardar en la base de datos.');
+    }
   };
 
   const cancelEdit = () => {
@@ -32,21 +78,45 @@ export default function CategoriasModal({ open, onClose, categorias, onChangeCat
     setEditName('');
   };
 
-  const deleteCat = (i) => {
+  const deleteCat = async (i) => {
     const removed = categorias[i];
+    const before = categorias.slice();
     const updated = categorias.filter((_, idx) => idx !== i);
+
+    // Optimistic UI
     onChangeCategorias(updated, removed, null);
+
+    try {
+      await persistCategorias(updated);
+      Swal.fire({ icon: 'success', title: 'Categoría eliminada', timer: 900, showConfirmButton: false });
+    } catch {
+      onChangeCategorias(before, null, removed);
+      alert('No se pudo eliminar en la base de datos.');
+    }
   };
 
-  const saveNew = () => {
-    const name = newCatName.trim();
+  const saveNew = async () => {
+    const name = (newCatName || '').trim();
     if (!name) return alert('Ingresa un nombre.');
     if (categorias.some((c) => c.toLowerCase() === name.toLowerCase())) {
       return alert('Ya existe una categoría con ese nombre.');
     }
-    onChangeCategorias([...categorias, name], null, name);
-    setAddMode(false);
-    setNewCatName('');
+
+    const before = categorias.slice();
+    const updated = [...categorias, name];
+
+    // Optimistic UI
+    onChangeCategorias(updated, null, name);
+
+    try {
+      await persistCategorias(updated);
+      setAddMode(false);
+      setNewCatName('');
+      Swal.fire({ icon: 'success', title: 'Categoría agregada', timer: 900, showConfirmButton: false });
+    } catch {
+      onChangeCategorias(before, name, null);
+      alert('No se pudo guardar en la base de datos.');
+    }
   };
 
   return (
@@ -64,7 +134,10 @@ export default function CategoriasModal({ open, onClose, categorias, onChangeCat
                   onChange={(e) => setNewCatName(e.target.value)}
                 />
                 <button className="rc-btn rc-btn-primary" onClick={saveNew}>Guardar</button>
-                <button className="rc-btn" onClick={() => { setAddMode(false); setNewCatName(''); }}>
+                <button
+                  className="rc-btn"
+                  onClick={() => { setAddMode(false); setNewCatName(''); }}
+                >
                   Cancelar
                 </button>
               </>

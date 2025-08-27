@@ -90,7 +90,11 @@
 .rc-qty{ text-align:right; }
 .no-spin::-webkit-inner-spin-button,
 .no-spin::-webkit-outer-spin-button{ -webkit-appearance:none; margin:0; }
-.no-spin{ -moz-appearance: textfield; }
+/* 🔧 FIX: agrega estándar + mantiene prefijo para Firefox */
+.no-spin{
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
 
 /* ===== Tabla base ===== */
 .rc-table{
@@ -110,13 +114,18 @@
   padding:14px; border-top:1px solid #f0ece6; text-align:center;
   color:var(--slate);
 }
-.rc-empty{ padding:14px; color:var(--muted); text-align:center; }
-
 /* Ajuste de números a la derecha en lista principal (coincide con tu JSX) */
 .rc-table td.text-right{ text-align:right; }
 
-/* Emails o textos largos: que quiebren responsablemente */
-.rc-table td{ overflow-wrap:anywhere; word-break:break-word; }
+/* 🔧 FIX: quiebre robusto para textos largos (fallbacks + anywhere moderno) */
+.rc-table td{
+  overflow-wrap: break-word;   /* estándar */
+  word-wrap: break-word;       /* legacy */
+  overflow-wrap: anywhere;     /* moderno */
+  word-break: break-word;      /* fallback adicional */
+}
+
+.rc-empty{ padding:14px; color:var(--muted); text-align:center; }
 
 /* ===== Modal (reemplaza el <style> inline) ===== */
 .modal-overlay {
@@ -190,9 +199,9 @@
   .rc-btn{ padding:8px 10px; }
 }
 
-/* 2) Tablas dentro de MODALES (Viewer y Editor) */
-/*   Viewer: Descripción / Monto / Ref / Categoría / Adjunto (5 cols)
-     Editor: Descripción / Monto / Ref / Categoría / Adjunto / Acciones (6 cols) */
+/* 2) Tablas dentro de MODALES (Viewer y Editor)
+   Viewer: Descripción / Monto / Ref / Categoría / Adjunto (5 cols)
+   Editor: Descripción / Monto / Ref / Categoría / Adjunto / Acciones (6 cols) */
 @media (max-width:760px){
   .modal .rc-table thead{
     border:0; clip:rect(0 0 0 0); height:1px; margin:-1px; overflow:hidden;
@@ -232,18 +241,104 @@
   .modal .rc-table td:nth-child(5)::before{ content:'Adjunto'; }
   .modal .rc-table td:nth-child(6)::before{ content:'Acciones'; }
 
-  .modal .rc-table td::before{
-    position:absolute;
-    left:14px; top:50%;
-    transform: translateY(-50%);
-    font-weight:800; color:var(--dark);
-    width:120px;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-  }
-
   /* Inputs a 100% en editor */
   .modal .rc-input{ width:100%; }
 }
 
 /* ===== Pequeños detalles ===== */
 .rc-btn.rc-btn-accent[title="Solo admin"]{ opacity:.6; }
+
+/* ====== HistorialPagos: tabla y botones estilo HistorialCuadres ====== */
+
+/* Wrapper con scroll seguro */
+.ventas-tabla-wrap{
+  width:min(1500px, 100%);
+  margin:0 auto;
+  overflow-x:auto;
+}
+
+/* Tabla (mismo look que tu rc-table) */
+.ventas-tabla{
+  width:100%;
+  border-collapse: collapse;
+  background:#fff;
+  border:1px solid #e7e2d9;
+  border-radius:14px;
+  overflow:hidden;
+  box-shadow: var(--shadow);
+}
+.ventas-tabla thead th{
+  background:#15824C; color:#fff; text-align:center;
+  padding:14px; font-size:1.05rem;
+}
+.ventas-tabla td{
+  padding:14px; border-top:1px solid #f0ece6; text-align:center;
+  color:var(--slate);
+  /* 🔧 FIX: quiebre robusto para textos largos */
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.ventas-tabla td.text-right{ text-align:right; }
+
+/* Contenedor de acciones por fila */
+.acciones{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+
+/* Botones pequeños por fila (igual que en Ventas) */
+.btn-min{
+  padding:8px 12px; border-radius:10px; border:1px solid #e7e2d9;
+  background:#fff; font-weight:700; cursor:pointer;
+}
+.btn-min:hover{ background:#f9fafb; }
+.btn-min.danger{ border-color:#eab0b0; color:#b42323; }
+
+/* ===== Responsive: tabla principal -> cards (para ventas-tabla) ===== */
+@media (max-width:760px){
+  .ventas-tabla thead{
+    border:0; clip:rect(0 0 0 0); height:1px; margin:-1px; overflow:hidden;
+    padding:0; position:absolute; width:1px;
+  }
+
+  .ventas-tabla,
+  .ventas-tabla tbody,
+  .ventas-tabla tr,
+  .ventas-tabla td{ display:block; width:100%; }
+
+  .ventas-tabla tr{
+    background:#fff;
+    margin:10px 0;
+    border:1px solid #e7e2d9;
+    border-radius:12px;
+    box-shadow: var(--shadow);
+    overflow:hidden;
+  }
+
+  .ventas-tabla td{
+    text-align:left;
+    border-top:1px solid #f0ece6;
+    padding:12px 14px 12px calc(14px + 150px); /* ancho del label */
+    position:relative;
+    min-height:44px;
+  }
+  .ventas-tabla td:first-child{ border-top:none; }
+
+  /* Usa data-label si está presente; si no, fallback por índice */
+  .ventas-tabla td::before{
+    content: attr(data-label);
+    position:absolute; left:14px; top:50%;
+    transform: translateY(-50%);
+    font-weight:800; color:var(--dark);
+    width:136px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+
+  /* Fallback (por si olvidas data-label) */
+  .ventas-tabla tr td:nth-child(1)::before{ content: 'Fecha'; }
+  .ventas-tabla tr td:nth-child(2)::before{ content: 'Sucursal'; }
+  .ventas-tabla tr td:nth-child(3)::before{ content: 'Items'; }
+  .ventas-tabla tr td:nth-child(4)::before{ content: 'Total utilizado'; }
+  .ventas-tabla tr td:nth-child(5)::before{ content: 'Sobrante p/ mañana'; }
+  .ventas-tabla tr td:nth-child(6)::before{ content: 'Acciones'; }
+
+  .acciones{ justify-content:flex-start; }
+}
