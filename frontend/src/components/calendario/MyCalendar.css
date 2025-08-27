@@ -93,7 +93,7 @@ body.modal-open {
 }
 
 /* ======== Fix responsive RBC en ~400px (sin tocar tu layout) ======== */
-@media (max-width: 422px) {
+@media (max-width: 400px) {
 
   /* Permite scroll horizontal de la vista Semana/Día */
   .rbc-time-view .rbc-time-content {
