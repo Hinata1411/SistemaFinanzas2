@@ -188,7 +188,7 @@ export default function Pagos() {
   return (
     <div className="ventas-shell">
       <header className="ventas-header">
-        <h1>Pagos</h1>
+        <h1>Historial de Pagos</h1>
 
         {/* Exportación agrupada (según filtros actuales) */}
         <div className="ventas-actions">
