@@ -409,29 +409,29 @@ export default function RegistrarPagos() {
           const safe = (r.fileName || fileBlob.name || `pago_${i}`).replace(/[^\w.-]+/g, '_');
           const path = `${folder}/${Date.now()}_${i}_${safe}`;
           const fileRef = sRef(storage, path);
-          await uploadBytes(
-            fileRef,
-            fileBlob,
-            { contentType: r.fileMime || fileBlob.type || 'application/octet-stream' }
-          );
+          await uploadBytes(fileRef, fileBlob, {
+            contentType: r.fileMime || fileBlob.type || 'application/octet-stream',
+          });
           const url = await getDownloadURL(fileRef);
           return { ...rest, fileUrl: url, fileName: safe, fileMime: (r.fileMime || fileBlob.type || '') };
         }
         return { ...rest };
       }));
 
-      // Usa la misma base que ves en pantalla (anclada al snapshot si estás editando ese doc)
+      // 👇 Primero define lo que usarás en los cálculos
+      const totalUtilizadoCalc = ready.reduce((s, it) => s + n(it.monto), 0);
+      const cajaChicaUsada = n(state.cajaChicaUsada || 0);
+
+      // 👇 Base que ves en pantalla (anclada al snapshot si estás editando ese doc)
       const kpiBase = getKpiDepositosUI();
 
       const sobranteParaManana = Math.max(0, (kpiBase - totalUtilizadoCalc) + cajaChicaUsada);
 
+      const actor = { uid: me.uid, username: me.username };
+
       // snapshots visibles en ver/editar
       const kpiSnapshot = kpiBase; // lo que se ve en “Dinero para depósitos”
       const cajaChicaSnapshot = active ? Number(cajaChicaBySuc[active] || 0) : 0; // disponible al guardar
-
-      const totalUtilizadoCalc = ready.reduce((s, it) => s + n(it.monto), 0);
-      const cajaChicaUsada = n(state.cajaChicaUsada || 0);
-      const actor = { uid: me.uid, username: me.username };
 
       if (isEditingExisting) {
         const prevCaja = n(originalDoc?.cajaChicaUsada);
@@ -456,14 +456,10 @@ export default function RegistrarPagos() {
           setCajaChicaBySuc(prev => ({ ...prev, [active]: n(prev[active]) + deltaCajaChica }));
         }
 
-        // ✅ Recalcular KPI según el documento más reciente (pago/cierre)
+        // ✅ Recalcular KPI según documento más reciente (pago/cierre)
         await recomputeSucursalKPI(active);
 
-        await Swal.fire({
-          icon: 'success',
-          title: 'Actualizado',
-          text: 'Los pagos se guardaron correctamente.'
-        });
+        await Swal.fire({ icon: 'success', title: 'Actualizado', text: 'Los pagos se guardaron correctamente.' });
         navigate('/Finanzas/HistorialPagos');
       } else {
         await addDoc(collection(db, 'pagos'), {
@@ -499,7 +495,7 @@ export default function RegistrarPagos() {
     }
   };
 
-    
+      
 
   const headerSuffix = isEditingExisting ? '(editando)' : isViewing ? '(viendo)' : '';
 
