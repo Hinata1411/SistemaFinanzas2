@@ -242,6 +242,7 @@ export default function RegistrarPagos() {
   // === Derivados y HOOKS antes de cualquier return temprano ===
   const active = activeSucursalId;
   const suc = (sucursales.find(s => s.id === active) || {});
+  const currentBranchLabel = suc.ubicacion || suc.nombre || suc.id || '—';
   const state = pagosMap[active] || { items:[], cajaChicaUsada:0 };
   const readOnly = isViewing;
 
