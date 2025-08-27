@@ -12,6 +12,19 @@ import GroupDownloadModal from '../ventas/GroupDownloadModal';
 import { exportSingleCuadrePdf, exportGroupedPdf } from '../../pdf/exportadores';
 import '../ventas/Ventas.css';
 
+// ★ Usa exactamente las categorías/encabezados de tu HistorialCuadres:
+const HEADERS = [
+  'Fecha',
+  'Sucursal',
+  'Usuario',
+  'Efectivo',
+  'Tarjeta',
+  'Motorista',
+  'Total a depositar',
+  'Hora',
+  'Acciones'
+];
+
 export default function Ventas() {
   const navigate = useNavigate();
 
@@ -166,8 +179,8 @@ export default function Ventas() {
         </div>
       </div>
 
-
       <VentasTable
+        headers={HEADERS}              // ★ pásale tus categorías
         cuadres={cuadres}
         sucursalesMap={sucursalesMap}
         onVer={handleVer}
