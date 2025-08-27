@@ -77,7 +77,6 @@ export const addHeader = (pdf, { title, fecha, sucursal, formatDate }) => {
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(11);
   pdf.setTextColor(90, 90, 90);
-  // Solo fecha, alineada a la izquierda bajo el título:
   if (fechaLabel) pdf.text(`Fecha: ${fechaLabel}`, 40, 50);
   // Nota: ya NO mostramos la sucursal a la derecha: el nombre va en el título.
 };
@@ -117,6 +116,8 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate, options 
 
   let y = 76;
   const width = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const bottomMargin = 30;
 
   /* === Arqueo Físico (con Apertura y Total neto) === */
   const arqueo = c.arqueo || [{}, {}, {}];
@@ -327,12 +328,22 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate, options 
     const boxHeight = (totalDepY - boxTop) + 14;
     pdf.setDrawColor(230, 236, 240);
     pdf.roundedRect(40, boxTop, width - 80, boxHeight, 4, 4);
+
+    // >>> ACTUALIZACIÓN CLAVE: avanzar 'y' usando la altura real del cuadro
+    y = boxTop + boxHeight + 12;
   }
 
+  // Salto de página si el comentario quedaría muy abajo
+  if (y > pageHeight - bottomMargin) {
+    pdf.addPage();
+    y = 40; // margen superior razonable para la nueva página
+  }
+
+  // === Comentario (debajo del Resumen, sin traslape) ===
   const comentarioPlano = (c.comentario || '').toString().trim();
   if (comentarioPlano) {
     autoTable(pdf, {
-      startY: y + 12,
+      startY: y,
       head: [['Comentario']],
       body: [[comentarioPlano]],
       styles: { fontSize: 10, cellPadding: 6, lineWidth: 0.2, lineColor: [230, 236, 240] },
