@@ -106,9 +106,11 @@ export default function RegistrarPagos() {
     if (!me.loaded) return;
 
     (async () => {
+      // 1) Siempre deja sucursales cargadas aunque alguna consulta falle
+      let arr = [];
       try {
         const qs = await getDocs(collection(db, 'sucursales'));
-        const arr = qs.docs.map((snap) => {
+        arr = qs.docs.map((snap) => {
           const d = snap.data() || {};
           return {
             id: snap.id,
@@ -118,28 +120,31 @@ export default function RegistrarPagos() {
           };
         });
         setSucursales(arr);
-
-        // Si venimos con documento, no fijamos sucursal aún; la fijamos al cargar el doc
         if (!editId) {
           setActiveSucursalId(prev => prev || arr[0]?.id || null);
         }
+      } catch (e) {
+        console.error('Error cargando sucursales:', e);
+        // si falla, dejamos sucursales como estaban (no borramos las pills)
+        return;
+      }
 
-        const hoy = getTodayISO();
+      const hoy = getTodayISO();
 
-        // Caja chica
-        const caja = {};
-        arr.forEach(s => {
-          caja[s.id] = Number(s?.cajaChica || 0);
-        });
+      // 2) Caja chica desde el doc de sucursal (sin queries extra)
+      const caja = {};
+      arr.forEach(s => {
+        caja[s.id] = Number(s?.cajaChica || 0);
+      });
 
-        // KPI: base = sobrante del último pago + suma de cierres desde ese día hasta hoy
-        const kpi = {};
-        await Promise.all(arr.map(async (s) => {
-          // último pago (como "checkpoint" de KPI)
+      // 3) KPI robusto por sucursal: base (último pago) + cierres desde ese día
+      const computeFor = async (sucId) => {
+        try {
+          // último pago
           const pagosRef = collection(db, 'pagos');
           const qPago = query(
             pagosRef,
-            where('sucursalId', '==', s.id),
+            where('sucursalId', '==', sucId),
             orderBy('fecha', 'desc'),
             limit(1)
           );
@@ -154,14 +159,14 @@ export default function RegistrarPagos() {
           if (lastFechaPago) {
             qCierres = query(
               cierresRef,
-              where('sucursalId','==', s.id),
+              where('sucursalId','==', sucId),
               where('fecha','>', lastFechaPago),
               where('fecha','<=', hoy)
             );
           } else {
             qCierres = query(
               cierresRef,
-              where('sucursalId','==', s.id),
+              where('sucursalId','==', sucId),
               where('fecha','<=', hoy)
             );
           }
@@ -169,18 +174,22 @@ export default function RegistrarPagos() {
           let sumaDesdeUltimoPago = 0;
           cierresSnap.forEach(d => { sumaDesdeUltimoPago += extractTotalADepositar(d.data() || {}); });
 
-          // KPI actual = base + cierres acumulados desde el último pago
-          kpi[s.id] = base + sumaDesdeUltimoPago;
-        }));
+          return base + sumaDesdeUltimoPago;
+        } catch (e) {
+          console.warn(`KPI fallo sucursal ${sucId}:`, e?.message || e);
+          return 0;
+        }
+      };
 
-        setKpiDepositosBySuc(kpi);
-        setCajaChicaBySuc(caja);
-      } catch (e) {
-        console.error(e);
-        setSucursales([]);
-        setKpiDepositosBySuc({});
-        setCajaChicaBySuc({});
-      }
+      const settled = await Promise.allSettled(arr.map(s => computeFor(s.id)));
+      const kpi = {};
+      settled.forEach((res, idx) => {
+        const id = arr[idx].id;
+        kpi[id] = res.status === 'fulfilled' ? Number(res.value || 0) : 0;
+      });
+
+      setKpiDepositosBySuc(kpi);
+      setCajaChicaBySuc(caja);
     })();
   }, [me.loaded, editId]);
 
@@ -458,7 +467,7 @@ export default function RegistrarPagos() {
         await updateDoc(doc(db, 'sucursales', active), { kpiDepositos: Number(sobranteParaManana) });
         setKpiDepositosBySuc(prev => ({ ...prev, [active]: Number(sobranteParaManana) }));
 
-       await Swal.fire({
+        await Swal.fire({
           icon: 'success',
           title: 'Actualizado',
           text: 'Los pagos se guardaron correctamente.'
@@ -532,7 +541,12 @@ export default function RegistrarPagos() {
 
       {/* PILS de sucursal (muestran UBICACIÓN) */}
       <div className="rc-tabs-row rc-tabs-attached">
-        <div className="rc-tabs rc-tabs-browser" role="tablist" aria-label="Sucursales">
+        <div
+          className="rc-tabs rc-tabs-browser"
+          role="tablist"
+          aria-label="Sucursales"
+          style={{ flexWrap:'nowrap' }}   /* refuerzo anti-colapso */
+        >
           {sucursales.map((s) => (
             <button
               key={s.id}
@@ -543,6 +557,7 @@ export default function RegistrarPagos() {
               aria-selected={active === s.id}
               disabled={readOnly}
               title={readOnly ? 'Vista de solo lectura' : ''}
+              style={{ flex:'0 0 auto' }} /* refuerzo anti-wrap */
             >
               {branchLabel(s)}
             </button>
@@ -584,166 +599,166 @@ export default function RegistrarPagos() {
             <col style={{width:'120px'}}/>{/* Acciones */}
           </colgroup>
 
-          <thead>
-            <tr>
-              <th style={{textAlign:'center'}}>Categoría</th>
-              <th style={{textAlign:'center'}}>Descripción</th>
-              <th style={{textAlign:'center'}}>Cantidad</th>
-              <th style={{textAlign:'center'}}>No. de ref</th>
-              <th style={{textAlign:'center'}}>Comprobante</th>
-              <th style={{textAlign:'center'}}>Acciones</th>
-            </tr>
-          </thead>
+        <thead>
+          <tr>
+            <th style={{textAlign:'center'}}>Categoría</th>
+            <th style={{textAlign:'center'}}>Descripción</th>
+            <th style={{textAlign:'center'}}>Cantidad</th>
+            <th style={{textAlign:'center'}}>No. de ref</th>
+            <th style={{textAlign:'center'}}>Comprobante</th>
+            <th style={{textAlign:'center'}}>Acciones</th>
+          </tr>
+        </thead>
 
-          <tbody>
-            {(!state.items || !state.items.length) && (
-              <tr><td colSpan={6} className="rc-empty">Sin pagos</td></tr>
-            )}
+        <tbody>
+          {(!state.items || !state.items.length) && (
+            <tr><td colSpan={6} className="rc-empty">Sin pagos</td></tr>
+          )}
 
-            {state.items?.map((r, i) => {
-              const isPdf = (r.fileMime || '').includes('pdf');
-              const hasFile = !!(r.filePreview || r.fileUrl || r.fileBlob);
-              return (
-                <tr key={`${active}-${i}`}>
+          {state.items?.map((r, i) => {
+            const isPdf = (r.fileMime || '').includes('pdf');
+            const hasFile = !!(r.filePreview || r.fileUrl || r.fileBlob);
+            return (
+              <tr key={`${active}-${i}`}>
 
-                  {/* Categoría */}
-                  <td data-label="Categoría">
-                    <select
-                      className="rc-input rc-select"
-                      value={r.categoria}
-                      onChange={(e)=>setRow(i,'categoria',e.target.value)}
-                      disabled={readOnly}
-                    >
-                      {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
-                  </td>
+                {/* Categoría */}
+                <td data-label="Categoría">
+                  <select
+                    className="rc-input rc-select"
+                    value={r.categoria}
+                    onChange={(e)=>setRow(i,'categoria',e.target.value)}
+                    disabled={readOnly}
+                  >
+                    {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+                </td>
 
-                  {/* Descripción */}
-                  <td data-label="Descripción">
-                    <input
-                      className="rc-input rc-desc"
-                      placeholder="Descripción"
-                      value={r.descripcion}
-                      onChange={(e)=>setRow(i,'descripcion',e.target.value)}
-                      disabled={readOnly}
-                      readOnly={readOnly}
-                    />
-                  </td>
+                {/* Descripción */}
+                <td data-label="Descripción">
+                  <input
+                    className="rc-input rc-desc"
+                    placeholder="Descripción"
+                    value={r.descripcion}
+                    onChange={(e)=>setRow(i,'descripcion',e.target.value)}
+                    disabled={readOnly}
+                    readOnly={readOnly}
+                  />
+                </td>
 
-                  {/* Monto */}
-                  <td data-label="Monto a depositar">
-                    <input
-                      className="rc-input rc-qty no-spin"
-                      type="number" min="0" step="0.01" inputMode="decimal"
-                      value={r.monto ?? ''}
-                      onChange={(e)=>setRow(i,'monto',e.target.value)}
-                      onWheel={(e)=>e.currentTarget.blur()}
-                      disabled={readOnly}
-                      readOnly={readOnly}
-                    />
-                  </td>
+                {/* Monto */}
+                <td data-label="Monto a depositar">
+                  <input
+                    className="rc-input rc-qty no-spin"
+                    type="number" min="0" step="0.01" inputMode="decimal"
+                    value={r.monto ?? ''}
+                    onChange={(e)=>setRow(i,'monto',e.target.value)}
+                    onWheel={(e)=>e.currentTarget.blur()}
+                    disabled={readOnly}
+                    readOnly={readOnly}
+                  />
+                </td>
 
-                  {/* Ref */}
-                  <td data-label="Ref">
-                    <input
-                      className="rc-input"
-                      placeholder="Referencia"
-                      value={r.ref || ''}
-                      onChange={(e)=>setRow(i,'ref',e.target.value)}
-                      disabled={readOnly}
-                      readOnly={readOnly}
-                    />
-                  </td>
+                {/* Ref */}
+                <td data-label="Ref">
+                  <input
+                    className="rc-input"
+                    placeholder="Referencia"
+                    value={r.ref || ''}
+                    onChange={(e)=>setRow(i,'ref',e.target.value)}
+                    disabled={readOnly}
+                    readOnly={readOnly}
+                  />
+                </td>
 
-                  {/* Comprobante (Img/PDF) */}
-                  <td data-label="Comprobante" className="img-cell">
-                    <div>
-                      {hasFile ? (
-                        <>
-                          <button
-                            className="rc-btn rc-btn-outline"
-                            type="button"
-                            onClick={()=>openViewer(r.filePreview || r.fileUrl || '', r.fileMime || '', r.fileName || '')}
-                            disabled={!(r.filePreview || r.fileUrl)}
-                            title="Ver comprobante"
-                          >
-                            {isPdf ? 'PDF' : 'Ver'}
-                          </button>
+                {/* Comprobante (Img/PDF) */}
+                <td data-label="Comprobante" className="img-cell">
+                  <div>
+                    {hasFile ? (
+                      <>
+                        <button
+                          className="rc-btn rc-btn-outline"
+                          type="button"
+                          onClick={()=>openViewer(r.filePreview || r.fileUrl || '', r.fileMime || '', r.fileName || '')}
+                          disabled={!(r.filePreview || r.fileUrl)}
+                          title="Ver comprobante"
+                        >
+                          {isPdf ? 'PDF' : 'Ver'}
+                        </button>
 
-                          {!readOnly && (
-                            <>
-                              <button className="rc-btn rc-btn-outline" type="button" onClick={()=>handlePickFile(i)}>
-                                Cambiar
-                              </button>
-                              <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>clearFile(i)}>
-                                Quitar
-                              </button>
-                            </>
-                          )}
-                        </>
-                      ) : (
-                        !readOnly && (
+                        {!readOnly && (
                           <>
-                            <input
-                              id={`pago-file-${active}-${i}`}
-                              type="file"
-                              accept="image/*,application/pdf"
-                              onChange={(e)=>handleFileChange(i,e)}
-                              style={{ display:'none' }}
-                              disabled={readOnly}
-                            />
                             <button className="rc-btn rc-btn-outline" type="button" onClick={()=>handlePickFile(i)}>
-                              Adjuntar
+                              Cambiar
+                            </button>
+                            <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>clearFile(i)}>
+                              Quitar
                             </button>
                           </>
-                        )
-                      )}
-                    </div>
-                  </td>
+                        )}
+                      </>
+                    ) : (
+                      !readOnly && (
+                        <>
+                          <input
+                            id={`pago-file-${active}-${i}`}
+                            type="file"
+                            accept="image/*,application/pdf"
+                            onChange={(e)=>handleFileChange(i,e)}
+                            style={{ display:'none' }}
+                            disabled={readOnly}
+                          />
+                          <button className="rc-btn rc-btn-outline" type="button" onClick={()=>handlePickFile(i)}>
+                            Adjuntar
+                          </button>
+                        </>
+                      )
+                    )}
+                  </div>
+                </td>
 
-                  {/* Acciones */}
-                  <td data-label="Acciones" style={{textAlign:'center'}}>
-                    <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>removeRow(i)} disabled={readOnly}>✕</button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
+                {/* Acciones */}
+                <td data-label="Acciones" style={{textAlign:'center'}}>
+                  <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>removeRow(i)} disabled={readOnly}>✕</button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
 
-          <tfoot>
-            <tr>
-              <td></td>
-              <td style={{ fontWeight:800, textAlign:'right', color:'var(--dark)' }}>
-                Total utilizado
-              </td>
-              <td style={{ fontWeight:800, textAlign:'right', color:'var(--dark)' }}>
-                {money(totalUtilizado)}
-              </td>
-              <td colSpan={4}></td>
-            </tr>
+        <tfoot>
+          <tr>
+            <td></td>
+            <td style={{ fontWeight:800, textAlign:'right', color:'var(--dark)' }}>
+              Total utilizado
+            </td>
+            <td style={{ fontWeight:800, textAlign:'right', color:'var(--dark)' }}>
+              {money(totalUtilizado)}
+            </td>
+            <td colSpan={4}></td>
+          </tr>
 
-            <tr>
-              <td></td>
-              <td style={{ fontWeight:800, textAlign:'right', color:'var(--dark)' }}>
-                Sobrante para mañana
-              </td>
-              <td style={{ fontWeight:800, textAlign:'right', color: sobranteFinal >= 0 ? 'var(--accent)' : 'var(--dark)' }}>
-                {money(sobranteFinal)}
-              </td>
-              <td colSpan={4} style={{ textAlign:'right' }}>
-                {mostrarUsarCajaChica && !readOnly && (
-                  <button className="rc-btn rc-btn-primary" type="button" onClick={usarCajaChica}>
-                    Usar caja chica
-                  </button>
-                )}
-                {state.cajaChicaUsada > 0 && (
-                  <span style={{ marginLeft:12, fontWeight:700, color:'var(--dark)' }}>
-                    Se tomó de caja chica: {money(state.cajaChicaUsada)}
-                  </span>
-                )}
-              </td>
-            </tr>
-          </tfoot>
+          <tr>
+            <td></td>
+            <td style={{ fontWeight:800, textAlign:'right', color:'var(--dark)' }}>
+              Sobrante para mañana
+            </td>
+            <td style={{ fontWeight:800, textAlign:'right', color: sobranteFinal >= 0 ? 'var(--accent)' : 'var(--dark)' }}>
+              {money(sobranteFinal)}
+            </td>
+            <td colSpan={4} style={{ textAlign:'right' }}>
+              {mostrarUsarCajaChica && !readOnly && (
+                <button className="rc-btn rc-btn-primary" type="button" onClick={usarCajaChica}>
+                  Usar caja chica
+                </button>
+              )}
+              {state.cajaChicaUsada > 0 && (
+                <span style={{ marginLeft:12, fontWeight:700, color:'var(--dark)' }}>
+                  Se tomó de caja chica: {money(state.cajaChicaUsada)}
+                </span>
+              )}
+            </td>
+          </tr>
+        </tfoot>
         </table>
 
         {!readOnly && (

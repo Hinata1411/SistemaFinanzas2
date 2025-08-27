@@ -38,24 +38,22 @@
   font-weight:700;
   cursor:pointer;
 }
-.btn:hover{ 
+.btn:hover{
   background:#f9fafb;
   color: black;
- }
-
+}
 .btn-primary{
-  background:var(--primary); 
-  color:#fff; 
+  background:var(--primary);
+  color:#fff;
   border-color:var(--primary);
 }
 .btn-primary:hover{ filter:brightness(.98); }
-
 .btn-accent{
   display: flex;
   background:var(--accent);
   justify-content:flex-end;
   margin-top: 10px;
-  color:#fff; 
+  color:#fff;
 }
 .btn-accent:hover{ filter:brightness(.98); }
 
@@ -71,6 +69,7 @@
   padding:10px 12px; background:#f9fafb; color:var(--slate);
   min-width: 220px;
 }
+
 /* Tabla */
 .ventas-tabla-wrap{ width:min(1500px, 100%); margin:0 auto; }
 .ventas-tabla{
@@ -124,21 +123,14 @@
 .modal-list{ max-height:300px; overflow:auto; display:flex; flex-direction:column; gap:6px; padding:6px; background:#f9fafb; border:1px solid #eee; border-radius:12px; }
 .modal-actions{ display:flex; justify-content:flex-end; gap:8px; }
 
-
-/* Responsive */
-@media (max-width: 900px){
-  .ventas-kpis{ grid-template-columns: 1fr; }
-}
-
-
-/* Responsive */
+/* Responsive helpers */
 @media (max-width: 900px){
   .ventas-kpis{ grid-template-columns:1fr; }
   .grid{ grid-template-columns: 1fr; }
   .footer-section{ grid-template-columns:1fr; }
 }
 
-/* ===== Ventas: responsive igual a HistorialPagos ===== */
+/* ===== Ventas: responsive Historial de Cuadres ===== */
 
 /* Scroll de seguridad en anchos medianos */
 .ventas-tabla-wrap { overflow-x: auto; }
@@ -147,27 +139,23 @@
 .ventas-tabla td { overflow-wrap:anywhere; word-break:break-word; }
 
 /* Móvil: ocultar thead y convertir filas en cards */
-/* ===== Ventas: labels correctos en móvil para Historial de Cuadres ===== */
 @media (max-width:760px){
-  /* Si el TD trae data-label se usa eso; si no, usamos fallback por posición: */
-  .ventas-tabla td::before{
-    content: attr(data-label);
+
+  /* Oculta encabezado accesiblemente */
+  .ventas-tabla thead{
+    border:0; clip:rect(0 0 0 0); height:1px; margin:-1px; overflow:hidden;
+    padding:0; position:absolute; width:1px;
   }
 
-  /* Fallback por posición (9 columnas): */
-  .ventas-tabla td:nth-child(1)::before{ content:'Fecha'; }
-  .ventas-tabla td:nth-child(2)::before{ content:'Sucursal'; }
-  .ventas-tabla td:nth-child(3)::before{ content:'Usuario'; }
-  .ventas-tabla td:nth-child(4)::before{ content:'Efectivo'; }
-  .ventas-tabla td:nth-child(5)::before{ content:'Tarjeta'; }
-  .ventas-tabla td:nth-child(6)::before{ content:'Motorista'; }
-  .ventas-tabla td:nth-child(7)::before{ content:'Total a depositar'; }
-  .ventas-tabla td:nth-child(8)::before{ content:'Hora'; }
-  .ventas-tabla td:nth-child(9)::before{ content:'Acciones'; }
+  /* Tabla -> bloques */
+  .ventas-tabla,
+  .ventas-tabla tbody,
+  .ventas-tabla tr,
+  .ventas-tabla td{
+    display:block; width:100%;
+  }
 
-  /* Asegura que las acciones se vean bien en card */
-  .ventas-tabla .acciones{ justify-content:flex-start; flex-wrap:wrap; }
-  /* Cada fila como “card” */
+  /* Fila como card */
   .ventas-tabla tr{
     background:#fff;
     margin:10px 0;
@@ -199,16 +187,19 @@
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
 
-  /* Fallback por posición si NO usas data-label (ajusta textos si tu orden cambia) */
+  /* Fallback POR POSICIÓN si NO hay data-label (exactamente tus 9 columnas) */
   .ventas-tabla td:nth-child(1)::before{ content:'Fecha'; }
-  .ventas-tabla td:nth-child(2)::before{ content:'Ubicación'; } /* o 'Sucursal' */
-  .ventas-tabla td:nth-child(3)::before{ content:'Cajas'; }      /* cambia si aplica */
-  .ventas-tabla td:nth-child(4)::before{ content:'Total sistema'; }
-  .ventas-tabla td:nth-child(5)::before{ content:'A depositar'; }
-  .ventas-tabla td:nth-child(6)::before{ content:'Acciones'; }
+  .ventas-tabla td:nth-child(2)::before{ content:'Sucursal'; }
+  .ventas-tabla td:nth-child(3)::before{ content:'Usuario'; }
+  .ventas-tabla td:nth-child(4)::before{ content:'Efectivo'; }
+  .ventas-tabla td:nth-child(5)::before{ content:'Tarjeta'; }
+  .ventas-tabla td:nth-child(6)::before{ content:'Motorista'; }
+  .ventas-tabla td:nth-child(7)::before{ content:'Total a depositar'; }
+  .ventas-tabla td:nth-child(8)::before{ content:'Hora'; }
+  .ventas-tabla td:nth-child(9)::before{ content:'Acciones'; }
 
   /* Acciones alineadas al inicio en móvil */
-  .ventas-tabla .acciones{ justify-content:flex-start; }
+  .ventas-tabla .acciones{ justify-content:flex-start; flex-wrap:wrap; }
 }
 
 /* Alineación numérica opcional */

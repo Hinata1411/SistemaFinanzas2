@@ -54,3 +54,7 @@
   -webkit-appearance: none;
   margin: 0;
 }
+
+/* Evitar wrap/colapso de las pills de sucursal */
+.rc-tabs { overflow-x: auto; white-space: nowrap; }
+.rc-tabs .rc-tab { flex: 0 0 auto; }

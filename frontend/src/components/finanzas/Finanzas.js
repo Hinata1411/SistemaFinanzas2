@@ -1,6 +1,6 @@
 // src/Finanzas.js
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { collection, getDocs, getDoc, doc, query, where } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, query, where, orderBy, limit } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '../../services/firebase';
 import MyCalendar from '../calendario/MyCalendar';
@@ -193,71 +193,65 @@ export default function Finanzas() {
 
       const hoy = todayISO();
 
-      // 1) Leer caja chica + override kpiDepositos por sucursal
-      const cajaPromises = sucIds.map(async (id) => {
+      // Para cada sucursal: caja chica + KPI (base último pago + cierres desde entonces)
+      const results = await Promise.all(sucIds.map(async (id) => {
         try {
-          const s = await getDoc(doc(db, 'sucursales', id));
-          const d = s.exists() ? (s.data() || {}) : {};
-          return {
-            id,
-            caja: Number(d.cajaChica || 0),
-            kpiOverride: typeof d.kpiDepositos === 'number' ? Number(d.kpiDepositos) : null,
-          };
-        } catch {
-          return { id, caja: 0, kpiOverride: null };
-        }
-      });
+          // 1) Doc sucursal (caja chica)
+          const sSnap = await getDoc(doc(db, 'sucursales', id));
+          const sData = sSnap.exists() ? (sSnap.data() || {}) : {};
+          const cajaChica = Number(sData.cajaChica || 0);
 
-      // 2) Leer cierres y sumar "Total a depositar" (solo si NO hay override)
-      const ventasPromises = sucIds.map(async (id) => {
-        try {
-          const cierresRef = collection(db, 'cierres');
-          const qRef = query(cierresRef, where('sucursalId', '==', id), where('fecha', '<=', hoy));
-          const snap = await getDocs(qRef);
-          let ventas = 0;
-          snap.docs.forEach((docSnap) => {
-            ventas += extractTotalADepositar(docSnap.data() || {});
-          });
-          return { id, ventas };
-        } catch {
-          return { id, ventas: 0 };
-        }
-      });
-
-      // 3) ¿Hay pagos hoy? Si no hay, ignorar override y "regresar" al cálculo desde cierres
-      const pagosTodayPromises = sucIds.map(async (id) => {
-        try {
+          // 2) Último pago (base KPI)
           const pagosRef = collection(db, 'pagos');
-          const qRef = query(pagosRef, where('sucursalId', '==', id), where('fecha', '==', hoy));
-          const snap = await getDocs(qRef);
-          return { id, has: snap.size > 0 };
+          const qPago = query(
+            pagosRef,
+            where('sucursalId', '==', id),
+            orderBy('fecha', 'desc'),
+            limit(1)
+          );
+          const pagoSnap = await getDocs(qPago);
+          const lastPago = pagoSnap.docs[0]?.data() || null;
+          const lastFechaPago = lastPago?.fecha || null;
+          const base = Number(lastPago?.sobranteParaManana || 0);
+
+          // 3) Cierres desde > lastFechaPago hasta <= hoy
+          const cierresRef = collection(db, 'cierres');
+          let qCierres;
+          if (lastFechaPago) {
+            qCierres = query(
+              cierresRef,
+              where('sucursalId','==', id),
+              where('fecha','>', lastFechaPago),
+              where('fecha','<=', hoy)
+            );
+          } else {
+            qCierres = query(
+              cierresRef,
+              where('sucursalId','==', id),
+              where('fecha','<=', hoy)
+            );
+          }
+          const cierresSnap = await getDocs(qCierres);
+          let sumaCierres = 0;
+          cierresSnap.forEach(d => { sumaCierres += extractTotalADepositar(d.data() || {}); });
+
+          // KPI final
+          const ventas = base + sumaCierres;
+
+          return { id, cajaChica, ventas };
         } catch {
-          return { id, has: false };
+          return { id, cajaChica: 0, ventas: 0 };
         }
-      });
+      }));
 
-      const [cajas, ventas, pagosToday] = await Promise.all([
-        Promise.all(cajaPromises),
-        Promise.all(ventasPromises),
-        Promise.all(pagosTodayPromises),
-      ]);
-
+      // Construir mapas y totales
       const map = {};
       let totalCaja = 0;
       let totalVentas = 0;
-
-      sucIds.forEach((id) => {
-        const cx = cajas.find(x => x.id === id) || { caja: 0, kpiOverride: null };
-        const vv = ventas.find(x => x.id === id)?.ventas || 0;
-        const hayPagos = pagosToday.find(x => x.id === id)?.has || false;
-
-        // Si hay pagos para HOY y hay override -> usar override; si NO hay pagos -> ignorar override
-        const usedVentas = (hayPagos && cx.kpiOverride != null) ? cx.kpiOverride : vv;
-
-        map[id] = { cajaChica: cx.caja, ventas: usedVentas };
-
-        totalCaja += cx.caja;
-        totalVentas += usedVentas;
+      results.forEach(({ id, cajaChica, ventas }) => {
+        map[id] = { cajaChica, ventas };
+        totalCaja += cajaChica;
+        totalVentas += ventas;
       });
 
       setKpiBySucursal(map);

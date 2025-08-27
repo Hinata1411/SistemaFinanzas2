@@ -544,7 +544,7 @@ export default function RegistrarCierre() {
 
         await Swal.fire({ icon: 'success', title: 'Guardado', text: 'El cuadre se guardó correctamente.', timer: 1600, showConfirmButton: false });
       }
-      navigate('/Finanzas/Ventas');
+      navigate('/Finanzas/HistorialCuadres');
     } catch (err) {
       console.error(err);
       Swal.fire('Error', err.message || 'No se pudo guardar.', 'error');
