@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
-  collection, addDoc, getDoc, getDocs, query, where, orderBy, limit,
+  collection, addDoc, getDoc, getDocs,
   doc, updateDoc, serverTimestamp, increment
 } from 'firebase/firestore';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -21,27 +21,6 @@ import AttachmentViewerModal from '../registrar-cierre/AttachmentViewerModal';
 // ====== Helpers ======
 const money = (v) =>
   new Intl.NumberFormat('es-GT', { style: 'currency', currency: 'GTQ', maximumFractionDigits: 2 }).format(Number(v) || 0);
-
-const extractTotalADepositar = (d) => {
-  const t = d?.totales || {};
-  const nnum = (v) => (typeof v === 'number' ? v : parseFloat(v || 0)) || 0;
-
-  const fromTotals = t?.totalGeneral ?? t?.total_general ?? null;
-  if (fromTotals != null && !isNaN(fromTotals)) {
-    const val = nnum(fromTotals); if (val !== 0) return val;
-  }
-  const aliases = d?.totalADepositar ?? d?.total_a_depositar ?? d?.totalDepositar ??
-                  d?.total_depositar ?? t?.totalADepositar ?? t?.total_a_depositar ??
-                  t?.totalDepositar ?? t?.total_depositar ?? t?.depositoEfectivo ??
-                  t?.efectivoParaDepositos ?? t?.efectivo_para_depositos ??
-                  t?.totalDeposito ?? t?.total_deposito ?? t?.total_para_depositar ?? null;
-  if (aliases != null && !isNaN(aliases)) {
-    const val = nnum(aliases); if (val !== 0) return val;
-  }
-  if (Array.isArray(d?.cierre)) return d.cierre.reduce((acc, c) => acc + nnum(c?.efectivo), 0);
-  if (Array.isArray(d?.arqueo)) return d.arqueo.reduce((acc, c) => acc + nnum(c?.efectivo), 0);
-  return 0;
-};
 
 const okTypes = ['image/png', 'image/jpeg', 'application/pdf'];
 const n = (v) => {
