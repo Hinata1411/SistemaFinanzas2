@@ -66,10 +66,14 @@
   vertical-align: middle;
 }
 
+/* ===== Encabezados de tabla (vista normal) ===== */
 .registrar-pagos .rc-gastos-table thead th {
+  background: var(--primary);  /* usa tu variable de verde */
+  color: #fff;                 /* texto blanco */
+  font-weight: 800;
   text-align: center;
-  color: #6b7280;
-  font-weight: 700;
+  padding: 10px 12px;
+  border: 1px solid #e7e2d9;
 }
 
 /* Descripción izquierda, resto centrado */
