@@ -140,111 +140,99 @@ export default function Pagos() {
   };
 
   // id = id del documento en 'pagos' que vas a eliminar
-const handleEliminar = async (id) => {
-  const confirmar = await Swal.fire({
-    title: '¿Eliminar pago?',
-    text: 'Esta acción no se puede deshacer.',
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonText: 'Sí, eliminar',
-    cancelButtonText: 'Cancelar'
-  });
-  if (!confirmar.isConfirmed) return;
+  const handleEliminar = async (id) => {
+    const confirmar = await Swal.fire({
+      title: '¿Eliminar pago?',
+      text: 'Esta acción no se puede deshacer.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar'
+    });
+    if (!confirmar.isConfirmed) return;
 
-  try {
-    // 1) Lee el doc de pago para saber sucursal y snapshots
-    const pagoRef = doc(db, 'pagos', id);
-    const pagoSnap = await getDoc(pagoRef);
-    if (!pagoSnap.exists()) {
-      await Swal.fire('No encontrado', 'El pago ya no existe.', 'info');
-      return;
-    }
-    const pago = pagoSnap.data();
-
-    const sucursalId = pago.sucursalId;
-    const cajaChicaUsada = Number(pago.cajaChicaUsada || 0);
-    const kpiAtSave = Number(
-      pago.kpiDepositosAtSave ??
-      pago.sobranteParaManana ?? // fallback muy viejo
-      0
-    );
-
-    // 2) Averigua si este pago es el MÁS RECIENTE de esa sucursal
-    //    Si lo es, el KPI debe quedar como el del "siguiente" más nuevo (si existe),
-    //    o volver a kpiAtSave si NO hay más.
-    let nextKpiForSucursal = null; // null => no tocar KPI
     try {
-      const pagosQ = query(
-        collection(db, 'pagos'),
-        where('sucursalId', '==', sucursalId),
-        orderBy('createdAt', 'desc'),
-        limit(2)
-      );
-      const pagosSnap = await getDocs(pagosQ);
+      // 1) Lee el doc para saber sucursal y lo usado de caja chica
+      const pagoRef = doc(db, 'pagos', id);
+      const pagoSnap = await getDoc(pagoRef);
+      if (!pagoSnap.exists()) {
+        await Swal.fire('No encontrado', 'El pago ya no existe.', 'info');
+        return;
+      }
+      const pago = pagoSnap.data();
+      const sucursalId = pago.sucursalId;
+      const cajaChicaUsada = Number(pago.cajaChicaUsada || 0);
 
-      // Lista (quizá incluye el que vamos a borrar)
-      const docs = pagosSnap.docs;
+      // 2) ¿Es el más reciente de la sucursal?
+      //    Si sí: KPI = sobrante del siguiente más nuevo; si NO existe siguiente => KPI = 0.
+      //    Si no es el más reciente: NO tocar KPI.
+      let nextKpiForSucursal = null; // null => no tocar KPI
+      try {
+        const pagosQ = query(
+          collection(db, 'pagos'),
+          where('sucursalId', '==', sucursalId),
+          orderBy('createdAt', 'desc'),
+          limit(2)
+        );
+        const pagosSnap = await getDocs(pagosQ);
+        const docs = pagosSnap.docs; // top 2, en orden más nuevo -> siguiente
 
-      if (docs.length) {
-        const first = docs[0];
-        if (first.id === id) {
-          // El que borramos es el más reciente
+        if (!docs.length) {
+          // No hay nada (raro si el que vamos a borrar existe), pon 0 por seguridad
+          nextKpiForSucursal = 0;
+        } else if (docs[0].id === id) {
+          // El que borramos es el más nuevo
           if (docs.length > 1) {
-            // Usa el sobrante del siguiente más nuevo
             const second = docs[1].data();
             nextKpiForSucursal = Number(
               second.sobranteParaManana ??
-              second.kpiDepositosAtSave ?? // fallback
-              kpiAtSave
+              second.kpiDepositosAtSave ?? 0
             );
           } else {
-            // No hay más pagos: regresa al KPI anterior que tenías al guardar este doc
-            nextKpiForSucursal = kpiAtSave;
+            // Era el ÚNICO pago: deja el KPI en 0
+            nextKpiForSucursal = 0;
           }
         } else {
-          // No es el más reciente => NO tocar KPI
+          // No es el más reciente => no toques el KPI
           nextKpiForSucursal = null;
         }
-      } else {
-        // No hay más docs (raro, pero por si acaso)
-        nextKpiForSucursal = kpiAtSave;
+      } catch (e) {
+        // Si falla la consulta (índice, etc.), al menos deja KPI en 0 si este era el único.
+        nextKpiForSucursal = 0;
       }
-    } catch {
-      // Si falla la consulta (p.ej. índice faltante), al menos devuelve KPI al snapshot
-      nextKpiForSucursal = kpiAtSave;
+
+      // 3) Aplica todo en batch
+      const batch = writeBatch(db);
+      const sucRef = doc(db, 'sucursales', sucursalId);
+
+      // 3.1) Elimina el pago
+      batch.delete(pagoRef);
+
+      // 3.2) Devuelve a caja chica lo que consumió este pago
+      if (cajaChicaUsada !== 0) {
+        batch.update(sucRef, { cajaChica: increment(cajaChicaUsada) });
+      }
+
+      // 3.3) Actualiza KPI si corresponde
+      if (nextKpiForSucursal !== null && Number.isFinite(nextKpiForSucursal)) {
+        batch.update(sucRef, { kpiDepositos: Number(nextKpiForSucursal) });
+      }
+
+      await batch.commit();
+
+      await Swal.fire({ icon: 'success', title: 'Pago eliminado', timer: 1200, showConfirmButton: false });
+
+      // refresca UI local
+      setPagos(prev => prev.filter(p => p.id !== id));
+      await refetch();
+
+    } catch (e) {
+      console.error(e);
+      Swal.fire('Error', e?.message || 'No se pudo eliminar.', 'error');
     }
+  };
 
-    // 3) Aplica los cambios de forma atómica con un batch
-    const batch = writeBatch(db);
-    const sucRef = doc(db, 'sucursales', sucursalId);
 
-    // 3.1) Elimina el pago
-    batch.delete(pagoRef);
-
-    // 3.2) Devuelve a caja chica lo usado por este pago
-    if (cajaChicaUsada !== 0) {
-      batch.update(sucRef, { cajaChica: increment(cajaChicaUsada) });
-    }
-
-    // 3.3) Actualiza KPI si corresponde
-    if (nextKpiForSucursal !== null && Number.isFinite(nextKpiForSucursal)) {
-      batch.update(sucRef, { kpiDepositos: Number(nextKpiForSucursal) });
-    }
-
-    await batch.commit();
-
-    await Swal.fire({ icon: 'success', title: 'Pago eliminado', timer: 1200, showConfirmButton: false });
-
-    // Refresca la tabla local
-
-    setPagos(prev => prev.filter(p => p.id !== id));
-    await refetch();
-
-  } catch (e) {
-    console.error(e);
-    Swal.fire('Error', e?.message || 'No se pudo eliminar.', 'error');
-  } 
-}; 
 
   // UI
   if (!me.loaded) {

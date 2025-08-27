@@ -1,7 +1,10 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import { deleteDoc, doc, getDoc } from 'firebase/firestore';
+import {
+  doc, getDoc, collection, getDocs,
+  query, where, orderBy, limit, writeBatch
+} from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '../../services/firebase';
 
@@ -24,6 +27,22 @@ const HEADERS = [
   'Hora',
   'Acciones'
 ];
+
+// Convierte Timestamp|Date|string a milisegundos
+const toMillis = (tsLike) => {
+  if (!tsLike) return 0;
+  if (typeof tsLike?.toDate === 'function') return tsLike.toDate().getTime(); // Firestore Timestamp
+  if (typeof tsLike?.seconds === 'number') return tsLike.seconds * 1000;
+  const d = new Date(tsLike);
+  return isNaN(d) ? 0 : d.getTime();
+};
+
+// Valor base del cuadre para KPI (preferimos totales.totalGeneral)
+const getKpiFromCuadre = (c) => {
+  const raw = c?.totales?.totalGeneral;
+  const v = typeof raw === 'number' ? raw : parseFloat(raw || 0);
+  return Number.isFinite(v) ? v : 0;
+};
 
 export default function HistorialCuadres() {
   const navigate = useNavigate();
@@ -87,21 +106,111 @@ export default function HistorialCuadres() {
     navigate(`/Finanzas/RegistrarCierre?id=${c.id}&mode=edit`);
   };
 
+  //Eliminar registro
   const handleEliminar = async (id) => {
     if (!canManage) {
       Swal.fire('Solo lectura', 'No tienes permisos para eliminar.', 'info');
       return;
     }
+
     const confirmar = await Swal.fire({
-      title:'¿Eliminar registro?',
-      text:'Esta acción no se puede deshacer.',
-      icon:'warning',
-      showCancelButton:true
+      title: '¿Eliminar cuadre?',
+      text: 'Esta acción no se puede deshacer.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
     });
     if (!confirmar.isConfirmed) return;
-    await deleteDoc(doc(db, 'cierres', id));
-    Swal.fire('Eliminado', 'El registro ha sido eliminado.', 'success');
-    await refetch();
+
+    try {
+      // 1) Leemos el cuadre para saber sucursal y fecha/createdAt
+      const cierreRef = doc(db, 'cierres', id);
+      const cierreSnap = await getDoc(cierreRef);
+      if (!cierreSnap.exists()) {
+        await Swal.fire('No encontrado', 'El cuadre ya no existe.', 'info');
+        return;
+      }
+      const cierre = cierreSnap.data() || {};
+      const sucursalId = cierre.sucursalId;
+      const cierreMs = toMillis(cierre.createdAt || cierre.updatedAt || cierre.fecha);
+
+      // 2) ¿Hay un PAGO más reciente que este cuadre para esa sucursal?
+      //    Si sí, NO tocamos el KPI (queda gobernado por pagos).
+      let nextKpi = null; // null => no tocar KPI
+      let hayPagoMasReciente = false;
+      try {
+        const pagosQ = query(
+          collection(db, 'pagos'),
+          where('sucursalId', '==', sucursalId),
+          orderBy('createdAt', 'desc'),
+          limit(1)
+        );
+        const pagosSnap = await getDocs(pagosQ);
+        if (!pagosSnap.empty) {
+          const pago = pagosSnap.docs[0].data() || {};
+          const pagoMs = toMillis(pago.createdAt || pago.updatedAt || pago.fecha);
+          hayPagoMasReciente = pagoMs > cierreMs;
+        }
+      } catch (e) {
+        // si falla la consulta, asumimos que NO hay pago más reciente y seguiremos con cierres
+        hayPagoMasReciente = false;
+      }
+
+      // 3) Si NO hay pago más reciente, el KPI debe quedar en el “siguiente” cuadre más nuevo
+      //    (o 0 si este era el único)
+      if (!hayPagoMasReciente) {
+        try {
+          const cierresQ = query(
+            collection(db, 'cierres'),
+            where('sucursalId', '==', sucursalId),
+            orderBy('createdAt', 'desc'),
+            limit(2)
+          );
+          const cierresSnap = await getDocs(cierresQ);
+          const docs = cierresSnap.docs;
+
+          if (!docs.length) {
+            // raro, pero por seguridad
+            nextKpi = 0;
+          } else if (docs[0].id === id) {
+            // borras el más reciente
+            if (docs.length > 1) {
+              const second = docs[1].data() || {};
+              nextKpi = getKpiFromCuadre(second);
+            } else {
+              // era el único cuadre
+              nextKpi = 0;
+            }
+          } else {
+            // no es el más reciente => no tocar KPI
+            nextKpi = null;
+          }
+        } catch (e) {
+          // si falla, al menos dejar en 0
+          nextKpi = 0;
+        }
+      } else {
+        nextKpi = null; // hay pago más reciente => KPI ya está definido por pagos, no mover
+      }
+
+      // 4) Ejecutar en batch: borrar cuadre + (opcional) actualizar KPI
+      const batch = writeBatch(db);
+      const sucRef = doc(db, 'sucursales', sucursalId);
+
+      batch.delete(cierreRef);
+      if (nextKpi !== null && Number.isFinite(nextKpi)) {
+        batch.update(sucRef, { kpiDepositos: Number(nextKpi) });
+      }
+
+      await batch.commit();
+
+      await Swal.fire({ icon: 'success', title: 'Cuadre eliminado', timer: 1200, showConfirmButton: false });
+      await refetch();
+    } catch (e) {
+      console.error(e);
+      Swal.fire('Error', e?.message || 'No se pudo eliminar.', 'error');
+    }
   };
 
   // PDFs
