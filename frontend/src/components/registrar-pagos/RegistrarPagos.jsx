@@ -14,7 +14,7 @@ import 'sweetalert2/dist/sweetalert2.min.css';
 
 import { auth, db } from '../../services/firebase';
 import { todayISO as getTodayISO } from '../../utils/dates';
-
+import { recomputeSucursalKPI } from '../../utils/kpi';
 import CategoriasModal from '../registrar-cierre/CategoriasModal';
 import AttachmentViewerModal from '../registrar-cierre/AttachmentViewerModal';
 
@@ -397,20 +397,24 @@ const cajaChicaDisponible = active ? Number(cajaChicaBySuc[active] || 0) : 0;
             { contentType: r.fileMime || fileBlob.type || 'application/octet-stream' }
           );
           const url = await getDownloadURL(fileRef);
-          return { ...rest, fileUrl:url, fileName:safe, fileMime:(r.fileMime || fileBlob.type || '') };
+          return { ...rest, fileUrl: url, fileName: safe, fileMime: (r.fileMime || fileBlob.type || '') };
         }
         return { ...rest };
       }));
 
       const totalUtilizadoCalc = ready.reduce((s, it) => s + n(it.monto), 0);
       const cajaChicaUsada = n(state.cajaChicaUsada || 0);
+
+      // KPI mostrado en UI (dinero para depósitos) - se usa para snapshot y cálculo de sobrante
+      const kpiDepositos = active ? Number(kpiDepositosBySuc[active] || 0) : 0;
+
       const sobranteParaManana = Math.max(0, (kpiDepositos - totalUtilizadoCalc) + cajaChicaUsada);
 
       const actor = { uid: me.uid, username: me.username };
 
       // snapshots visibles en ver/editar
       const kpiSnapshot = Number(kpiDepositos);              // lo que se ve en “Dinero para depósitos”
-      const cajaChicaSnapshot = Number(cajaChicaDisponible); // disponible al guardar
+      const cajaChicaSnapshot = active ? Number(cajaChicaBySuc[active] || 0) : 0; // disponible al guardar
 
       if (isEditingExisting) {
         const prevCaja = n(originalDoc?.cajaChicaUsada);
@@ -434,9 +438,9 @@ const cajaChicaDisponible = active ? Number(cajaChicaBySuc[active] || 0) : 0;
           await updateDoc(doc(db, 'sucursales', active), { cajaChica: increment(deltaCajaChica) });
           setCajaChicaBySuc(prev => ({ ...prev, [active]: n(prev[active]) + deltaCajaChica }));
         }
-        // después de guardar, el KPI base de sucursal pasa a ser el sobrante calculado
-        await updateDoc(doc(db, 'sucursales', active), { kpiDepositos: Number(sobranteParaManana) });
-        setKpiDepositosBySuc(prev => ({ ...prev, [active]: Number(sobranteParaManana) }));
+
+        // ✅ Recalcular KPI según el documento más reciente (pago/cierre)
+        await recomputeSucursalKPI(active);
 
         await Swal.fire({
           icon: 'success',
@@ -463,14 +467,13 @@ const cajaChicaDisponible = active ? Number(cajaChicaBySuc[active] || 0) : 0;
         if (deltaCajaChica !== 0) {
           await updateDoc(doc(db, 'sucursales', active), { cajaChica: increment(deltaCajaChica) });
         }
-        // base KPI = sobrante para mañana
-        await updateDoc(doc(db, 'sucursales', active), { kpiDepositos: Number(sobranteParaManana) });
+
+        // ✅ Recalcular KPI (el nuevo pago normalmente será el más reciente)
+        await recomputeSucursalKPI(active);
 
         setCajaChicaBySuc(prev => ({ ...prev, [active]: Number(prev[active] || 0) + deltaCajaChica }));
-        setKpiDepositosBySuc(prev => ({ ...prev, [active]: Number(sobranteParaManana) }));
 
-         // ✅ Opción A: esperar el toast y luego redirigir
-        await Swal.fire({ icon:'success', title:'Pagos guardados', timer:1200, showConfirmButton:false });
+        await Swal.fire({ icon: 'success', title: 'Pagos guardados', timer: 1200, showConfirmButton: false });
         navigate('/Finanzas/HistorialPagos');
       }
     } catch (e) {
@@ -478,6 +481,8 @@ const cajaChicaDisponible = active ? Number(cajaChicaBySuc[active] || 0) : 0;
       Swal.fire('Error', e.message || 'No se pudo guardar.', 'error');
     }
   };
+
+    
 
   const headerSuffix = isEditingExisting ? '(editando)' : isViewing ? '(viendo)' : '';
 
