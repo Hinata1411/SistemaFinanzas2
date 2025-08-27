@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
-  collection, addDoc, getDoc, getDocs,
+  collection, addDoc, getDoc,
   doc, updateDoc, serverTimestamp, increment, onSnapshot
 } from 'firebase/firestore';
 import { useSearchParams, useNavigate } from 'react-router-dom';
