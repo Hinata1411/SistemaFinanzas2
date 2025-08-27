@@ -12,6 +12,7 @@ import './HistorialPagos.css';
 import { auth, db } from '../../services/firebase';
 import { getTodayLocalISO as getTodayLocalISO_ventas } from '../../utils/dates';
 import { exportDepositosPdf, exportPagosGroupedPdf } from '../../pdf/exportadoresPagos'; 
+import GroupDownloadModal from '../ventas/GroupDownloadModal'; // ⬅️ agregado
 
 // Compatibilidad
 const getTodayLocalISO = getTodayLocalISO_ventas || (() => {
@@ -138,12 +139,16 @@ export default function Pagos() {
   const [viewer, setViewer] = useState({ open:false, doc:null });
   const [editor, setEditor] = useState({ open:false, doc:null, items:[] });
 
+  // ⬇️ Estado para el modal de descarga agrupada (igual que en HistorialCuadres)
+  const [showGroup, setShowGroup] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) { setMe({ loaded:true, role:'viewer', sucursalId:null }); return; }
       try {
         const snap = await getDoc(doc(db, 'usuarios', user.uid));
-        const data = snap.exists() ? snap.data() : {};
+        const data = snap.exists() ? data = snap.data() : {};
         setMe({ loaded:true, role: data.role || 'viewer', sucursalId: data.sucursalId || null });
       } catch {
         setMe({ loaded:true, role:'viewer', sucursalId:null });
@@ -291,23 +296,9 @@ export default function Pagos() {
           <button
             className="btn btn-primary"
             onClick={async () => {
-              try {
-                const conditions = [];
-                if (fechaFiltro) conditions.push(where('fecha','==', fechaFiltro));
-                if (currentSucursalValue && currentSucursalValue !== 'all') {
-                  conditions.push(where('sucursalId','==', currentSucursalValue));
-                }
-                const snap = await getDocs(query(collection(db,'pagos'), ...conditions));
-                const docs = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
-                if (!docs.length) {
-                  await Swal.fire('Sin registros', 'No hay pagos para exportar con los filtros actuales.', 'info');
-                  return;
-                }
-                await exportPagosGroupedPdf(docs, sucursalesMap, `Pagos_Agrupados_${fechaFiltro || 'todas'}`);
-              } catch (e) {
-                console.error(e);
-                Swal.fire('Error', e?.message || 'No se pudo generar el PDF.', 'error');
-              }
+              // ⬇️ Igual que en HistorialCuadres: abrir modal con todos preseleccionados
+              setSelectedIds(pagos.map(p => p.id));
+              setShowGroup(true);
             }}
             title="Descargar PDF agrupado por los filtros actuales"
           >
@@ -398,7 +389,8 @@ export default function Pagos() {
                           type="button"
                           title="Descargar depósitos (Descripción y Cantidad)"
                           onClick={() => {
-                            exportDepositosPdf(p, sucNom, `Depositos_${sucNom}_${p.fecha || ''}`);
+                            const sucNom2 = sucursalesMap[p.sucursalId] || p.sucursalId || '';
+                            exportDepositosPdf(p, sucNom2, `Depositos_${sucNom2}_${p.fecha || ''}`);
                           }}
                         >
                           Descargar depósitos
@@ -619,6 +611,38 @@ export default function Pagos() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ⬇️ Modal para descarga agrupada (idéntico patrón que HistorialCuadres) */}
+      {isAdmin && (
+        <GroupDownloadModal
+          visible={showGroup}
+          cuadres={pagos} // reutilizamos la misma prop; el modal solo lista/selecciona y llama onDownload
+          sucursalesMap={sucursalesMap}
+          selectedIds={selectedIds}
+          onToggleAll={() =>
+            setSelectedIds(selectedIds.length === pagos.length ? [] : pagos.map(p=>p.id))
+          }
+          onToggleOne={(id) =>
+            setSelectedIds((prev)=> prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id])
+          }
+          onCancel={()=> setShowGroup(false)}
+          onDownload={async () => {
+            try {
+              const docs = pagos.filter(p => selectedIds.includes(p.id));
+              if (!docs.length) {
+                await Swal.fire('Selecciona al menos un registro','','warning');
+                return;
+              }
+              const nombre = `Pagos_Agrupados_${fechaFiltro || 'todas'}`;
+              await exportPagosGroupedPdf(docs, sucursalesMap, nombre);
+              setShowGroup(false);
+            } catch (e) {
+              console.error(e);
+              Swal.fire('Error', e?.message || 'No se pudo generar el PDF.', 'error');
+            }
+          }}
+        />
       )}
     </div>
   );
