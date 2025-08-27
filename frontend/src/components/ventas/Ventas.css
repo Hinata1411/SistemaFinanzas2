@@ -139,15 +139,15 @@
 .ventas-tabla td { overflow-wrap:anywhere; word-break:break-word; }
 
 /* Móvil: ocultar thead y convertir filas en cards */
+/* ===== Ventas: responsive Historial de Cuadres ===== */
+
 @media (max-width:760px){
 
-  /* Oculta encabezado accesiblemente */
   .ventas-tabla thead{
     border:0; clip:rect(0 0 0 0); height:1px; margin:-1px; overflow:hidden;
     padding:0; position:absolute; width:1px;
   }
 
-  /* Tabla -> bloques */
   .ventas-tabla,
   .ventas-tabla tbody,
   .ventas-tabla tr,
@@ -155,7 +155,6 @@
     display:block; width:100%;
   }
 
-  /* Fila como card */
   .ventas-tabla tr{
     background:#fff;
     margin:10px 0;
@@ -165,20 +164,19 @@
     overflow:hidden;
   }
 
-  /* Celdas con label a la izquierda */
   .ventas-tabla td{
     text-align:left;
     border-top:1px solid #f0ece6;
-    padding:12px 14px 12px calc(14px + 140px); /* 140px = ancho del label */
+    padding:12px 14px 12px calc(14px + 140px);
     position:relative;
     min-height:44px;
     color:var(--slate);
   }
   .ventas-tabla td:first-child{ border-top:none; }
 
-  /* Si el TD trae data-label, úsalo */
+  /* ★ Usa SIEMPRE el data-label del TD (coincide con tus headers) */
   .ventas-tabla td::before{
-    content: attr(data-label);
+    content: attr(data-label) !important;
     position:absolute;
     left:14px; top:50%;
     transform: translateY(-50%);
@@ -187,7 +185,7 @@
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
 
-  /* Fallback POR POSICIÓN si NO hay data-label (exactamente tus 9 columnas) */
+  /* (Opcional) elimina el fallback por posición:
   .ventas-tabla td:nth-child(1)::before{ content:'Fecha'; }
   .ventas-tabla td:nth-child(2)::before{ content:'Sucursal'; }
   .ventas-tabla td:nth-child(3)::before{ content:'Usuario'; }
@@ -197,10 +195,10 @@
   .ventas-tabla td:nth-child(7)::before{ content:'Total a depositar'; }
   .ventas-tabla td:nth-child(8)::before{ content:'Hora'; }
   .ventas-tabla td:nth-child(9)::before{ content:'Acciones'; }
+  */
 
-  /* Acciones alineadas al inicio en móvil */
   .ventas-tabla .acciones{ justify-content:flex-start; flex-wrap:wrap; }
 }
 
-/* Alineación numérica opcional */
 .ventas-tabla td.text-right{ text-align:right; }
+

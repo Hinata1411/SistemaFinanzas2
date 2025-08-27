@@ -14,6 +14,35 @@ export default function VentasTable({
   canDownload = true, // Descargar PDF
   isAdmin = false,    // Opcional: si no lo pasas, se infiere con canManage
 }) {
+  const showAdminCols = isAdmin || canManage;
+
+  // Headers EXACTOS que quieres ver (desktop y los mismos en móvil vía data-label)
+  const headers = React.useMemo(
+    () =>
+      showAdminCols
+        ? [
+            'Fecha',
+            'Sucursal',
+            'Usuario',
+            'Efectivo',
+            'Tarjeta',
+            'Motorista',
+            'Total a depositar',
+            'Hora',
+            'Acciones',
+          ]
+        : [
+            'Fecha',
+            'Efectivo',
+            'Tarjeta',
+            'Motorista',
+            'Total a depositar',
+            'Hora',
+            'Acciones',
+          ],
+    [showAdminCols]
+  );
+
   const Acciones = ({ c }) => (
     <div className="acciones">
       <button className="btn-min" onClick={() => onVer && onVer(c)}>Ver</button>
@@ -47,31 +76,21 @@ export default function VentasTable({
     return d.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
-  // Mostrar columnas de admin si explícitamente isAdmin || si puede gestionar
-  const showAdminCols = isAdmin || canManage;
-  const EMPTY_COLSPAN = showAdminCols ? 9 : 7;
-
   return (
     <div className="ventas-tabla-wrap">
       <table className="ventas-tabla">
         <thead>
           <tr>
-            <th>Fecha</th>
-            {showAdminCols && <th>Sucursal</th>}
-            {showAdminCols && <th>Usuario</th>}
-            <th>Efectivo</th>
-            <th>Tarjeta</th>
-            <th>Motorista</th>
-            <th>Total a depositar</th>
-            <th>Hora</th>
-            <th>Acciones</th>
+            {headers.map((h) => (
+              <th key={h}>{h}</th>
+            ))}
           </tr>
         </thead>
 
         <tbody>
           {cuadres.length === 0 ? (
             <tr>
-              <td className="empty" colSpan={EMPTY_COLSPAN}>Sin registros</td>
+              <td className="empty" colSpan={headers.length}>Sin registros</td>
             </tr>
           ) : (
             cuadres.map((c) => {
@@ -96,17 +115,34 @@ export default function VentasTable({
               // Hora (createdAt > updatedAt)
               const hora = toLocalHour(c?.createdAt || c?.updatedAt);
 
+              if (showAdminCols) {
+                // Orden: Fecha | Sucursal | Usuario | Efectivo | Tarjeta | Motorista | Total | Hora | Acciones
+                return (
+                  <tr key={c.id}>
+                    <td data-label={headers[0]}>{formatDate(c.fecha)}</td>
+                    <td data-label={headers[1]}>{sucursalesMap[c.sucursalId] || '—'}</td>
+                    <td data-label={headers[2]}>{usuario}</td>
+                    <td data-label={headers[3]} className="text-right">{toMoney(ef)}</td>
+                    <td data-label={headers[4]} className="text-right">{toMoney(tar)}</td>
+                    <td data-label={headers[5]} className="text-right">{toMoney(mot)}</td>
+                    <td data-label={headers[6]} className="text-right">{toMoney(totalDepositar)}</td>
+                    <td data-label={headers[7]}>{hora}</td>
+                    <td data-label={headers[8]}><Acciones c={c} /></td>
+                  </tr>
+                );
+              }
+
+              // Viewer (sin columnas de admin)
+              // Orden: Fecha | Efectivo | Tarjeta | Motorista | Total | Hora | Acciones
               return (
                 <tr key={c.id}>
-                  <td>{formatDate(c.fecha)}</td>
-                  {showAdminCols && <td>{sucursalesMap[c.sucursalId] || '—'}</td>}
-                  {showAdminCols && <td>{usuario}</td>}
-                  <td>{toMoney(ef)}</td>
-                  <td>{toMoney(tar)}</td>
-                  <td>{toMoney(mot)}</td>
-                  <td>{toMoney(totalDepositar)}</td>
-                  <td>{hora}</td>
-                  <td><Acciones c={c} /></td>
+                  <td data-label={headers[0]}>{formatDate(c.fecha)}</td>
+                  <td data-label={headers[1]} className="text-right">{toMoney(ef)}</td>
+                  <td data-label={headers[2]} className="text-right">{toMoney(tar)}</td>
+                  <td data-label={headers[3]} className="text-right">{toMoney(mot)}</td>
+                  <td data-label={headers[4]} className="text-right">{toMoney(totalDepositar)}</td>
+                  <td data-label={headers[5]}>{hora}</td>
+                  <td data-label={headers[6]}><Acciones c={c} /></td>
                 </tr>
               );
             })
