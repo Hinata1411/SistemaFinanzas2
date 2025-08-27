@@ -179,7 +179,7 @@ export default function Pagos() {
   if (!me.loaded) {
     return (
       <div className="ventas-shell">
-        <header className="ventas-header"><h1>Pagos</h1></header>
+        <header className="ventas-header"><h1>Historial de Pagos </h1></header>
         <div className="empty">Cargando perfil…</div>
       </div>
     );
