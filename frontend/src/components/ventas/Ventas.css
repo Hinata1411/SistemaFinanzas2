@@ -147,21 +147,26 @@
 .ventas-tabla td { overflow-wrap:anywhere; word-break:break-word; }
 
 /* Móvil: ocultar thead y convertir filas en cards */
+/* ===== Ventas: labels correctos en móvil para Historial de Cuadres ===== */
 @media (max-width:760px){
-  /* Oculta el encabezado accesiblemente */
-  .ventas-tabla thead{
-    border:0; clip:rect(0 0 0 0); height:1px; margin:-1px; overflow:hidden;
-    padding:0; position:absolute; width:1px;
+  /* Si el TD trae data-label se usa eso; si no, usamos fallback por posición: */
+  .ventas-tabla td::before{
+    content: attr(data-label);
   }
 
-  /* Tabla -> bloques */
-  .ventas-tabla,
-  .ventas-tabla tbody,
-  .ventas-tabla tr,
-  .ventas-tabla td{
-    display:block; width:100%;
-  }
+  /* Fallback por posición (9 columnas): */
+  .ventas-tabla td:nth-child(1)::before{ content:'Fecha'; }
+  .ventas-tabla td:nth-child(2)::before{ content:'Sucursal'; }
+  .ventas-tabla td:nth-child(3)::before{ content:'Usuario'; }
+  .ventas-tabla td:nth-child(4)::before{ content:'Efectivo'; }
+  .ventas-tabla td:nth-child(5)::before{ content:'Tarjeta'; }
+  .ventas-tabla td:nth-child(6)::before{ content:'Motorista'; }
+  .ventas-tabla td:nth-child(7)::before{ content:'Total a depositar'; }
+  .ventas-tabla td:nth-child(8)::before{ content:'Hora'; }
+  .ventas-tabla td:nth-child(9)::before{ content:'Acciones'; }
 
+  /* Asegura que las acciones se vean bien en card */
+  .ventas-tabla .acciones{ justify-content:flex-start; flex-wrap:wrap; }
   /* Cada fila como “card” */
   .ventas-tabla tr{
     background:#fff;

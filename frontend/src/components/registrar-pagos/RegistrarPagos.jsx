@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
-  collection, addDoc, getDoc, getDocs, query, where,
+  collection, addDoc, getDoc, getDocs, query, where, orderBy, limit,
   doc, updateDoc, serverTimestamp, increment
 } from 'firebase/firestore';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -101,7 +101,7 @@ export default function RegistrarPagos() {
     return () => unsub();
   }, []);
 
-  // Cargar sucursales + KPI (sumar cierres) + caja chica (MISMA lógica que en Finanzas)
+  // Cargar sucursales + KPI (último pago + cierres desde entonces) + caja chica
   useEffect(() => {
     if (!me.loaded) return;
 
@@ -126,40 +126,51 @@ export default function RegistrarPagos() {
 
         const hoy = getTodayISO();
 
-        // 1) leer caja chica + posibles overrides
+        // Caja chica
         const caja = {};
-        const override = {};
         arr.forEach(s => {
           caja[s.id] = Number(s?.cajaChica || 0);
-          if (typeof s?.kpiDepositos === 'number') override[s.id] = Number(s.kpiDepositos);
         });
 
-        // 2) sumar cierres (Total a depositar)
-        const desdeCierres = {};
-        await Promise.all(arr.map(async (s) => {
-          const cierresRef = collection(db, 'cierres');
-          const qRef = query(cierresRef, where('sucursalId','==',s.id), where('fecha','<=',hoy));
-          const snap = await getDocs(qRef);
-          let sum = 0;
-          snap.forEach(d => { sum += extractTotalADepositar(d.data() || {}); });
-          desdeCierres[s.id] = sum;
-        }));
-
-        // 3) ¿hay pagos hoy? para decidir si usar override
-        const hayPagosHoy = {};
-        await Promise.all(arr.map(async (s) => {
-          const pagosRef = collection(db, 'pagos');
-          const qRef = query(pagosRef, where('sucursalId', '==', s.id), where('fecha', '==', hoy));
-          const snap = await getDocs(qRef);
-          hayPagosHoy[s.id] = snap.size > 0;
-        }));
-
-        // 4) construir mapas finales
+        // KPI: base = sobrante del último pago + suma de cierres desde ese día hasta hoy
         const kpi = {};
-        arr.forEach(s => {
-          const usarOverride = hayPagosHoy[s.id] && override[s.id] != null;
-          kpi[s.id] = usarOverride ? override[s.id] : (desdeCierres[s.id] || 0);
-        });
+        await Promise.all(arr.map(async (s) => {
+          // último pago
+          const pagosRef = collection(db, 'pagos');
+          const qPago = query(
+            pagosRef,
+            where('sucursalId', '==', s.id),
+            orderBy('fecha', 'desc'),
+            limit(1)
+          );
+          const pagoSnap = await getDocs(qPago);
+          const lastPago = pagoSnap.docs[0]?.data() || null;
+          const lastFechaPago = lastPago?.fecha || null;
+          const base = Number(lastPago?.sobranteParaManana || 0);
+
+          // cierres desde > lastFechaPago hasta <= hoy
+          const cierresRef = collection(db, 'cierres');
+          let qCierres;
+          if (lastFechaPago) {
+            qCierres = query(
+              cierresRef,
+              where('sucursalId','==', s.id),
+              where('fecha','>', lastFechaPago),
+              where('fecha','<=', hoy)
+            );
+          } else {
+            qCierres = query(
+              cierresRef,
+              where('sucursalId','==', s.id),
+              where('fecha','<=', hoy)
+            );
+          }
+          const cierresSnap = await getDocs(qCierres);
+          let sumaDesdeUltimoPago = 0;
+          cierresSnap.forEach(d => { sumaDesdeUltimoPago += extractTotalADepositar(d.data() || {}); });
+
+          kpi[s.id] = base + sumaDesdeUltimoPago;
+        }));
 
         setKpiDepositosBySuc(kpi);
         setCajaChicaBySuc(caja);

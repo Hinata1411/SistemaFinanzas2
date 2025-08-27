@@ -314,8 +314,7 @@
 }
 .rc-select{ width:200px; }
 
-/* Total de caja (efectivo) */
-.rc-total-caja{
+rc-total-caja{
   background:#fff;
   border:1px solid #e0ded7;
   border-radius:10px;
@@ -806,5 +805,166 @@
   /* Forzar que Gastos use SIEMPRE su propio label */
   .rc-gastos-table td::before{
     content: attr(data-label) !important;
+  }
+}
+
+
+
+/* ===========================
+   Responsivo GastosList
+   =========================== */
+
+/* El contenedor permite scroll horizontal si la tabla no cabe */
+.rc-table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* La tabla se comporta bien en espacios reducidos */
+.rc-gastos-table {
+  width: 100%;
+  table-layout: fixed;              /* obliga a que las celdas respeten el ancho disponible */
+  border-collapse: collapse;
+}
+
+/* Celdas: contenido no rompe el layout */
+.rc-gastos-table th,
+.rc-gastos-table td {
+  overflow: hidden;                 /* recorta sobrante dentro de la celda */
+  text-overflow: ellipsis;          /* agrega “…” visual cuando aplique */
+  white-space: nowrap;              /* evita wraps raros en inputs */
+}
+
+/* Input de descripción: nunca excede el ancho de su celda */
+.rc-gastos-table .rc-desc {
+  width: 100%;
+  max-width: 100%;                  /* clave para que no se “salga” */
+  box-sizing: border-box;           /* incluye padding/borde en el cálculo de ancho */
+  min-width: 0;                     /* permite encoger dentro de celdas fijas */
+}
+
+/* Cantidad y Ref centrados sin romper */
+.rc-gastos-table .rc-qty,
+.rc-gastos-table input[type="text"],
+.rc-gastos-table input[type="number"] {
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+/* En móviles ajustamos aún más */
+@media (max-width: 480px) {
+  /* Permite que la tabla se mueva horizontalmente si no cabe */
+  .rc-table-responsive { overflow-x: auto; }
+
+  /* Reduce un poco paddings para ganar espacio visual */
+  .rc-gastos-table th,
+  .rc-gastos-table td {
+    padding: 6px 8px;
+  }
+
+  /* Aún más estricto con el input de descripción */
+  .rc-gastos-table .rc-desc {
+    font-size: 0.95rem;
+  }
+}
+
+
+/* ====== Meta responsive (Fecha arriba, Sucursal abajo) ====== */
+.rc-meta-responsive {
+  display: none;
+  margin: 8px 0 12px;
+}
+.rc-meta {
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+.rc-meta + .rc-meta {
+  margin-top: 4px; /* fecha arriba, sucursal abajo */
+}
+
+/* ====== Wrapper de tabla para scroll horizontal en móviles ====== */
+.rc-table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* ====== Tabla sólida en espacios reducidos ====== */
+.rc-gastos-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.rc-gastos-table th,
+.rc-gastos-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rc-gastos-table .rc-desc,
+.rc-gastos-table .rc-qty,
+.rc-gastos-table input[type="text"],
+.rc-gastos-table input[type="number"],
+.rc-gastos-table select {
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+/* ====== Mobile rules ====== */
+@media (max-width: 576px) {
+  /* Mostrar bloque de fecha/sucursal */
+  .rc-meta-responsive { display: block; }
+
+  /* Ocultar celdas de relleno en el footer después de "Total de gastos" + monto */
+  .rc-gastos-table tfoot .rc-mobile-hide { display: none; }
+}
+/* ===== Meta inline: Fecha y Sucursal ===== */
+.rc-meta-inline{
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* a la par en desktop */
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+.rc-meta-item{
+  padding: 8px 10px;
+  background: #f9fafb;
+  border: 1px solid #e7e2d9;
+  border-radius: 10px;
+  font-weight: 700;
+  color: var(--dark);
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 576px){
+  /* Fecha y sucursal una debajo de otra */
+  .rc-meta-inline{
+    grid-template-columns: 1fr; /* stacked */
+  }
+
+  /* Oculta celdas de relleno del footer después del total y monto */
+  .rc-gastos-table tfoot .rc-mobile-hide{
+    display: none;
+  }
+}
+
+
+/* ===== Fix: Total de gastos en una sola fila en responsive ===== */
+@media (max-width: 860px) {
+  /* Ocultar todas las celdas del footer menos la que tiene el texto y el monto */
+  .rc-gastos-table tfoot tr td {
+    display: none;
+  }
+
+  /* Mostrar solo la primera celda del footer (la de "Total de gastos" y monto) */
+  .rc-gastos-table tfoot tr td:first-child {
+    display: block;
+    border: 1px solid #e7e2d9;
+    border-radius: 12px;
+    margin-top: 6px;
+    padding: 12px 14px;
+    text-align: right;
+    background: #fff;
+    font-weight: 800;
   }
 }

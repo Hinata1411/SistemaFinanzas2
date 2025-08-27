@@ -162,7 +162,7 @@ export default function Login() {
         <aside className="hero">
           <div className="hero-inner">
             <div className="hero-badge">
-              <img src="/Logosinfondo.png" alt="Brand" className="brand-logo"/>
+              <img src="img/Logosinfondo.png" alt="Brand" className="brand-logo"/>
             </div>
             <div className="hero-brand">American Pizza By Vipizza</div>
             <h1 className="hero-title">Sistema<br/>Finanzas</h1>

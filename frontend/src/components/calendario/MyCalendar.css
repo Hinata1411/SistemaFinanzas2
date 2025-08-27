@@ -91,3 +91,36 @@ body.modal-open {
   padding-right: 0 !important;  /* elimina compensación de scrollbar */
   overflow: hidden;              /* conserva el bloqueo de fondo */
 }
+
+/* ======== Fix responsive RBC en ~400px (sin tocar tu layout) ======== */
+@media (max-width: 374px) {
+  /* Permite scroll horizontal de la vista Semana/Día */
+  .rbc-time-view .rbc-time-content {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  /* Evita que las columnas se aplasten: fuerza un ancho mínimo “scrolleable” */
+  .rbc-time-view .rbc-time-content > * + * > * {
+    min-width: 720px;            /* prueba 840px si aún se corta */
+  }
+
+  /* El header de días acompaña el mismo ancho mínimo */
+  .rbc-time-header-content {
+    min-width: 720px;            /* mantén igual que arriba */
+  }
+
+  /* El “gutter” de horas queda fijo a la izquierda al hacer scroll */
+  .rbc-time-gutter,
+  .rbc-time-header-gutter {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: #fff;
+  }
+
+  /* Si el mes también llega a cortarse por estilos externos, habilita scroll: */
+  .rbc-calendar {
+    overflow-x: auto;            /* solo si notas recorte en MONTH */
+  }
+}
