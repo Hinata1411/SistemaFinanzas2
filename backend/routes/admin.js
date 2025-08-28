@@ -40,6 +40,23 @@ async function isAdminUID(uid) {
 const lower = (s) => (s || '').toString().trim().toLowerCase();
 const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '').trim());
 
+/** Sincroniza el custom claim {admin:true|false} preservando otros claims */
+async function setAdminClaim(uid, shouldBeAdmin) {
+  try {
+    const u = await admin.auth().getUser(uid);
+    const current = !!(u.customClaims && u.customClaims.admin);
+    const desired = !!shouldBeAdmin;
+    if (current === desired) return false; // sin cambios
+
+    const nextClaims = { ...(u.customClaims || {}), admin: desired };
+    await admin.auth().setCustomUserClaims(uid, nextClaims);
+    return true;
+  } catch (e) {
+    console.warn('setAdminClaim error:', e.message);
+    return false;
+  }
+}
+
 /* =========================================================
    DELETE USER (Auth + Firestore)
    body: { uid }
@@ -68,7 +85,7 @@ router.post('/deleteUser', verifyFirebaseToken, async (req, res) => {
 });
 
 /* =========================================================
-   UPDATE USER (Auth + Firestore)
+   UPDATE USER (Auth + Firestore + Claims)
    body: {
      uid: string (requerido)
      // Auth (opcionales)
@@ -113,6 +130,16 @@ router.post('/updateUser', verifyFirebaseToken, async (req, res) => {
       return res.status(400).json({ message: 'Rol inválido (usa admin|viewer)' });
     }
 
+    /* ---------- Leer estado actual para lógica dependiente ---------- */
+    let currentDoc = null;
+    try {
+      const snap = await db.collection('usuarios').doc(uid).get();
+      currentDoc = snap.exists ? (snap.data() || {}) : null;
+    } catch {}
+
+    const currentRole = lower(currentDoc?.role || currentDoc?.rol || (currentDoc?.isAdmin ? 'admin' : ''));
+    const nextRole = role != null ? lower(role) : currentRole || ''; // rol final esperado
+
     /* ---------- 1) Actualizaciones en Auth ---------- */
     const authUpdate = {};
     if (typeof authDisabled === 'boolean') authUpdate.disabled = !!authDisabled;
@@ -130,12 +157,12 @@ router.post('/updateUser', verifyFirebaseToken, async (req, res) => {
     /* ---------- 2) Actualizaciones en Firestore (perfil) ---------- */
     const fsUpdate = {};
     if (username != null) fsUpdate.username = String(username).trim();
-    if (role != null) fsUpdate.role = String(role).toLowerCase();
+    if (role != null) fsUpdate.role = nextRole;
     if (disabled != null) fsUpdate.disabled = !!disabled;
 
     // Si viewer => guardar sucursalId; si admin => poner en null
     if (role != null) {
-      if (String(role).toLowerCase() === 'viewer') {
+      if (nextRole === 'viewer') {
         if (sucursalId == null || sucursalId === '') {
           return res.status(400).json({ message: 'sucursalId es requerido para role=viewer' });
         }
@@ -145,9 +172,6 @@ router.post('/updateUser', verifyFirebaseToken, async (req, res) => {
       }
     } else if (sucursalId != null) {
       // permitir actualizar sucursal sin tocar rol, solo si ya es viewer
-      const snap = await db.collection('usuarios').doc(uid).get();
-      const current = snap.exists ? (snap.data() || {}) : {};
-      const currentRole = String(current.role || '').toLowerCase();
       if (currentRole === 'viewer') {
         if (sucursalId === '' || sucursalId == null) {
           return res.status(400).json({ message: 'sucursalId es requerido para role=viewer' });
@@ -169,7 +193,17 @@ router.post('/updateUser', verifyFirebaseToken, async (req, res) => {
       await db.collection('usuarios').doc(uid).set(fsUpdate, { merge: true });
     }
 
-    /* ---------- 3) Respuesta ---------- */
+    /* ---------- 3) Claims: sincroniza {admin: bool} según rol final ---------- */
+    let claimsUpdated = false;
+    if (nextRole === 'admin' || nextRole === 'viewer') {
+      claimsUpdated = await setAdminClaim(uid, nextRole === 'admin');
+    } else if (role != null) {
+      // rol desconocido → forzamos false por seguridad
+      claimsUpdated = await setAdminClaim(uid, false);
+    }
+    // Nota UX: el usuario cuyo rol cambió debe volver a iniciar sesión para ver reflejado el claim.
+
+    /* ---------- 4) Respuesta ---------- */
     return res.json({
       ok: true,
       message: 'Usuario actualizado',
@@ -177,6 +211,8 @@ router.post('/updateUser', verifyFirebaseToken, async (req, res) => {
         ? { uid: authUser.uid, email: authUser.email, disabled: !!authUser.disabled }
         : null,
       firestore: fsUpdate,
+      finalRole: nextRole || null,
+      claimsUpdated,
     });
   } catch (e) {
     return res.status(500).json({ message: e.message || 'Error al actualizar usuario' });

@@ -2,26 +2,29 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
-import PrivateRoute from './auth/PrivateRoute.js';
+import PrivateRoute from './auth/PrivateRoute.js'; // tu guard mejorado por token/exp/roles
 import DashboardLayout from './components/nav-bar/DashboardLayout.js';
+
 import Finanzas from './components/finanzas/Finanzas.js';
 import RegistrarCierre from './components/registrar-cierre/RegistrarCierre.js';
 import HistorialCuadres from './components/historial/HistorialCuadres.js';
+
 import Sucursales from './components/sucursales/Sucursales.js';
 import Usuarios from './components/usuarios/Usuarios.js';
-import Login from './auth/Login';
-import { RequireAdmin } from './router/guards';
+
 import RegistrarPagos from './components/registrar-pagos/RegistrarPagos.jsx';
 import HistorialPagos from './components/historial/HistorialPagos.jsx';
 
-export default function App() { 
+import Login from './auth/Login'; // tu login
+
+export default function App() {
   return (
     <Routes>
-      {/* públicas */}
+      {/* Rutas públicas */}
       <Route path="/" element={<Login />} />
       <Route path="/login" element={<Login />} />
 
-      {/* protegidas */}
+      {/* Rutas protegidas: Dashboard y anidadas */}
       <Route
         path="/Finanzas"
         element={
@@ -30,46 +33,47 @@ export default function App() {
           </PrivateRoute>
         }
       >
+        {/* Cualquiera autenticado */}
         <Route index element={<Finanzas />} />
         <Route path="RegistrarCierre" element={<RegistrarCierre />} />
-        <Route path="HistorialCuadres" element={<HistorialCuadres  />} />
+        <Route path="HistorialCuadres" element={<HistorialCuadres />} />
 
-        {/* solo ADMIN */}
+        {/* Solo ADMIN (usa requiredRoles="admin") */}
         <Route
           path="HistorialPagos"
           element={
-            <RequireAdmin>
+            <PrivateRoute requiredRoles="admin" redirectIfDenied="/Finanzas">
               <HistorialPagos />
-            </RequireAdmin>
+            </PrivateRoute>
           }
         />
         <Route
           path="RegistrarPagos"
           element={
-            <RequireAdmin>
+            <PrivateRoute requiredRoles="admin" redirectIfDenied="/Finanzas">
               <RegistrarPagos />
-            </RequireAdmin>
+            </PrivateRoute>
           }
         />
         <Route
           path="Sucursales"
           element={
-            <RequireAdmin>
+            <PrivateRoute requiredRoles="admin" redirectIfDenied="/Finanzas">
               <Sucursales />
-            </RequireAdmin>
+            </PrivateRoute>
           }
         />
         <Route
           path="Usuarios"
           element={
-            <RequireAdmin>
+            <PrivateRoute requiredRoles="admin" redirectIfDenied="/Finanzas">
               <Usuarios />
-            </RequireAdmin>
+            </PrivateRoute>
           }
         />
       </Route>
 
-      {/* fallback */}
+      {/* Fallback */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );

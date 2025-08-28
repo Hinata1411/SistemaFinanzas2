@@ -1,9 +1,10 @@
-// src/Login.jsx
+// src/auth/Login.jsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { fetchUsersForSelect, loginAndGetBackendToken } from './authService';
+import { fetchUsersForSelect, loginAndGetBackendToken } from '../auth/authService';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../services/firebase';
+
 import './Login.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
@@ -29,12 +30,69 @@ async function refreshClaimsUntil(timeoutMs = 3500) {
   }
 }
 
+// Decode seguro JWT base64url (para leer role del JWT de tu backend si fuera necesario)
+function decodeJwtPayload(token) {
+  try {
+    const base64Url = (token || '').split('.')[1] || '';
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const json = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(json);
+  } catch {
+    return {};
+  }
+}
+
+const lower = (v) => (v ?? '').toString().trim().toLowerCase();
+
+// Fallback por correo si backend/JWT/lista no traen rol
+const ADMIN_EMAILS = ['auxiliar.vipizzal@gmail.com', 'admin@example.com'];
+
+// Resuelve 'admin' | 'viewer' desde: respuesta login -> JWT -> lista usuarios -> fallback por correo
+function resolveRole(loginRes, selectedEmail, usersList) {
+  // 1) loginRes.role
+  if (loginRes && typeof loginRes === 'object' && loginRes.role) {
+    return lower(loginRes.role);
+  }
+  // 2) JWT de tu backend (si vino)
+  const token = typeof loginRes === 'string' ? loginRes : loginRes?.token;
+  if (token) {
+    const p = decodeJwtPayload(token);
+    const jwtRole = lower(p.role || p.rol || p['https://example.com/role']);
+    if (jwtRole) return jwtRole;
+    if (typeof p.isAdmin === 'boolean' || typeof p.admin === 'boolean') {
+      return (p.isAdmin || p.admin) ? 'admin' : 'viewer';
+    }
+  }
+  // 3) Lista usuarios (por si fetchUsersForSelect trae rol)
+  if (Array.isArray(usersList) && usersList.length) {
+    const u = usersList.find(x => lower(x.email) === lower(selectedEmail));
+    if (u) {
+      const fromUser =
+        lower(u.role) ||
+        lower(u.rol) ||
+        lower(u.type) ||
+        lower(u?.perfil?.nombre);
+      if (fromUser === 'admin' || fromUser === 'viewer') return fromUser;
+      if (typeof u.isAdmin === 'boolean') return u.isAdmin ? 'admin' : 'viewer';
+    }
+  }
+  // 4) Fallback por correo
+  if (ADMIN_EMAILS.map(lower).includes(lower(selectedEmail))) return 'admin';
+  return 'viewer';
+}
+
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || '/Finanzas';
 
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState([]);             // sugerencias (si Firestore lo permite)
+  const [usersLoaded, setUsersLoaded] = useState(false);
   const [email, setEmail] = useState('');
   const [pwd, setPwd] = useState('');
   const [showPwd, setShowPwd] = useState(false);
@@ -43,78 +101,38 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [remember, setRemember] = useState(() => !!localStorage.getItem('remember_email'));
 
-  // Fallback por correo si backend/JWT/lista no traen rol
-  const ADMIN_EMAILS = ['auxiliar.vipizzal@gmail.com', 'admin@example.com'];
-
-  // Decode seguro JWT base64url
-  const decodeJwtPayload = (token) => {
-    try {
-      const base64Url = (token || '').split('.')[1] || '';
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const json = decodeURIComponent(
-        atob(base64)
-          .split('')
-          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-          .join('')
-      );
-      return JSON.parse(json);
-    } catch { return {}; }
-  };
-
-  const lower = (v) => (v ?? '').toString().trim().toLowerCase();
-
-  // Resuelve 'admin' | 'viewer' desde: respuesta login -> JWT -> lista usuarios -> fallback por correo
-  const resolveRole = (loginRes, selectedEmail, usersList) => {
-    // 1) loginRes.role
-    if (loginRes && typeof loginRes === 'object' && loginRes.role) {
-      return lower(loginRes.role);
-    }
-    // 2) JWT
-    const token = typeof loginRes === 'string' ? loginRes : loginRes?.token;
-    if (token) {
-      const p = decodeJwtPayload(token);
-      const jwtRole = lower(p.role || p.rol || p['https://example.com/role']);
-      if (jwtRole) return jwtRole;
-      if (typeof p.isAdmin === 'boolean' || typeof p.admin === 'boolean') {
-        return (p.isAdmin || p.admin) ? 'admin' : 'viewer';
-      }
-    }
-    // 3) Lista usuarios (por si fetchUsersForSelect trae rol)
-    if (Array.isArray(usersList) && usersList.length) {
-      const u = usersList.find(x => lower(x.email) === lower(selectedEmail));
-      if (u) {
-        const fromUser =
-          lower(u.role) ||
-          lower(u.rol) ||
-          lower(u.type) ||
-          lower(u?.perfil?.nombre);
-        if (fromUser === 'admin' || fromUser === 'viewer') return fromUser;
-        if (typeof u.isAdmin === 'boolean') return u.isAdmin ? 'admin' : 'viewer';
-      }
-    }
-    // 4) Fallback por correo
-    if (ADMIN_EMAILS.map(lower).includes(lower(selectedEmail))) return 'admin';
-    return 'viewer';
-  };
-
   useEffect(() => {
     (async () => {
       setErr(''); setInfo('');
       try {
         const list = await fetchUsersForSelect(); // { email, username, role?, disabled? }
-        setUsers(list);
+        setUsers(list || []);
+        setUsersLoaded(true);
 
+        // preferir recordar si existe y no está deshabilitado
         const remembered = localStorage.getItem('remember_email');
-        // Prefiere recordar si existe y no está deshabilitado
-        if (remembered && list.some(u => u.email === remembered && !u.disabled)) {
+        if (remembered && list.some(u => lower(u.email) === lower(remembered) && !u.disabled)) {
           setEmail(remembered);
-        } else {
-          // Selecciona el primer usuario activo disponible (si hay)
-          const firstActive = list.find(u => !u.disabled);
-          if (firstActive) setEmail(firstActive.email);
+          return;
         }
+
+        // si hay algún activo, sugerirlo
+        const firstActive = list.find(u => !u.disabled);
+        if (firstActive) {
+          setEmail(firstActive.email);
+          return;
+        }
+
+        // si no hay lista o todos deshabilitados, conservar lo que haya en remember_email
+        if (remembered) setEmail(remembered);
       } catch {
-        setErr('Error al cargar usuarios.');
+        // Si falla la carga de usuarios (reglas de lectura), no bloqueamos el login:
+        // dejamos email vacío (el usuario lo escribirá manualmente)
+        setUsers([]);
+        setUsersLoaded(true);
+        const remembered = localStorage.getItem('remember_email');
+        if (remembered) setEmail(remembered);
+        // No mostramos error aquí para no confundir: el login puede continuar igual.
       }
     })();
   }, []);
@@ -132,12 +150,20 @@ export default function Login() {
     e.preventDefault();
     if (busy) return;
     setErr(''); setInfo('');
-    if (!email || !pwd) return setErr('Completa todos los campos.');
 
-    // Pre-chequeo: si está marcado como deshabilitado en Firestore
-    const uSel = users.find(u => lower(u.email) === lower(email));
-    if (uSel?.disabled) {
-      return setErr('Este usuario está deshabilitado. Contacta al administrador.');
+    if (!email || !pwd) {
+      setErr('Completa todos los campos.');
+      return;
+    }
+
+    // Si logramos cargar la lista y encontramos el usuario marcado como deshabilitado,
+    // prevenimos (si no, dejamos que el backend lo detecte tras signIn).
+    if (usersLoaded && users.length) {
+      const uSel = users.find(u => lower(u.email) === lower(email));
+      if (uSel?.disabled) {
+        setErr('Este usuario está deshabilitado. Contacta al administrador.');
+        return;
+      }
     }
 
     try {
@@ -195,10 +221,10 @@ export default function Login() {
     e.preventDefault();
     if (busy) return;
     setErr(''); setInfo('');
-    if (!email) return setErr('Selecciona un usuario para recuperar.');
+    if (!email) return setErr('Escribe el correo del usuario para recuperar.');
     try {
       setBusy(true);
-      await sendPasswordResetEmail(auth, email);
+      await sendPasswordResetEmail(auth, email.trim());
       setInfo('Te enviamos un correo para restablecer tu contraseña.');
     } catch {
       setErr('No se pudo enviar el correo de recuperación.');
@@ -230,28 +256,37 @@ export default function Login() {
             {info && <div className="alert alert-success py-2 small mb-3">{info}</div>}
 
             <form onSubmit={onSubmit} noValidate>
-              {/* Usuario */}
+              {/* Email (con datalist de sugerencias si existen) */}
               <div className="mb-3">
-                <label className="form-label" htmlFor="userSelect">Usuario</label>
+                <label className="form-label" htmlFor="emailInput">Usuario (correo)</label>
                 <div className="input-with-icon">
                   <span className="icon" aria-hidden="true">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="#0F3D2E">
                       <path d="M12 12c2.76 0 5-2.69 5-6s-2.24-6-5-6-5 2.69-5 6 2.24 6 5 6Zm0 2c-4.42 0-8 3.13-8 7v1h16v-1c0-3.87-3.58-7-8-7Z"/>
                     </svg>
                   </span>
-                  <select
-                    id="userSelect"
-                    className="form-select"
+                  <input
+                    id="emailInput"
+                    type="email"
+                    className="form-control"
+                    placeholder="email@dominio.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    list="usersList"
+                    autoComplete="username"
+                    required
                     disabled={busy}
-                  >
-                    {users.map((u, i) => (
-                      <option key={i} value={u.email} disabled={u.disabled}>
-                        {u.username}{u.disabled ? ' (deshabilitado)' : ''}
-                      </option>
-                    ))}
-                  </select>
+                  />
+                  {/* Sugerencias cuando pudimos leer usuarios */}
+                  {usersLoaded && users.length > 0 && (
+                    <datalist id="usersList">
+                      {users.map((u, i) => (
+                        <option key={i} value={u.email}>
+                          {u.username}{u.disabled ? ' (deshabilitado)' : ''}
+                        </option>
+                      ))}
+                    </datalist>
+                  )}
                 </div>
               </div>
 

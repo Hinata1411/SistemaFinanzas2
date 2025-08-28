@@ -1,10 +1,9 @@
-// src/pages/usuarios/Usuarios.js
+// src/pages/usuarios/Usuarios.js — Paso 3 (usar backend para TODOS los cambios)
 import React, { useState, useEffect, useMemo } from 'react';
 import { db, auth } from '../../services/firebase';
 import {
   collection,
   getDocs,
-  updateDoc,
   doc,
   setDoc
 } from 'firebase/firestore';
@@ -82,7 +81,7 @@ export default function Usuarios() {
           Swal.fire('Error', 'No se pudieron cargar los usuarios', 'error');
         }
 
-        // Cargar sucursales (⚠️ nombre exacto)
+        // Cargar sucursales
         try {
           const snap = await getDocs(collection(db, 'sucursales'));
           setSucursales(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -97,7 +96,7 @@ export default function Usuarios() {
     })();
   }, []);
 
-  // ========= Registrar (auth secundario, no cambia sesión admin) =========
+  // ========= Registrar (auth secundario) + asegurar claim vía backend =========
   const handleRegister = async (e) => {
     e.preventDefault();
 
@@ -128,7 +127,7 @@ export default function Usuarios() {
 
       const secondaryAuth = getSecondaryAuth();
 
-      // 1) Crear cuenta
+      // 1) Crear cuenta en Auth
       const { user: newUser } = await createUserWithEmailAndPassword(
         secondaryAuth,
         email.trim(),
@@ -136,17 +135,36 @@ export default function Usuarios() {
       );
 
       // 2) Guardar doc en Firestore
+      const normalizedEmail = email.trim();
       await setDoc(doc(db, 'usuarios', newUser.uid), {
         username: username.trim(),
-        email: email.trim(),
+        email: normalizedEmail,
+        emailLower: normalizedEmail.toLowerCase(),
         role,
-        // 👇 admin => null; viewer => sucursalId elegido
         sucursalId: role === 'viewer' ? sucursalId : null,
         disabled: false,
         createdAt: Date.now(),
       });
 
-      // 3) Signout del secundario
+      // 3) Sincronizar claim admin del NUEVO usuario vía backend (según rol)
+      try {
+        const idToken = await auth.currentUser.getIdToken(true);
+        await fetch(`${API}/admin/updateUser`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+          body: JSON.stringify({
+            uid: newUser.uid,
+            role,
+            sucursalId: role === 'viewer' ? sucursalId : null,
+            username: username.trim(),
+            email: normalizedEmail,
+          }),
+        });
+      } catch (e) {
+        console.warn('No se pudo sincronizar claim admin del nuevo usuario:', e?.message || e);
+      }
+
+      // 4) Signout del secundario
       await signOutAuth(secondaryAuth).catch(() => {});
 
       Swal.fire('Éxito', 'Usuario registrado', 'success');
@@ -167,7 +185,7 @@ export default function Usuarios() {
   // ========= Selección =========
   const handleSelect = (id) => setSelectedId(id === selectedId ? null : id);
 
-  // ========= Activar/Desactivar =========
+  // ========= Activar/Desactivar (vía backend) =========
   const handleToggleDisabled = async () => {
     if (!selectedId) return;
     const u = usuarios.find(x => x.id === selectedId);
@@ -181,14 +199,24 @@ export default function Usuarios() {
       }
 
       const next = !u.disabled;
-      await updateDoc(doc(db, 'usuarios', u.id), { disabled: next });
+      const idToken = await auth.currentUser.getIdToken(true);
+      const resp = await fetch(`${API}/admin/updateUser`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ uid: u.id, disabled: next }),
+      });
+      if (!resp.ok) {
+        const data = await resp.json().catch(()=>({}));
+        throw new Error(data?.message || 'No se pudo cambiar el estado');
+      }
+
       Swal.fire('OK', next ? 'Usuario deshabilitado' : 'Usuario activado', 'success');
 
       const snap = await getDocs(collection(db, 'usuarios'));
       setUsuarios(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (e) {
       console.error(e);
-      Swal.fire('Error', 'No se pudo cambiar el estado', 'error');
+      Swal.fire('Error', e?.message || 'No se pudo cambiar el estado', 'error');
     } finally {
       setWorking(false);
     }
@@ -244,7 +272,7 @@ export default function Usuarios() {
     }
   };
 
-  // ========= Editar (username, rol, sucursal, email y contraseña) =========
+  // ========= Editar (username, rol, sucursal, email y contraseña) — SIEMPRE vía backend =========
   const handleEdit = async () => {
     if (!selectedId) return;
     const u = usuarios.find(x => x.id === selectedId);
@@ -375,38 +403,29 @@ export default function Usuarios() {
       }
     }
 
-    // === Guardar todo ===
+    // === Guardar todo — SIEMPRE vía backend ===
     try {
       setWorking(true);
+      const idToken = await auth.currentUser.getIdToken(true);
 
-      // A) Actualizar doc Firestore (username, rol, sucursalId, email si cambió)
-      await updateDoc(doc(db, 'usuarios', u.id), {
-        username: newUsername,
-        role: newRole,
-        // admin => null, viewer => id
-        sucursalId: newRole === 'viewer' ? newSucursalId : null,
-        ...(newEmail && newEmail !== u.email ? { email: newEmail } : {})
+      const resp = await fetch(`${API}/admin/updateUser`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({
+          uid: u.id,
+          username: newUsername,
+          role: newRole,
+          sucursalId: newRole === 'viewer' ? newSucursalId : null,
+          email: (newEmail && newEmail !== u.email) ? newEmail : undefined,
+          password: tempPassword || undefined,
+        })
       });
-
-      // B) Si hay cambio de email y/o temp password, usar backend admin
-      if ((newEmail && newEmail !== u.email) || tempPassword) {
-        const idToken = await auth.currentUser.getIdToken(true);
-        const resp = await fetch(`${API}/admin/updateUser`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-          body: JSON.stringify({
-            uid: u.id,
-            email: (newEmail && newEmail !== u.email) ? newEmail : undefined,
-            password: tempPassword || undefined
-          })
-        });
-        if (!resp.ok) {
-          const data = await resp.json().catch(()=>({}));
-          throw new Error(data?.message || 'No se pudo actualizar email/contraseña en Auth');
-        }
+      if (!resp.ok) {
+        const data = await resp.json().catch(()=>({}));
+        throw new Error(data?.message || 'No se pudo actualizar el usuario');
       }
 
-      // C) Si eligió enviar email de restablecimiento
+      // Si eligió enviar email de restablecimiento
       if (doSendReset) {
         await sendPasswordResetEmail(auth, newEmail || u.email);
       }
