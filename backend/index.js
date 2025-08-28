@@ -3,7 +3,6 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
-const helmet = require('helmet');
 const { admin, db } = require('./firebaseAdmin');
 
 const app = express();
@@ -37,7 +36,6 @@ const corsOptions = {
 app.set('trust proxy', true);
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '2mb' }));
-app.use(helmet()); // seguridad
 app.options('*', cors(corsOptions));
 
 /* ========= Rutas ========= */
