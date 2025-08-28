@@ -1,7 +1,7 @@
 // src/auth/authService.js
 import { auth } from '../services/firebase';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { db } from '../services/firebase';
+import { db } from './firebase';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 
 // Base del API
