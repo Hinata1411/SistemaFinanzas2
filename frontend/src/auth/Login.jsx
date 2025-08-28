@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { fetchUsersForSelect, loginAndGetBackendToken } from './authService';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from './services/firebase';
+import { auth } from '../services/firebase';
 import './Login.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
