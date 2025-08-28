@@ -1,35 +1,63 @@
 // backend/firebaseAdmin.js
-const path = require('path');
 const admin = require('firebase-admin');
 
-// Carga .env en local (en Render no hace falta, pero no estorba)
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+// Intenta inicializar una sola vez
+function initAdmin() {
+  if (admin.apps && admin.apps.length) return;
 
-let raw = process.env.FIREBASE_SERVICE_ACCOUNT;
-if (!raw) {
-  console.error('❌ FIREBASE_SERVICE_ACCOUNT no está definida. Configúrala en Render → Environment.');
-  process.exit(1);
-}
+  // 1) Modo A: SERVICE ACCOUNT en una sola variable JSON
+  const rawSA = process.env.FIREBASE_SERVICE_ACCOUNT;
 
-let serviceAccount;
-try {
-  serviceAccount = JSON.parse(raw);
-  // Convierte \\n del .env a saltos reales
-  if (typeof serviceAccount.private_key === 'string') {
-    serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+  if (rawSA) {
+    try {
+      const serviceAccount = JSON.parse(rawSA);
+      if (typeof serviceAccount.private_key === 'string') {
+        // Render/Netlify suelen escapar saltos de línea
+        serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+      }
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+      return;
+    } catch (e) {
+      console.error('❌ No se pudo parsear FIREBASE_SERVICE_ACCOUNT como JSON:', e.message);
+      // seguimos intentando con el modo B
+    }
   }
-} catch (err) {
-  console.error('❌ Error al parsear FIREBASE_SERVICE_ACCOUNT:', err);
-  process.exit(1);
-}
 
-if (!admin.apps.length) {
+  // 2) Modo B: variables separadas
+  const projectId   = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  let privateKey    = process.env.FIREBASE_PRIVATE_KEY;
+
+  if (privateKey) privateKey = privateKey.replace(/\\n/g, '\n');
+
+  if (!projectId || !clientEmail || !privateKey) {
+    // No revienta el proceso; deja un error claro
+    const missing = [
+      !projectId && 'FIREBASE_PROJECT_ID',
+      !clientEmail && 'FIREBASE_CLIENT_EMAIL',
+      !privateKey && 'FIREBASE_PRIVATE_KEY',
+    ].filter(Boolean).join(', ');
+    throw new Error(`Faltan variables para Firebase Admin: ${missing} (o define FIREBASE_SERVICE_ACCOUNT).`);
+  }
+
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    // databaseURL: 'https://TU_PROYECTO.firebaseio.com'
+    credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
   });
 }
 
+try {
+  initAdmin();
+  // console.log('✅ Firebase Admin inicializado');
+} catch (err) {
+  console.error('❌ Error inicializando Firebase Admin:', err.message);
+  // Propaga el error: el index.js lo atrapará y responderá 500 si hace falta
+  throw err;
+}
+
 const db = admin.firestore();
+// exporta admin (y opcionalmente auth si te gusta como alias)
 const auth = admin.auth();
+
 module.exports = { admin, db, auth };
