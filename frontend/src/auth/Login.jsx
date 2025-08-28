@@ -7,6 +7,28 @@ import { auth } from '../services/firebase';
 import './Login.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
+// Helper: refresca el ID token hasta que aparezca el claim `admin` (o se agote el timeout)
+async function refreshClaimsUntil(timeoutMs = 3500) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      await auth.currentUser?.getIdToken(true); // fuerza refresh
+      const r = await auth.currentUser?.getIdTokenResult();
+      if (r?.claims && ('admin' in r.claims)) return r.claims; // ya bajó el claim
+    } catch {
+      // ignore y reintenta
+    }
+    await new Promise(res => setTimeout(res, 250)); // espera 250ms y reintenta
+  }
+  // último intento: devuelve lo que haya
+  try {
+    const r = await auth.currentUser?.getIdTokenResult();
+    return r?.claims || {};
+  } catch {
+    return {};
+  }
+}
+
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -127,8 +149,8 @@ export default function Login() {
       // Login con Firebase + canje en backend
       const loginRes = await loginAndGetBackendToken(email.trim(), pwd.trim());
 
-      // (Muy importante) refrescar ID token para bajar los custom claims (admin)
-      try { await auth.currentUser?.getIdToken(true); } catch {}
+      // Refresca el ID token y espera hasta ver el claim admin (robusto)
+      try { await refreshClaimsUntil(3500); } catch {}
 
       // Guarda token si viene (para rutas protegidas por tu app)
       let token = '';
