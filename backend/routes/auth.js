@@ -10,49 +10,62 @@ function getBearerToken(req) {
   const m = /^Bearer\s+(.+)$/i.exec(h);
   return m ? m[1] : null;
 }
-
 const lower = (s) => (s || '').toString().trim().toLowerCase();
 
-async function resolveRoleDebug({ uid, email }) {
-
-  // 0) ADMIN_EMAILS que ve el proceso
-  const admins = (process.env.ADMIN_EMAILS || '')
-    .split(',')
-    .map((s) => lower(s))
-    .filter(Boolean);
-
-  // 1) Por UID
+async function getUserDocByUid(uid) {
   try {
-    const docUid = await db.collection('usuarios').doc(uid).get();
-    if (docUid.exists) {
-      const d = docUid.data() || {};
-      const r = lower(d.role || d.rol || (d.isAdmin ? 'admin' : ''));
-      if (r === 'admin' || r === 'viewer') {
-        return r;
-      }
-    }
-  } catch (e) {
+    const snap = await db.collection('usuarios').doc(uid).get();
+    if (!snap.exists) return null;
+    const d = snap.data() || {};
+    return {
+      role: lower(d.role || d.rol || (d.isAdmin ? 'admin' : '')),
+      disabled: !!d.disabled,
+      username: d.username,
+      email: d.email,
+    };
+  } catch {
+    return null;
   }
+}
 
-  // 2) Por email (exact match)
+async function getUserDocByEmailExact(email) {
   try {
     const qs = await db.collection('usuarios').where('email', '==', email).limit(1).get();
     if (!qs.empty) {
       const d = qs.docs[0].data() || {};
-      const r = lower(d.role || d.rol || (d.isAdmin ? 'admin' : ''));
-      if (r === 'admin' || r === 'viewer') {
-        return r;
-      }
+      return {
+        role: lower(d.role || d.rol || (d.isAdmin ? 'admin' : '')),
+        disabled: !!d.disabled,
+        username: d.username,
+        email: d.email,
+      };
     }
-  } catch (e) {
+  } catch {}
+  return null;
+}
+
+async function resolveRoleAndDisabled({ uid, email }) {
+  const byUid = await getUserDocByUid(uid);
+  if (byUid) {
+    const role = (byUid.role === 'admin' || byUid.role === 'viewer') ? byUid.role : '';
+    return { role: role || '', disabled: !!byUid.disabled };
   }
 
-  // 3) Fallback ADMIN_EMAILS
+  const byEmail = await getUserDocByEmailExact(email);
+  if (byEmail) {
+    const role = (byEmail.role === 'admin' || byEmail.role === 'viewer') ? byEmail.role : '';
+    return { role: role || '', disabled: !!byEmail.disabled };
+  }
+
+  const admins = (process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map(lower)
+    .filter(Boolean);
   if (admins.includes(lower(email))) {
-    return 'admin';
+    return { role: 'admin', disabled: false };
   }
 
-  return 'viewer';
+  return { role: 'viewer', disabled: false };
 }
 
 router.post('/login', async (req, res) => {
@@ -61,14 +74,17 @@ router.post('/login', async (req, res) => {
 
   try {
     const decoded = await admin.auth().verifyIdToken(idToken);
-    const role = await resolveRoleDebug({ uid: decoded.uid, email: decoded.email });
+    const uid = decoded.uid;
+    const email = decoded.email || '';
 
-    const token = jwt.sign({ uid: decoded.uid, email: decoded.email, role }, APP_SECRET, {
-      expiresIn: '8h',
-    });
+    const { role, disabled } = await resolveRoleAndDisabled({ uid, email });
+    if (disabled) {
+      return res.status(403).json({ message: 'Cuenta deshabilitada' });
+    }
 
+    const token = jwt.sign({ uid, email, role }, APP_SECRET, { expiresIn: '8h' });
     return res.json({ token, role });
-  } catch (e) {
+  } catch {
     return res.status(401).json({ message: 'Token de Firebase inválido' });
   }
 });

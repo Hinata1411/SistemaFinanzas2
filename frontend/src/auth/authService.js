@@ -1,22 +1,24 @@
 // src/auth/authService.js
 import { auth } from '../services/firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { db } from '../services/firebase';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 
-// Base del API (usa proxy /api en Netlify si no hay env)
+// Base del API
 const API = (process.env.REACT_APP_API_URL || '/api').replace(/\/+$/, '');
 console.log('API base =', API);
 
-/** Lee la colección 'usuarios' y devuelve [{email, username, role?}] */
+/** Lee la colección 'usuarios' y devuelve [{email, username, role?, disabled?, emailLower?}] */
 export async function fetchUsersForSelect() {
   const qs = await getDocs(collection(db, 'usuarios'));
   return qs.docs.map((snap) => {
     const d = snap.data();
     return {
       email: d.email,
+      emailLower: d.emailLower || (d.email ? String(d.email).toLowerCase() : undefined),
       username: d.username || d.email,
       role: d.role || d.rol || (d.isAdmin ? 'admin' : undefined),
+      disabled: !!d.disabled,
     };
   });
 }
@@ -27,13 +29,23 @@ export async function loginAndGetBackendToken(email, password) {
   const cred = await signInWithEmailAndPassword(auth, email, password);
   const user = cred.user;
 
-  // Guarda email para tu app
-  localStorage.setItem('email', user.email || '');
+  // 2) Validar que NO esté deshabilitado (Firestore)
+  const ref = doc(db, 'usuarios', user.uid);
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    const data = snap.data();
+    if (data?.disabled) {
+      await signOut(auth).catch(()=>{});
+      const err = new Error('Tu cuenta está deshabilitada. Contacta al administrador.');
+      err.code = 'auth/user-disabled';
+      throw err;
+    }
+  }
 
-  // 2) ID token fresco de Firebase
+  // 3) ID token fresco de Firebase
   const idToken = await user.getIdToken(true);
 
-  // 3) Intercambio con tu backend
+  // 4) Intercambio con backend
   const url = `${API}/auth/login`;
   const resp = await fetch(url, {
     method: 'POST',
@@ -41,28 +53,37 @@ export async function loginAndGetBackendToken(email, password) {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${idToken}`,
     },
-    credentials: 'omit', // cambia a 'include' si usas cookies/sesión en backend
+    credentials: 'omit',
     body: JSON.stringify({ idToken }),
   });
 
-  // 4) Manejo de errores HTTP
+  // 👇 Patch importante: mapear 403 a user-disabled
   if (!resp.ok) {
-    const txt = await resp.text().catch(() => '');
-    throw new Error(`HTTP ${resp.status} en ${url}: ${txt || 'Error de autenticación'}`);
+    let msg = '';
+    try { msg = await resp.text(); } catch {}
+    await signOut(auth).catch(()=>{});
+    if (resp.status === 403 && (msg || '').toLowerCase().includes('deshabilit')) {
+      const err = new Error('Tu cuenta está deshabilitada. Contacta al administrador.');
+      err.code = 'auth/user-disabled';
+      throw err;
+    }
+    throw new Error(`HTTP ${resp.status} en ${url}: ${msg || 'Error de autenticación'}`);
   }
 
-  // 5) Parseo seguro de respuesta
   const contentType = resp.headers.get('content-type') || '';
   const data = contentType.includes('application/json')
     ? await resp.json()
     : { raw: await resp.text().catch(() => '') };
 
   if (!data?.token) {
+    await signOut(auth).catch(()=>{});
     throw new Error(data?.message || 'Respuesta inválida del servidor (falta token)');
   }
 
-  // 6) Persistir token/rol
+  // 5) Persistir
+  localStorage.setItem('email', user.email || '');
   localStorage.setItem('token', data.token);
+  if (data.role) localStorage.setItem('role', String(data.role).toLowerCase());
 
   return {
     user,
@@ -79,6 +100,5 @@ export async function getUserDoc(uid) {
   return snap.exists() ? snap.data() : null;
 }
 
-// Export por defecto
 const authService = { fetchUsersForSelect, loginAndGetBackendToken, getUserDoc };
 export default authService;

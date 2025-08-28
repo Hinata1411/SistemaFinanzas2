@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { fetchUsersForSelect, loginAndGetBackendToken } from './authService';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '../services/firebase';
+import { auth } from './services/firebase';
 import './Login.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
@@ -21,13 +21,13 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [remember, setRemember] = useState(() => !!localStorage.getItem('remember_email'));
 
-  // === Fallback: correos admin si el backend/JWT/lista no trae rol ===
+  // fallback por correo si backend/JWT/lista no traen rol
   const ADMIN_EMAILS = [
-    'auxiliar.vipizzal@gmail.com', // <-- agregado
+    'auxiliar.vipizzal@gmail.com',
     'admin@example.com'
   ];
 
-  // Decode seguro para JWT base64url
+  // Decode seguro JWT base64url
   const decodeJwtPayload = (token) => {
     try {
       const base64Url = (token || '').split('.')[1] || '';
@@ -42,7 +42,6 @@ export default function Login() {
     } catch { return {}; }
   };
 
-  // Normaliza string
   const lower = (v) => (v ?? '').toString().trim().toLowerCase();
 
   // Resuelve 'admin' | 'viewer' desde: respuesta login -> JWT -> lista usuarios -> fallback por correo
@@ -51,7 +50,6 @@ export default function Login() {
     if (loginRes && typeof loginRes === 'object' && loginRes.role) {
       return lower(loginRes.role);
     }
-
     // 2) JWT
     const token = typeof loginRes === 'string' ? loginRes : loginRes?.token;
     if (token) {
@@ -62,8 +60,7 @@ export default function Login() {
         return (p.isAdmin || p.admin) ? 'admin' : 'viewer';
       }
     }
-
-    // 3) Lista de usuarios (por si fetchUsersForSelect trae el rol)
+    // 3) Lista usuarios (por si fetchUsersForSelect trae rol)
     if (Array.isArray(usersList) && usersList.length) {
       const u = usersList.find(x => lower(x.email) === lower(selectedEmail));
       if (u) {
@@ -76,10 +73,8 @@ export default function Login() {
         if (typeof u.isAdmin === 'boolean') return u.isAdmin ? 'admin' : 'viewer';
       }
     }
-
     // 4) Fallback por correo
     if (ADMIN_EMAILS.map(lower).includes(lower(selectedEmail))) return 'admin';
-
     return 'viewer';
   };
 
@@ -87,7 +82,7 @@ export default function Login() {
     (async () => {
       setErr(''); setInfo('');
       try {
-        const list = await fetchUsersForSelect();
+        const list = await fetchUsersForSelect(); // debe traer { email, username, disabled? }
         setUsers(list);
         const remembered = localStorage.getItem('remember_email');
         if (remembered && list.some(u => u.email === remembered)) setEmail(remembered);
@@ -98,20 +93,37 @@ export default function Login() {
     })();
   }, []);
 
+  // Limpia sesión/tokens locales ante errores
+  const clearSession = async () => {
+    try { await auth.signOut(); } catch {}
+    localStorage.removeItem('token');
+    localStorage.removeItem('role');
+    localStorage.removeItem('email');
+    // no tocamos remember_email para respetar preferencia
+  };
+
   const onSubmit = async (e) => {
     e.preventDefault();
+    if (busy) return;
     setErr(''); setInfo('');
     if (!email || !pwd) return setErr('Completa todos los campos.');
+
+    // Pre-chequeo: si está marcado como deshabilitado en Firestore
+    const uSel = users.find(u => lower(u.email) === lower(email));
+    if (uSel?.disabled) {
+      return setErr('Este usuario está deshabilitado. Contacta al administrador.');
+    }
+
     try {
       setBusy(true);
 
       if (remember) localStorage.setItem('remember_email', email);
       else localStorage.removeItem('remember_email');
 
-      // Puede devolver { token, role, ... } o solo token string
+      // Login + canje en backend
       const loginRes = await loginAndGetBackendToken(email.trim(), pwd.trim());
 
-      // Guarda token si viene (para PrivateRoute)
+      // Guarda token si viene
       let token = '';
       if (typeof loginRes === 'string') token = loginRes;
       else if (loginRes?.token) token = loginRes.token;
@@ -120,14 +132,23 @@ export default function Login() {
       // Guarda email
       localStorage.setItem('email', email.trim());
 
-      // Determina y guarda el rol (admin/viewer)
+      // Determina y guarda rol
       const role = resolveRole(loginRes, email.trim(), users);
       localStorage.setItem('role', role);
 
       navigate(from, { replace: true });
     } catch (e) {
+      await clearSession();
       const code = e?.code;
-      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+      const msg = (e?.message || '').toLowerCase();
+
+      if (code === 'auth/user-disabled' || msg.includes('deshabilitada')) {
+        setErr('Tu cuenta está deshabilitada. Contacta al administrador.');
+      } else if (
+        code === 'auth/invalid-credential' ||
+        code === 'auth/wrong-password' ||
+        code === 'auth/user-not-found'
+      ) {
         setErr('Credenciales inválidas. Verifica usuario y contraseña.');
       } else if (code === 'auth/too-many-requests') {
         setErr('Demasiados intentos fallidos. Intenta más tarde.');
@@ -143,6 +164,7 @@ export default function Login() {
 
   const onForgot = async (e) => {
     e.preventDefault();
+    if (busy) return;
     setErr(''); setInfo('');
     if (!email) return setErr('Selecciona un usuario para recuperar.');
     try {
@@ -171,7 +193,6 @@ export default function Login() {
           <div className="hero-pattern" aria-hidden />
         </aside>
 
-        {/* Tarjeta del formulario */}
         <main className="form-area">
           <div className="form-card shadow-sm">
             <h3 className="form-title">Iniciar sesión</h3>
@@ -197,7 +218,9 @@ export default function Login() {
                     disabled={busy}
                   >
                     {users.map((u, i) => (
-                      <option key={i} value={u.email}>{u.username}</option>
+                      <option key={i} value={u.email}>
+                        {u.username}{u.disabled ? ' (deshabilitado)' : ''}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -229,6 +252,7 @@ export default function Login() {
                     onClick={() => setShowPwd(s => !s)}
                     aria-label={showPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                     title={showPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    disabled={busy}
                   >
                     {showPwd ? (
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="#0F3D2E"><path d="M2 2l20 20-1.5 1.5L18 19.5c-1.8 1-3.8 1.5-6 1.5-5.5 0-10-3.5-12-9 1-2.7 2.7-4.9 4.8-6.5L.5 3.5 2 2Zm5.7 5.7C9.3 7 10.6 6.5 12 6.5c4.1 0 7.5 2.4 9.2 6-1 2.3-2.6 4-4.6 5.1l-2.3-2.3A4.5 4.5 0 0 0 9 9l-1.3-1.3Z"/></svg>
@@ -250,9 +274,8 @@ export default function Login() {
                     onChange={(e) => setRemember(e.target.checked)}
                     disabled={busy}
                   />
-                  <label className="form-check-label" htmlFor="rememberMe">Recordar contraseña</label>
+                  <label className="form-check-label" htmlFor="rememberMe">Recordar usuario</label>
                 </div>
-                {/* botón accesible en lugar de <a href="#"> */}
                 <span
                   role="button"
                   tabIndex={0}
@@ -262,10 +285,8 @@ export default function Login() {
                 >
                   ¿Olvidaste tu contraseña?
                 </span>
-
               </div>
 
-              {/* Botón */}
               <button className="btn btn-primary w-100" disabled={busy}>
                 {busy ? (
                   <>
