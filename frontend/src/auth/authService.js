@@ -13,8 +13,6 @@ console.log('API base =', API);
 // =============================
 // Utils
 // =============================
-const lower = (v) => (v ?? '').toString().trim().toLowerCase();
-
 async function safeGetUserDisabled(uid) {
   try {
     const ref = doc(db, 'usuarios', uid);
