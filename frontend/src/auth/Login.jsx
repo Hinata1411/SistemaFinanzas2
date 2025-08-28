@@ -21,11 +21,8 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [remember, setRemember] = useState(() => !!localStorage.getItem('remember_email'));
 
-  // fallback por correo si backend/JWT/lista no traen rol
-  const ADMIN_EMAILS = [
-    'auxiliar.vipizzal@gmail.com',
-    'admin@example.com'
-  ];
+  // Fallback por correo si backend/JWT/lista no traen rol
+  const ADMIN_EMAILS = ['auxiliar.vipizzal@gmail.com', 'admin@example.com'];
 
   // Decode seguro JWT base64url
   const decodeJwtPayload = (token) => {
@@ -82,11 +79,18 @@ export default function Login() {
     (async () => {
       setErr(''); setInfo('');
       try {
-        const list = await fetchUsersForSelect(); // debe traer { email, username, disabled? }
+        const list = await fetchUsersForSelect(); // { email, username, role?, disabled? }
         setUsers(list);
+
         const remembered = localStorage.getItem('remember_email');
-        if (remembered && list.some(u => u.email === remembered)) setEmail(remembered);
-        else if (list.length) setEmail(list[0].email);
+        // Prefiere recordar si existe y no está deshabilitado
+        if (remembered && list.some(u => u.email === remembered && !u.disabled)) {
+          setEmail(remembered);
+        } else {
+          // Selecciona el primer usuario activo disponible (si hay)
+          const firstActive = list.find(u => !u.disabled);
+          if (firstActive) setEmail(firstActive.email);
+        }
       } catch {
         setErr('Error al cargar usuarios.');
       }
@@ -120,10 +124,13 @@ export default function Login() {
       if (remember) localStorage.setItem('remember_email', email);
       else localStorage.removeItem('remember_email');
 
-      // Login + canje en backend
+      // Login con Firebase + canje en backend
       const loginRes = await loginAndGetBackendToken(email.trim(), pwd.trim());
 
-      // Guarda token si viene
+      // (Muy importante) refrescar ID token para bajar los custom claims (admin)
+      try { await auth.currentUser?.getIdToken(true); } catch {}
+
+      // Guarda token si viene (para rutas protegidas por tu app)
       let token = '';
       if (typeof loginRes === 'string') token = loginRes;
       else if (loginRes?.token) token = loginRes.token;
@@ -132,7 +139,7 @@ export default function Login() {
       // Guarda email
       localStorage.setItem('email', email.trim());
 
-      // Determina y guarda rol
+      // Determina y guarda el rol
       const role = resolveRole(loginRes, email.trim(), users);
       localStorage.setItem('role', role);
 
@@ -142,7 +149,7 @@ export default function Login() {
       const code = e?.code;
       const msg = (e?.message || '').toLowerCase();
 
-      if (code === 'auth/user-disabled' || msg.includes('deshabilitada')) {
+      if (code === 'auth/user-disabled' || msg.includes('deshabilitad')) {
         setErr('Tu cuenta está deshabilitada. Contacta al administrador.');
       } else if (
         code === 'auth/invalid-credential' ||
@@ -205,8 +212,8 @@ export default function Login() {
               <div className="mb-3">
                 <label className="form-label" htmlFor="userSelect">Usuario</label>
                 <div className="input-with-icon">
-                  <span className="icon">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#0F3D2E" aria-hidden="true">
+                  <span className="icon" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#0F3D2E">
                       <path d="M12 12c2.76 0 5-2.69 5-6s-2.24-6-5-6-5 2.69-5 6 2.24 6 5 6Zm0 2c-4.42 0-8 3.13-8 7v1h16v-1c0-3.87-3.58-7-8-7Z"/>
                     </svg>
                   </span>
@@ -218,7 +225,7 @@ export default function Login() {
                     disabled={busy}
                   >
                     {users.map((u, i) => (
-                      <option key={i} value={u.email}>
+                      <option key={i} value={u.email} disabled={u.disabled}>
                         {u.username}{u.disabled ? ' (deshabilitado)' : ''}
                       </option>
                     ))}
@@ -230,8 +237,8 @@ export default function Login() {
               <div className="mb-2">
                 <label className="form-label" htmlFor="password">Contraseña</label>
                 <div className="input-with-icon">
-                  <span className="icon">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#0F3D2E" aria-hidden="true">
+                  <span className="icon" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#0F3D2E">
                       <path d="M17 9V7a5 5 0 0 0-10 0v2H5v13h14V9h-2Zm-8 0V7a3 3 0 0 1 6 0v2H9Zm3 5a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/>
                     </svg>
                   </span>
@@ -255,9 +262,13 @@ export default function Login() {
                     disabled={busy}
                   >
                     {showPwd ? (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="#0F3D2E"><path d="M2 2l20 20-1.5 1.5L18 19.5c-1.8 1-3.8 1.5-6 1.5-5.5 0-10-3.5-12-9 1-2.7 2.7-4.9 4.8-6.5L.5 3.5 2 2Zm5.7 5.7C9.3 7 10.6 6.5 12 6.5c4.1 0 7.5 2.4 9.2 6-1 2.3-2.6 4-4.6 5.1l-2.3-2.3A4.5 4.5 0 0 0 9 9l-1.3-1.3Z"/></svg>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="#0F3D2E">
+                        <path d="M2 2l20 20-1.5 1.5L18 19.5c-1.8 1-3.8 1.5-6 1.5-5.5 0-10-3.5-12-9 1-2.7 2.7-4.9 4.8-6.5L.5 3.5 2 2Zm5.7 5.7C9.3 7 10.6 6.5 12 6.5c4.1 0 7.5 2.4 9.2 6-1 2.3-2.6 4-4.6 5.1l-2.3-2.3A4.5 4.5 0 0 0 9 9l-1.3-1.3Z"/>
+                      </svg>
                     ) : (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="#0F3D2E"><path d="M12 5c-5 0-9.3 3-11 7 1.7 4 6 7 11 7s9.3-3 11-7c-1.7-4-6-7-11-7Zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></svg>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="#0F3D2E">
+                        <path d="M12 5c-5 0-9.3 3-11 7 1.7 4 6 7 11 7s9.3-3 11-7c-1.7-4-6-7-11-7Zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/>
+                      </svg>
                     )}
                   </button>
                 </div>

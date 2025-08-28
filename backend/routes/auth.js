@@ -57,15 +57,26 @@ async function resolveRoleAndDisabled({ uid, email }) {
     return { role: role || '', disabled: !!byEmail.disabled };
   }
 
-  const admins = (process.env.ADMIN_EMAILS || '')
-    .split(',')
-    .map(lower)
-    .filter(Boolean);
-  if (admins.includes(lower(email))) {
-    return { role: 'admin', disabled: false };
-  }
+  const admins = (process.env.ADMIN_EMAILS || '').split(',').map(lower).filter(Boolean);
+  if (admins.includes(lower(email))) return { role: 'admin', disabled: false };
 
   return { role: 'viewer', disabled: false };
+}
+
+// Sincroniza el custom claim { admin: true/false } preservando otros claims
+async function syncAdminClaim(uid, shouldBeAdmin) {
+  try {
+    const u = await admin.auth().getUser(uid);
+    const current = !!(u.customClaims && u.customClaims.admin);
+    const desired = !!shouldBeAdmin;
+    if (current === desired) return false; // sin cambios
+
+    const nextClaims = { ...(u.customClaims || {}), admin: desired };
+    await admin.auth().setCustomUserClaims(uid, nextClaims);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 router.post('/login', async (req, res) => {
@@ -78,10 +89,12 @@ router.post('/login', async (req, res) => {
     const email = decoded.email || '';
 
     const { role, disabled } = await resolveRoleAndDisabled({ uid, email });
-    if (disabled) {
-      return res.status(403).json({ message: 'Cuenta deshabilitada' });
-    }
+    if (disabled) return res.status(403).json({ message: 'Cuenta deshabilitada' });
 
+    // 👉 escribe/actualiza el claim admin en Firebase
+    await syncAdminClaim(uid, role === 'admin');
+
+    // Tu JWT de app (para tus rutas protegidas propias)
     const token = jwt.sign({ uid, email, role }, APP_SECRET, { expiresIn: '8h' });
     return res.json({ token, role });
   } catch {
