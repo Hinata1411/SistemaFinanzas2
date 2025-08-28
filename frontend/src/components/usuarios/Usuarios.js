@@ -4,14 +4,14 @@ import { db, auth } from '../../services/firebase';
 import {
   collection,
   getDocs,
-  doc,
-  setDoc,
   updateDoc,
-  serverTimestamp
+  doc,
+  setDoc
 } from 'firebase/firestore';
 import {
   createUserWithEmailAndPassword,
-  signOut as signOutAuth
+  signOut as signOutAuth,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import Swal from 'sweetalert2';
 import { getSecondaryAuth } from '../../services/secondaryAuth';
@@ -19,9 +19,30 @@ import './Usuarios.css';
 
 const API = (process.env.REACT_APP_API_URL || '/api').replace(/\/+$/, '');
 
+// === Helper: refresca ID token hasta que vea el claim admin ===
+async function refreshClaimsUntil(timeoutMs = 3500) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      await auth.currentUser?.getIdToken(true);
+      const r = await auth.currentUser?.getIdTokenResult();
+      if (r?.claims && ('admin' in r.claims)) return r.claims;
+    } catch {}
+    await new Promise(res => setTimeout(res, 250));
+  }
+  try {
+    const r = await auth.currentUser?.getIdTokenResult();
+    return r?.claims || {};
+  } catch {
+    return {};
+  }
+}
+
 export default function Usuarios() {
   const [usuarios, setUsuarios] = useState([]);
   const [sucursales, setSucursales] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [permError, setPermError] = useState('');
 
   const sucMap = useMemo(
     () => Object.fromEntries(sucursales.map(s => [s.id, s.nombre])),
@@ -32,7 +53,7 @@ export default function Usuarios() {
   const [username, setUsername] = useState('');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [showRegPwd, setShowRegPwd] = useState(false); // 👈 ver/ocultar
+  const [showRegPwd, setShowRegPwd] = useState(false);
   const [role, setRole]         = useState('viewer');
   const [sucursalId, setSucursalId] = useState(''); // requerido si role === 'viewer'
 
@@ -40,32 +61,41 @@ export default function Usuarios() {
   const [selectedId, setSelectedId] = useState(null);
   const [working, setWorking] = useState(false);
 
-  // ========= Cargas =========
-  const cargarUsuarios = async () => {
-    try {
-      const snapshot = await getDocs(collection(db, 'usuarios'));
-      setUsuarios(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (err) {
-      console.error('Error al cargar usuarios:', err);
-      Swal.fire('Error', 'No se pudieron cargar los usuarios', 'error');
-    }
-  };
-
-  const cargarSucursales = async () => {
-    try {
-      const snapshot = await getDocs(collection(db, 'sucursales'));
-      setSucursales(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (err) {
-      console.error('Error al cargar sucursales:', err);
-    }
-  };
-
-  useEffect(() => {
-    cargarUsuarios();
-    cargarSucursales();
-  }, []);
-
   const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v||'').trim());
+
+  // ========= Cargas (con refresh de claims al entrar) =========
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+        setPermError('');
+
+        await refreshClaimsUntil(3500);
+
+        // Cargar usuarios
+        try {
+          const snap = await getDocs(collection(db, 'usuarios'));
+          setUsuarios(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        } catch (e) {
+          console.error('Error al cargar usuarios:', e);
+          setPermError(e?.message || 'Error al cargar usuarios');
+          Swal.fire('Error', 'No se pudieron cargar los usuarios', 'error');
+        }
+
+        // Cargar sucursales (⚠️ nombre exacto)
+        try {
+          const snap = await getDocs(collection(db, 'sucursales'));
+          setSucursales(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        } catch (e) {
+          console.error('Error al cargar sucursales:', e);
+          setPermError(prev => prev || e?.message || '');
+          Swal.fire('Error', 'No se pudieron cargar las sucursales', 'error');
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   // ========= Registrar (auth secundario, no cambia sesión admin) =========
   const handleRegister = async (e) => {
@@ -81,11 +111,7 @@ export default function Usuarios() {
     if (password.length < 6) {
       return Swal.fire('Advertencia', 'La contraseña debe tener al menos 6 caracteres', 'warning');
     }
-    // Duplicados robusto (usa email o emailLower si ya existiera)
-    const emailLowerIncoming = String(email).toLowerCase().trim();
-    if (usuarios.some(u =>
-      String(u.email?.toLowerCase?.() || u.emailLower || '').trim() === emailLowerIncoming
-    )) {
+    if (usuarios.some(u => String(u.email).toLowerCase() === String(email).toLowerCase())) {
       return Swal.fire('Advertencia', 'Ese email ya está registrado', 'warning');
     }
     if (role === 'viewer' && !sucursalId) {
@@ -94,42 +120,45 @@ export default function Usuarios() {
 
     try {
       setWorking(true);
+      await refreshClaimsUntil(3500);
+      const claims = await auth.currentUser?.getIdTokenResult();
+      if (!(claims?.claims?.admin === true)) {
+        return Swal.fire('Permiso denegado', 'Necesitas ser administrador para registrar usuarios.', 'info');
+      }
+
       const secondaryAuth = getSecondaryAuth();
 
-      // 1) Crear cuenta SIN afectar la sesión principal
+      // 1) Crear cuenta
       const { user: newUser } = await createUserWithEmailAndPassword(
         secondaryAuth,
         email.trim(),
         password.trim()
       );
 
-      // 2) Guardar doc en Firestore (con emailLower + serverTimestamp)
+      // 2) Guardar doc en Firestore
       await setDoc(doc(db, 'usuarios', newUser.uid), {
         username: username.trim(),
         email: email.trim(),
-        emailLower: emailLowerIncoming,
         role,
+        // 👇 admin => null; viewer => sucursalId elegido
         sucursalId: role === 'viewer' ? sucursalId : null,
         disabled: false,
-        createdAt: serverTimestamp(),
+        createdAt: Date.now(),
       });
 
-      // 3) Cerrar sesión del auth secundario (higiene)
+      // 3) Signout del secundario
       await signOutAuth(secondaryAuth).catch(() => {});
 
       Swal.fire('Éxito', 'Usuario registrado', 'success');
-      setUsername(''); setEmail(''); setPassword('');
-      setShowRegPwd(false);
+      setUsername(''); setEmail(''); setPassword(''); setShowRegPwd(false);
       setRole('viewer'); setSucursalId('');
-      cargarUsuarios();
+
+      // Recarga lista
+      const snapU = await getDocs(collection(db, 'usuarios'));
+      setUsuarios(snapU.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (err) {
       console.error(err);
-      const code = err?.code;
-      if (code === 'auth/email-already-in-use') {
-        Swal.fire('Advertencia', 'Ese email ya está registrado en Auth', 'warning');
-      } else {
-        Swal.fire('Error', err.message || 'No se pudo registrar', 'error');
-      }
+      Swal.fire('Error', err.message || 'No se pudo registrar', 'error');
     } finally {
       setWorking(false);
     }
@@ -141,19 +170,22 @@ export default function Usuarios() {
   // ========= Activar/Desactivar =========
   const handleToggleDisabled = async () => {
     if (!selectedId) return;
-    // Evita auto-deshabilitar la cuenta actual
-    if (selectedId === auth.currentUser?.uid) {
-      Swal.fire('No permitido', 'No puedes deshabilitar tu propia cuenta', 'info');
-      return;
-    }
     const u = usuarios.find(x => x.id === selectedId);
     if (!u) return;
     try {
       setWorking(true);
+      await refreshClaimsUntil(3500);
+      const claims = await auth.currentUser?.getIdTokenResult();
+      if (!(claims?.claims?.admin === true)) {
+        return Swal.fire('Permiso denegado', 'Necesitas ser administrador.', 'info');
+      }
+
       const next = !u.disabled;
       await updateDoc(doc(db, 'usuarios', u.id), { disabled: next });
       Swal.fire('OK', next ? 'Usuario deshabilitado' : 'Usuario activado', 'success');
-      cargarUsuarios();
+
+      const snap = await getDocs(collection(db, 'usuarios'));
+      setUsuarios(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (e) {
       console.error(e);
       Swal.fire('Error', 'No se pudo cambiar el estado', 'error');
@@ -162,7 +194,7 @@ export default function Usuarios() {
     }
   };
 
-  // ========= Eliminar (Auth + Firestore vía backend). Fallback: disabled =========
+  // ========= Eliminar (vía backend) =========
   const handleDelete = async () => {
     if (!selectedId) return;
     if (selectedId === auth.currentUser?.uid) {
@@ -178,7 +210,12 @@ export default function Usuarios() {
 
     try {
       setWorking(true);
-      // 1) Intentar borrado REAL via backend (Auth + Firestore)
+      await refreshClaimsUntil(3500);
+      const claims = await auth.currentUser?.getIdTokenResult();
+      if (!(claims?.claims?.admin === true)) {
+        return Swal.fire('Permiso denegado', 'Necesitas ser administrador.', 'info');
+      }
+
       const idToken = await auth.currentUser.getIdToken(true);
       const resp = await fetch(`${API}/admin/deleteUser`, {
         method: 'POST',
@@ -197,29 +234,29 @@ export default function Usuarios() {
 
       Swal.fire('Eliminado', 'Usuario eliminado', 'success');
       setSelectedId(null);
-      cargarUsuarios();
+      const snap = await getDocs(collection(db, 'usuarios'));
+      setUsuarios(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (err) {
-      console.warn('Delete via backend falló, se aplica fallback disabled.', err);
-      try {
-        await updateDoc(doc(db, 'usuarios', selectedId), { disabled: true });
-        Swal.fire('Marcado', 'Usuario marcado como deshabilitado', 'success');
-        setSelectedId(null);
-        cargarUsuarios();
-      } catch (e2) {
-        console.error(e2);
-        Swal.fire('Error', e2.message || 'No se pudo eliminar', 'error');
-      }
+      console.warn('Delete via backend falló:', err);
+      Swal.fire('Error', err.message || 'No se pudo eliminar', 'error');
     } finally {
       setWorking(false);
     }
   };
 
-  // ========= Editar (username, rol, sucursal) =========
+  // ========= Editar (username, rol, sucursal, email y contraseña) =========
   const handleEdit = async () => {
     if (!selectedId) return;
     const u = usuarios.find(x => x.id === selectedId);
     if (!u) return;
 
+    await refreshClaimsUntil(3500);
+    const claims = await auth.currentUser?.getIdTokenResult();
+    if (!(claims?.claims?.admin === true)) {
+      return Swal.fire('Permiso denegado', 'Necesitas ser administrador.', 'info');
+    }
+
+    // 1) Username
     const rUser = await Swal.fire({
       title: 'Editar usuario',
       input: 'text',
@@ -232,6 +269,7 @@ export default function Usuarios() {
     if (!rUser.isConfirmed) return;
     const newUsername = rUser.value.trim();
 
+    // 2) Rol
     const rRole = await Swal.fire({
       title: 'Rol',
       input: 'select',
@@ -246,6 +284,7 @@ export default function Usuarios() {
     if (!rRole.isConfirmed) return;
     const newRole = rRole.value;
 
+    // 3) Sucursal si viewer
     let newSucursalId = u.sucursalId || '';
     if (newRole === 'viewer') {
       const inputOptions = Object.fromEntries(
@@ -258,7 +297,7 @@ export default function Usuarios() {
         inputValue: newSucursalId || '',
         inputPlaceholder: 'Selecciona sucursal',
         showCancelButton: true,
-        confirmButtonText: 'Guardar'
+        confirmButtonText: 'Siguiente'
       });
       if (!rSuc.isConfirmed) return;
       newSucursalId = rSuc.value;
@@ -266,22 +305,121 @@ export default function Usuarios() {
         Swal.fire('Advertencia', 'Debes seleccionar una sucursal para viewer', 'warning');
         return;
       }
+    } else {
+      // admin => todas
+      newSucursalId = null;
     }
 
+    // 4) ¿Cambiar email?
+    let newEmail = u.email || '';
+    const changeEmail = await Swal.fire({
+      title: '¿Cambiar email?',
+      text: `Email actual: ${u.email || '—'}`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, cambiar',
+      cancelButtonText: 'No'
+    });
+    if (changeEmail.isConfirmed) {
+      const rEmail = await Swal.fire({
+        title: 'Nuevo email',
+        input: 'email',
+        inputValue: u.email || '',
+        inputValidator: (v) => (!isEmail(v) ? 'Email inválido' : undefined),
+        showCancelButton: true,
+        confirmButtonText: 'Guardar email'
+      });
+      if (!rEmail.isConfirmed) return;
+      newEmail = rEmail.value.trim();
+    }
+
+    // 5) ¿Cambiar contraseña?
+    let tempPassword = '';
+    const changePwd = await Swal.fire({
+      title: 'Contraseña',
+      text: '¿Deseas restablecer la contraseña de este usuario?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Opciones',
+      cancelButtonText: 'No'
+    });
+
+    let doSendReset = false;
+    if (changePwd.isConfirmed) {
+      const rPwdMode = await Swal.fire({
+        title: 'Restablecer contraseña',
+        input: 'select',
+        inputOptions: {
+          send: 'Enviar email de restablecimiento',
+          set: 'Establecer contraseña temporal ahora'
+        },
+        inputPlaceholder: 'Selecciona una opción',
+        showCancelButton: true,
+        confirmButtonText: 'Continuar'
+      });
+      if (!rPwdMode.isConfirmed) return;
+      const mode = rPwdMode.value;
+      if (mode === 'send') {
+        doSendReset = true;
+      } else {
+        const rTemp = await Swal.fire({
+          title: 'Contraseña temporal',
+          input: 'text',
+          inputPlaceholder: 'Mínimo 6 caracteres',
+          inputValidator: (v) => (!v || v.length < 6 ? 'Mínimo 6 caracteres' : undefined),
+          showCancelButton: true,
+          confirmButtonText: 'Establecer'
+        });
+        if (!rTemp.isConfirmed) return;
+        tempPassword = rTemp.value;
+      }
+    }
+
+    // === Guardar todo ===
     try {
       setWorking(true);
+
+      // A) Actualizar doc Firestore (username, rol, sucursalId, email si cambió)
       await updateDoc(doc(db, 'usuarios', u.id), {
         username: newUsername,
         role: newRole,
-        sucursalId: newRole === 'viewer' ? newSucursalId : null
+        // admin => null, viewer => id
+        sucursalId: newRole === 'viewer' ? newSucursalId : null,
+        ...(newEmail && newEmail !== u.email ? { email: newEmail } : {})
       });
+
+      // B) Si hay cambio de email y/o temp password, usar backend admin
+      if ((newEmail && newEmail !== u.email) || tempPassword) {
+        const idToken = await auth.currentUser.getIdToken(true);
+        const resp = await fetch(`${API}/admin/updateUser`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+          body: JSON.stringify({
+            uid: u.id,
+            email: (newEmail && newEmail !== u.email) ? newEmail : undefined,
+            password: tempPassword || undefined
+          })
+        });
+        if (!resp.ok) {
+          const data = await resp.json().catch(()=>({}));
+          throw new Error(data?.message || 'No se pudo actualizar email/contraseña en Auth');
+        }
+      }
+
+      // C) Si eligió enviar email de restablecimiento
+      if (doSendReset) {
+        await sendPasswordResetEmail(auth, newEmail || u.email);
+      }
 
       Swal.fire('Actualizado', 'Usuario modificado', 'success');
       setSelectedId(null);
-      cargarUsuarios();
+
+      // Recarga lista
+      const snap = await getDocs(collection(db, 'usuarios'));
+      setUsuarios(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (err) {
       console.error(err);
-      Swal.fire('Error', 'No se pudo actualizar', 'error');
+      Swal.fire('Error', err.message || 'No se pudo actualizar', 'error');
     } finally {
       setWorking(false);
     }
@@ -325,9 +463,6 @@ export default function Usuarios() {
               <div className="input-with-icon">
                 <input
                   type={showRegPwd ? 'text' : 'password'}
-                  inputMode="text"
-                  autoComplete="new-password"
-                  minLength={6}
                   placeholder="••••••••"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
@@ -384,6 +519,12 @@ export default function Usuarios() {
         <section className="card">
           <h3 className="card-title">Listado</h3>
 
+          {permError && (
+            <div className="alert alert-warning small" role="alert">
+              {permError}
+            </div>
+          )}
+
           <div className="acciones-usuario">
             <button className="btn-min" onClick={handleEdit} disabled={!selectedId || working}>Editar</button>
             <button className="btn-min" onClick={handleToggleDisabled} disabled={!selectedId || working}>
@@ -406,20 +547,23 @@ export default function Usuarios() {
                 </tr>
               </thead>
               <tbody>
-                {usuarios.map(u => (
-                  <tr
-                    key={u.id}
-                    className={u.id === selectedId ? 'selected' : ''}
-                    onClick={() => handleSelect(u.id)}
-                  >
-                    <td>{u.username || '—'}</td>
-                    <td>{u.email || '—'}</td>
-                    <td>{u.role || '—'}</td>
-                    <td>{u.role === 'admin' ? 'Todas' : (sucMap[u.sucursalId] || '—')}</td>
-                    <td>{u.disabled ? 'Deshabilitado' : 'Activo'}</td>
-                  </tr>
-                ))}
-                {!usuarios.length && (
+                {loading ? (
+                  <tr><td colSpan={5} className="empty">Cargando…</td></tr>
+                ) : usuarios.length ? (
+                  usuarios.map(u => (
+                    <tr
+                      key={u.id}
+                      className={u.id === selectedId ? 'selected' : ''}
+                      onClick={() => handleSelect(u.id)}
+                    >
+                      <td>{u.username || '—'}</td>
+                      <td>{u.email || '—'}</td>
+                      <td>{u.role || '—'}</td>
+                      <td>{u.role === 'admin' ? 'Todas' : (sucMap[u.sucursalId] || '—')}</td>
+                      <td>{u.disabled ? 'Deshabilitado' : 'Activo'}</td>
+                    </tr>
+                  ))
+                ) : (
                   <tr><td colSpan={5} className="empty">Sin usuarios</td></tr>
                 )}
               </tbody>
