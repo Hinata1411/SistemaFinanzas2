@@ -1,7 +1,7 @@
 // src/services/secondaryAuth.js
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { firebaseConfig } from './firebaseConfig'; // asegúrate de exportar firebaseConfig
+import { firebaseConfig } from './firebase'; 
 
 let secondaryAuth;
 
