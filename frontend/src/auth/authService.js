@@ -8,7 +8,6 @@ import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 // Config API base
 // =============================
 const API = (process.env.REACT_APP_API_URL || '/api').replace(/\/+$/, '');
-console.log('API base =', API);
 
 // =============================
 // Utils
