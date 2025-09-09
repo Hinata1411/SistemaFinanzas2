@@ -66,6 +66,52 @@ export default function RegistrarPagos() {
   // Para deltas al editar y snapshots
   const [originalDoc, setOriginalDoc] = useState(null);
 
+  // Helpers para inicializar el mapa de pagos
+  const makeEmptyItem = (cats) => ({
+    descripcion: '',
+    monto: '',
+    ref: '',
+    categoria: (cats && cats[0]) || 'Varios',
+    fileBlob: null,
+    fileUrl: '',
+    fileName: '',
+    fileMime: '',
+    filePreview: '',
+    locked: false,
+  });
+
+  const buildInitialPagosMap = (sucs, cats) => {
+    const m = {};
+    (sucs || []).forEach((s) => {
+      m[s.id] = { items: [makeEmptyItem(cats)], cajaChicaUsada: 0 };
+    });
+    return m;
+  };
+
+  // 👇 Importante: definir resetForm ANTES de los useEffect que lo usan
+  const resetForm = React.useCallback(() => {
+    // Revocar previews anteriores (por si venías de ver/editar)
+    try {
+      Object.values(pagosMap).forEach((suc) => {
+        (suc?.items || []).forEach((it) => {
+          if (it?.filePreview) URL.revokeObjectURL(it.filePreview);
+        });
+      });
+    } catch {}
+
+    setOriginalDoc(null);
+    setFecha(getTodayISO());
+    setCategorias(INIT_CATS);
+    setPagosMap(buildInitialPagosMap(sucursales, INIT_CATS)); // inicial con las sucursales cargadas (si ya están)
+    setShowCatModal(false);
+    setViewer({ open: false, url: '', mime: '', name: '' });
+    // Nota: NO tocamos activeSucursalId para respetar lo que esté seleccionado/visible
+  }, [sucursales, INIT_CATS]); // dependemos de sucursales para sembrar filas si ya están
+
+  useEffect(() => {
+    if (!editId) resetForm();
+  }, [editId, mode, resetForm]);
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) { setMe({ loaded:true, role:'viewer', uid:null, username:'' }); return; }
