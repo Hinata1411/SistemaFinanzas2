@@ -163,6 +163,9 @@ export default function RegistrarCierre() {
   }, []);
   const isAdmin = me.role === 'admin';
 
+  const isViewer = me.role === 'viewer'; // informativo, por si lo usas en otros lados
+  const isReadOnlyUI = isViewing; 
+
   // Sucursales
   const sucursales = useSucursales();
 
@@ -194,6 +197,37 @@ export default function RegistrarCierre() {
 
   const [amexItems, setAmexItems] = useState({});
   const [amexTotal, setAmexTotal] = useState(0);
+
+  // 👇 NUEVO: función para dejar el form limpio
+  const resetForm = React.useCallback(() => {
+    setOriginalDoc(null);
+    setFecha(todayISO());
+    setArqueo([emptyArqueoCaja(), emptyArqueoCaja(), emptyArqueoCaja()]);
+    setCierre([emptyCierreCaja(), emptyCierreCaja(), emptyCierreCaja()]);
+    setGastos([{
+      categoria: INIT_GASTO_CATEGORIAS[0],
+      descripcion: '',
+      cantidad: '',
+      ref: '',
+      locked: false,
+      fileUrl: '',
+      fileBlob: null,
+      filePreview: '',
+      fileMime: '',
+      fileName: '',
+    }]);
+    setCategorias(INIT_GASTO_CATEGORIAS);
+    setComentario('');
+    setCajaChicaUsada(0);
+    setFaltantePagado(0);
+    setPedidosYaText('');
+    setAmexItems({});
+    setAmexTotal(0);
+    // Nota: NO tocamos activeSucursalId para respetar la selección visible
+  }, []);
+
+
+
   const [fecha, setFecha] = useState(todayISO());
 
   const [arqueo, setArqueo] = useState([emptyArqueoCaja(), emptyArqueoCaja(), emptyArqueoCaja()]);
@@ -268,6 +302,11 @@ export default function RegistrarCierre() {
       }
     })();
   }, [editId]);
+
+  // si no hay editId (ruta /RegistrarCierre), limpia el formulario
+  useEffect(() => {
+    if (!editId) resetForm();
+  }, [editId, mode, resetForm]);
 
   const [busy, setBusy] = useState(false);
 
@@ -353,8 +392,9 @@ export default function RegistrarCierre() {
   });
   const { faltanteEfectivo, faltantePorGastos } = totals;
 
+
   const setArq = (idx, field, value) => {
-    if (isViewing) return;
+    if (isReadOnlyUI) return;
     setArqueo((prev) => {
       const copy = prev.map((c) => ({ ...c }));
       copy[idx][field] = value;
@@ -363,7 +403,7 @@ export default function RegistrarCierre() {
   };
 
   const setCier = (idx, field, value) => {
-    if (isViewing) return;
+    if (isReadOnlyUI) return;
     setCierre((prev) => {
       const copy = prev.map((c) => ({ ...c }));
       copy[idx][field] = value;
@@ -372,7 +412,7 @@ export default function RegistrarCierre() {
   };
 
   const addGasto = () => {
-    if (isViewing) return;
+    if (isReadOnlyUI) return;
     setGastos((g) => {
       const prevLocked = g.map((item) => ({ ...item, locked: true }));
       const nuevo = {
@@ -392,7 +432,7 @@ export default function RegistrarCierre() {
   };
 
   const setGasto = (i, field, val) => {
-    if (isViewing) return;
+    if (isReadOnlyUI) return;
     setGastos((prev) => {
       const c = [...prev];
       c[i] = { ...c[i], [field]: val };
@@ -401,7 +441,7 @@ export default function RegistrarCierre() {
   };
 
   const removeGasto = (i) => {
-    if (isViewing) return;
+    if (isReadOnlyUI) return;
     setGastos((prev) => prev.filter((_, idx) => idx !== i));
   };
 
@@ -667,8 +707,8 @@ export default function RegistrarCierre() {
                 type="date"
                 value={fecha}
                 onChange={(e) => setFecha(e.target.value)}
-                disabled={isViewing}
-                readOnly={isViewing}
+                disabled={isReadOnlyUI}
+                readOnly={isReadOnlyUI}
               />
             </div>
 
@@ -679,13 +719,13 @@ export default function RegistrarCierre() {
                 value={activeSucursalId || ''}
                 onChange={(e) => {
                   const next = e.target.value || null;
-                  if (isViewing) return;
+                  if (isReadOnlyUI) return;
                   if (!isAdmin && me.sucursalId && next !== me.sucursalId) return;
                   setActiveSucursalId(next);
                   setCajaChicaUsada(0);
                   setFaltantePagado(0);
                 }}
-                disabled={isViewing || !sucursalesVisibles.length}
+                disabled={isReadOnlyUI || !sucursalesVisibles.length}
               >
                 {!sucursalesVisibles.length && <option value="">(Sin sucursales)</option>}
                 {sucursalesVisibles.map((s) => (
@@ -695,7 +735,7 @@ export default function RegistrarCierre() {
             </div>
 
             <div className="rc-tabs-actions" style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-              {!isViewing && (
+              {!isReadOnlyUI && (
                 <button
                   type="button"
                   className="rc-btn rc-btn-accent"
@@ -747,7 +787,7 @@ export default function RegistrarCierre() {
             arqueo={arqueo}
             setArq={setArq}
             cajaChicaDisponible={cajaChicaDisponibleUI}
-            readOnly={isViewing}
+            readOnly={isReadOnlyUI}
           />
         </div>
       )}
@@ -755,7 +795,7 @@ export default function RegistrarCierre() {
       {activeTab === TABS.CIERRE && (
         <div className="rc-grid">
           {isAdmin ? (
-            <CierreGrid cierre={cierre} setCier={setCier} readOnly={isViewing} />
+            <CierreGrid cierre={cierre} setCier={setCier} readOnly={isReadOnlyUI} />
           ) : (
             <div className="rc-tab-empty">Solo administradores</div>
           )}
@@ -774,7 +814,7 @@ export default function RegistrarCierre() {
             activeSucursalNombre={activeSucursalDoc?.nombre ?? activeFromHook?.nombre}
             cajaChicaDisponible={cajaChicaDisponibleUI}
             faltantePorGastos={faltantePorGastos}
-            readOnly={isViewing}
+            readOnly={isReadOnlyUI}
             isAdmin={isAdmin} 
           />
         </div>
@@ -818,7 +858,7 @@ export default function RegistrarCierre() {
                 setPedidosYaText(raw);
               }
             }}
-            disabled={isViewing}
+            disabled={isReadOnlyUI}
             style={{
               width: 220,
               height: 52,
@@ -859,7 +899,7 @@ export default function RegistrarCierre() {
                     }}
                     onWheel={blockWheel}
                     onKeyDown={blockArrows}
-                    disabled={isViewing}
+                    disabled={isReadOnlyUI}
                     aria-label={`Cantidad ${name}`}
                     style={{ width: 100, textAlign: 'center', background: '#cfeee0', border: '1px solid #cfe8db', borderRadius: 12, fontWeight: 800 }}
                   />
@@ -886,7 +926,7 @@ export default function RegistrarCierre() {
               totals={totals || {}}
               flags={flags || {}}
               cajaChicaUsada={cajaChicaUsada}
-              onPagarFaltante={handlePagarFaltante}
+              onPagarFaltante={isAdmin ? handlePagarFaltante : undefined}
               faltantePagado={faltantePagado}
               pedidosYaCantidad={pedidosYaCantidad}
               amexTotal={amexTotal}
