@@ -23,8 +23,10 @@ import AttachmentViewerModal from '../registrar-cierre/AttachmentViewerModal';
 const ICONS = {
   attach: '/img/camara.png',
   view: '/img/img.png',
+  money: '/img/billetes-de-banco.png',
+  pago: '/img/pago-en-efectivo.png',
+  guardar: '/img/manana.png',
 };
-
 
 /* ===========================
    Constantes / helpers módulo
@@ -627,10 +629,35 @@ export default function RegistrarPagos() {
                   {isEditingExisting ? 'Actualizar pagos' : 'Guardar pagos'}
                 </button>
               )}
-              <button type="button" className="rc-btn rc-btn-outline" onClick={()=>setShowCatModal(true)} disabled={readOnly}>
-                Categorías
-              </button>
-            </div>
+            </div> 
+
+             {/* KPI compacto */}
+            <section className="rc-card" style={{ marginTop: 8 }}>
+              <div className="rc-card-bd" style={{ display:'flex', gap:18, alignItems:'center', flexWrap:'wrap' }}>
+                <div>
+                  <div className="kpi-title">
+                    <img src={ICONS.pago} alt="Dinero" width={35} height={35} style={{ display: 'inline-block', objectFit: 'contain' }} />
+                    Dinero para depósitos</div>
+                  <div className="kpi-value">{money(kpiDepositos)}</div>
+                </div>
+                <div>
+                  <div className="kpi-title">
+                    <img src={ICONS.money} alt="Dinero" width={35} height={35} style={{ display: 'inline-block', objectFit: 'contain' }} />
+                    Caja chica disponible</div>
+                  <div className="kpi-value">{money(cajaChicaDisponible)}</div>
+                </div>
+                <div>
+                  <div className="kpi-title">
+                    <img src={ICONS.guardar} alt="Dinero" width={35} height={35} style={{ display: 'inline-block', objectFit: 'contain' }} />
+                    Sobrante para mañana</div>
+                  <div className="kpi-value" style={{ color: sobranteFinal > 0 ? 'var(--accent)' : 'var(--dark)' }}>
+                    {money(sobranteFinal)}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            
           </div>
         </div>
       </div>
@@ -661,25 +688,7 @@ export default function RegistrarPagos() {
         </div>
       </div>
 
-      {/* KPI compacto */}
-      <section className="rc-card" style={{ marginTop: 8 }}>
-        <div className="rc-card-bd" style={{ display:'flex', gap:18, alignItems:'center', flexWrap:'wrap' }}>
-          <div>
-            <div className="kpi-title">Dinero para depósitos</div>
-            <div className="kpi-value">{money(kpiDepositos)}</div>
-          </div>
-          <div>
-            <div className="kpi-title">Caja chica disponible</div>
-            <div className="kpi-value">{money(cajaChicaDisponible)}</div>
-          </div>
-          <div>
-            <div className="kpi-title">Sobrante para mañana</div>
-            <div className="kpi-value" style={{ color: sobranteFinal > 0 ? 'var(--accent)' : 'var(--dark)' }}>
-              {money(sobranteFinal)}
-            </div>
-          </div>
-        </div>
-      </section>
+     
 
       {/* TABLA */}
       <section className="rc-card">
@@ -687,10 +696,10 @@ export default function RegistrarPagos() {
 
         <table className="rc-table rc-gastos-table rc-pagos-table">
           <colgroup>
-            <col style={{width:'140px'}}/>{/* Categoría */}
-            <col style={{width:'230px'}}/>{/* Descripción */}
-            <col style={{width:'120px'}}/>{/* Monto */}
-            <col style={{width:'150px'}}/>{/* Ref */}
+            <col style={{width:'200px'}}/>{/* Categoría */}
+            <col style={{width:'240px'}}/>{/* Descripción */}
+            <col style={{width:'200px'}}/>{/* Monto */}
+            <col style={{width:'200px'}}/>{/* Ref */}
             <col style={{width:'140px'}}/>{/* Img */}
             <col style={{width:'120px'}}/>{/* Acciones */}
           </colgroup>
@@ -739,7 +748,7 @@ export default function RegistrarPagos() {
                   </td>
 
                   {/* Monto */}
-                  <td data-label="Monto a depositar">
+                  <td data-label="Cantidad">
                     <input
                       className="rc-input rc-qty no-spin"
                       type="number" min="0" step="0.01" inputMode="decimal"
