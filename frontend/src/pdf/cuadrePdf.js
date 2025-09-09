@@ -201,7 +201,7 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate, options 
     const ef  = n(cc.efectivo);
     const tar = n(cc.tarjeta);
     const mot = n(cc.motorista);
-    const tot = ef + tar + mot;
+    const tot = ef + tar;
     return [
       `Caja ${i + 1}`,
       toMoney(ef),
