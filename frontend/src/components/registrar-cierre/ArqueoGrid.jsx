@@ -2,38 +2,68 @@
 import React from 'react';
 import { n, toMoney } from '../../utils/numbers';
 
-/* === Iconos inline (SVG) === */
-const IcoMoney = ({ size = 18, style = {} }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'inline-block', ...style }} xmlns="http://www.w3.org/2000/svg">
-    <rect x="3" y="6" width="18" height="12" rx="2" ry="2" stroke="currentColor" strokeWidth="2" />
-    <circle cx="12" cy="12" r="2.5" stroke="currentColor" strokeWidth="2" />
-    <path d="M6 12h1M17 12h1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-  </svg>
-);
+/* === Rutas de íconos (REEMPLAZA con tus archivos) === */
+const ICONS = {
+  money: '/img/billetes-de-banco.png',
+  bill:  '/img/billetes-de-banco.png',
+  card:  '/img/pago-tarjeta.png',
+  moto:  '/img/repartidor.png',
+};
 
-const IcoBill = ({ size = 20, style = {} }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'inline-block', ...style }} xmlns="http://www.w3.org/2000/svg">
-    <rect x="2" y="7" width="20" height="10" rx="2" ry="2" stroke="currentColor" strokeWidth="2" />
-    <circle cx="12" cy="12" r="2.25" stroke="currentColor" strokeWidth="2" />
-    <path d="M5 10h1M18 10h1M5 14h1M18 14h1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-  </svg>
-);
+/* === Utilidades === */
+const isEmpty = (v) => v === '' || v === null || v === undefined;
 
-const IcoCard = ({ size = 18, style = {} }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'inline-block', ...style }} xmlns="http://www.w3.org/2000/svg">
-    <rect x="2" y="6" width="20" height="12" rx="2" ry="2" stroke="currentColor" strokeWidth="2" />
-    <path d="M2 10h20" stroke="currentColor" strokeWidth="2" />
-    <path d="M6 15h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-  </svg>
-);
+/* Formatea dinero SIN símbolo para inputs; vacío => '' (placeholder visible) */
+const formatMoneyNoSymbol = (val) => {
+  if (isEmpty(val)) return '';
+  const num = Number(String(val).replace(/,/g, ''));
+  if (Number.isNaN(num)) return '';
+  return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 
-const IcoMoto = ({ size = 18, style = {} }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'inline-block', ...style }} xmlns="http://www.w3.org/2000/svg">
-    <circle cx="6" cy="17" r="3" stroke="currentColor" strokeWidth="2" />
-    <circle cx="18" cy="17" r="3" stroke="currentColor" strokeWidth="2" />
-    <path d="M6 17l5-7h4l3 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M13 10l-1-3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-  </svg>
+/* Limpia a número con decimales (para dinero) */
+const sanitizeToNumberString = (str) => {
+  const cleaned = String(str ?? '').replace(/[^0-9.]/g, '');
+  const parts = cleaned.split('.');
+  if (parts.length > 2) return `${parts[0]}.${parts.slice(1).join('')}`;
+  return cleaned;
+};
+
+/* Solo dígitos (enteros) para denominaciones ≠ q1 */
+const sanitizeInts = (str) => String(str ?? '').replace(/\D/g, '');
+
+/* Número con un solo punto decimal para q1 */
+const sanitizeDecimal = (str) => {
+  const cleaned = String(str ?? '').replace(/[^0-9.]/g, '');
+  const parts = cleaned.split('.');
+  if (parts.length > 2) return `${parts[0]}.${parts.slice(1).join('')}`;
+  return cleaned;
+};
+
+/* === Input monetario SIN prefijo (el Q. va afuera) === */
+const MoneyInput = ({
+  value,
+  onChange,
+  placeholder = '0.00',
+  ariaLabel,
+  disabled,
+  width = 200,
+}) => (
+  <input
+    className="rc-input no-spin"
+    type="text"
+    inputMode="decimal"
+    value={formatMoneyNoSymbol(value)}
+    onChange={(e) => onChange(sanitizeToNumberString(e.target.value))}
+    onKeyDown={(e) => {
+      if (['ArrowUp','ArrowDown','PageUp','PageDown'].includes(e.key)) e.preventDefault();
+    }}
+    onWheel={(e) => e.currentTarget.blur()}
+    placeholder={placeholder}
+    aria-label={ariaLabel}
+    disabled={disabled}
+    style={{ width, textAlign: 'right' }}
+  />
 );
 
 export default function ArqueoGrid({
@@ -42,7 +72,6 @@ export default function ArqueoGrid({
   cajaChicaDisponible = 0,
   totalNeto,
   readOnly = false,
-  // 👇 eliminamos props sin uso de extras
 }) {
   const DENOMS = [
     ['q200', 200],
@@ -51,7 +80,7 @@ export default function ArqueoGrid({
     ['q20', 20],
     ['q10', 10],
     ['q5', 5],
-    ['q1', 1],
+    ['q1', 1],     // <- SOLO esta permite decimales en cantidad
   ];
 
   const totalEfectivoCaja = (c = {}) =>
@@ -62,13 +91,17 @@ export default function ArqueoGrid({
   return (
     <section className="rc-card">
       {/* Encabezado general */}
-      <div className="rc-card-hd" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+      <div className="rc-card-hd">
         <h3 style={{ margin: 0 }}>Arqueo Físico</h3>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span className="rc-cell-label strong" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--dark)' }} title="Caja Chica disponible">
-              <IcoMoney size={18} style={{ color: 'var(--primary)' }} />
+            <span
+              className="rc-cell-label strong"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--dark)' }}
+              title="Caja Chica disponible"
+            >
+              <img src={ICONS.money} alt="Dinero" width={35} height={35} style={{ display: 'inline-block', objectFit: 'contain' }} />
               Caja Chica disponible:
             </span>
             <b>{toMoney(cajaChicaDisponible)}</b>
@@ -80,138 +113,148 @@ export default function ArqueoGrid({
       <div className="rc-sheet rc-sheet-3cols">
         {[0, 1, 2].map((i) => {
           const c = arqueo[i] || {};
-          const apertura = n(c.apertura ?? 1000);
+          const apertura = n(c.apertura ?? 0);
           const totalBruto = totalEfectivoCaja(c);
-          const totalNeto  = totalBruto - apertura;
+          const totalNetoCalc = totalBruto - apertura;
 
           return (
             <div className="rc-col" key={`arq-${i}`}>
               {/* Cabecera de la caja + Apertura */}
-              <div
-                className="rc-col-hd"
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width:'115%' }}
-              >
+              <div className="rc-col-hd rc-col-hd--stack">
                 <span>Caja {i + 1}</span>
 
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  marginLeft: 'auto'
-                }}>
+                <div className="rc-col-open">
                   <span className="rc-cell-label" style={{ color: '#6b7280' }}>Apertura</span>
-                  <input
-                    className="rc-input no-spin"
-                    type="number"
-                    inputMode="decimal"
-                    step="0.01"
-                    min="0"
-                    value={c.apertura ?? 1000}
-                    onChange={(e) => setArq(i, 'apertura', e.target.value)}
-                    onKeyDown={(e) => {
-                      if (
-                        e.key === 'ArrowUp' ||
-                        e.key === 'ArrowDown' ||
-                        e.key === 'PageUp' ||
-                        e.key === 'PageDown'
-                      ) {
-                        e.preventDefault();
-                      }
-                    }}
-                    onWheel={(e) => e.currentTarget.blur()}
+                  <span style={{ color: '#6b7280', fontWeight: 600 }}>Q.</span>
+                  <MoneyInput
+                    value={c.apertura ?? ''}   // vacío para que se vea placeholder 0.00
+                    onChange={(val) => setArq(i, 'apertura', val)}
                     placeholder="0.00"
+                    ariaLabel={`Apertura caja ${i + 1}`}
                     disabled={inputsDisabled}
-                    style={{ width: 180, textAlign: 'right' }}
-                    aria-label={`Apertura caja ${i + 1}`}
+                    width={220}
                   />
                 </div>
               </div>
 
               {/* Encabezados de denominaciones */}
               <div className="rc-row" style={{ fontWeight: 600, opacity: 0.9 }}>
-                <span className="rc-cell-label rc-bill-ico" style={{ flex: '0 0 60px', display: 'inline-flex', alignItems: 'left', justifyContent: 'left', marginLeft: '16px' }} title="Denominaciones">
-                  <IcoBill />
+                <span
+                  className="rc-cell-label rc-bill-ico"
+                  style={{ flex: '0 0 40px', display: 'inline-flex', alignItems: 'left', justifyContent: 'left', marginLeft: 16 }}
+                  title="Denominaciones"
+                >
+                  <img src={ICONS.bill} alt="Billete" width={35} height={35} style={{ display: 'inline-block', objectFit: 'contain', marginTop: '10px' }} />
                 </span>
                 <span className="rc-cell-label" style={{ flex: '0 0 auto', textAlign: 'center' }}>Cantidad</span>
                 <span className="rc-cell-label" style={{ flex: '0 0 80px', textAlign: 'right' }}>Subtotal</span>
               </div>
 
               {DENOMS.map(([field, valor]) => {
-                const cantidad = n(c[field]);
+                const cantidad = n(c[field]);         // <- q1 puede ser decimal
                 const subtotal = cantidad * valor;
 
                 return (
                   <div className="rc-row" key={field} style={{ alignItems: 'center', gap: 8 }}>
-                    <span className="rc-cell-label" style={{ flex: '0 0 80px' }}>
+                    <span className="rc-cell-label" style={{ flex: '0 0 70px' }}>
                       Q {valor}
                     </span>
 
-                    <input
-                      className="rc-input no-spin"
-                      type="number"
-                      inputMode="numeric"
-                      min="0"
-                      step="1"
-                      value={c[field] ?? ''}
-                      onChange={(e) => setArq(i, field, e.target.value)}
-                      onKeyDown={(e) => {
-                        if (
-                          e.key === 'ArrowUp' ||
-                          e.key === 'ArrowDown' ||
-                          e.key === 'PageUp' ||
-                          e.key === 'PageDown'
-                        ) {
-                          e.preventDefault();
-                        }
-                      }}
-                      onWheel={(e) => e.currentTarget.blur()}
-                      placeholder="0"
-                      style={{ flex: '1 1 auto' }}
-                      aria-label={`Cantidad de Q${valor}`}
-                      disabled={inputsDisabled}
-                    />
+                    {/* Cantidad: q1 permite decimales; el resto, enteros */}
+                    {field === 'q1' ? (
+                      <input
+                        className="rc-input no-spin"
+                        type="text"
+                        inputMode="decimal"
+                        value={c[field] ?? ''}
+                        onChange={(e) => setArq(i, field, sanitizeDecimal(e.target.value))}
+                        onKeyDown={(e) => {
+                          if (['e','E','+','-'].includes(e.key)) e.preventDefault();
+                          if (['ArrowUp','ArrowDown','PageUp','PageDown'].includes(e.key)) e.preventDefault();
+                        }}
+                        onWheel={(e) => e.currentTarget.blur()}
+                        placeholder="0.00"
+                        style={{ flex: '1 1 auto', textAlign: 'right' }}
+                        aria-label={`Cantidad de Q${valor}`}
+                        disabled={inputsDisabled}
+                      />
+                    ) : (
+                      <input
+                        className="rc-input no-spin"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={c[field] ?? ''}
+                        onChange={(e) => setArq(i, field, sanitizeInts(e.target.value))}
+                        onKeyDown={(e) => {
+                          if (['.', ',', 'e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+                          if (['ArrowUp','ArrowDown','PageUp','PageDown'].includes(e.key)) e.preventDefault();
+                        }}
+                        onWheel={(e) => e.currentTarget.blur()}
+                        placeholder="0"
+                        style={{ flex: '1 1 auto', textAlign: 'right' }}
+                        aria-label={`Cantidad de Q${valor}`}
+                        disabled={inputsDisabled}
+                      />
+                    )}
 
-                    <b style={{ flex: '0 0 80px', textAlign: 'right' }}>{toMoney(subtotal)}</b>
+                    {/* Subtotal con toMoney */}
+                    <b style={{ flex: '0 0 90px', textAlign: 'right' }}>{toMoney(subtotal)}</b>
                   </div>
                 );
               })}
-
-              {/* Total de caja (NETO) */}
-              <div className="rc-row rc-total-caja" style={{ marginTop: 6 }}>
-                <span className="rc-cell-label strong">Total de caja (menos apertura)</span>
-                <b>{toMoney(totalNeto)}</b>
+              
+              {/* Total de caja (NETO) con toMoney */}
+              <div className="rc-total-caja">
+                <div className="rc-total-line">
+                  <span className="rc-cell-label strong">Total de caja</span>
+                  <div className="rc-money-wrap rc-money-wrap--total">
+                    <b className="rc-total-amount">{toMoney(totalNetoCalc)}</b>
+                  </div>
+                </div>
+                <small className="rc-total-note">(menos apertura)</small>
               </div>
 
               <div className="rc-row rc-row-sep" />
 
-              <div className="rc-row">
-                <span className="rc-cell-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <IcoCard />
+              {/* Tarjeta */}
+              <div className="rc-row" style={{ alignItems: 'center', gap: 8 }}>
+                <span className="rc-cell-label rc-label-card" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <img src={ICONS.card} alt="Tarjeta" width={35} height={35} style={{ display: 'inline-block', objectFit: 'contain' }} />
                   Tarjeta
                 </span>
-                <input
-                  className="rc-input"
-                  inputMode="numeric"
-                  value={c.tarjeta || ''}
-                  onChange={(e) => setArq(i, 'tarjeta', e.target.value)}
-                  placeholder="0.00"
-                  disabled={inputsDisabled}
-                />
+
+                <div className="rc-money-wrap">
+                  <span style={{ color: '#6b7280', fontWeight: 600 }}>Q.</span>
+                  <MoneyInput
+                    value={isEmpty(c.tarjeta) ? '' : c.tarjeta}
+                    onChange={(val) => setArq(i, 'tarjeta', val)}
+                    placeholder="0.00"
+                    ariaLabel={`Tarjeta caja ${i + 1}`}
+                    disabled={inputsDisabled}
+                    width="100%"
+                  />
+                </div>
               </div>
 
-              <div className="rc-row">
-                <span className="rc-cell-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <IcoMoto />
+              {/* A domicilio (motorista) */}
+              <div className="rc-row" style={{ alignItems: 'center', gap: 8 }}>
+                <span className="rc-cell-label rc-label-moto" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+                  <img src={ICONS.moto} alt="A domicilio" width={35} height={35} style={{ display: 'inline-block', objectFit: 'contain'}} />
                   A domicilio
                 </span>
-                <input
-                  className="rc-input"
-                  inputMode="numeric"
-                  value={c.motorista || ''}
-                  onChange={(e) => setArq(i, 'motorista', e.target.value)}
-                  placeholder="0.00"
-                  disabled={inputsDisabled}
-                />
+
+                <div className="rc-money-wrap">
+                  <span style={{ color: '#6b7280', fontWeight: 600 }}>Q.</span>
+                  <MoneyInput
+                    value={isEmpty(c.motorista) ? '' : c.motorista}
+                    onChange={(val) => setArq(i, 'motorista', val)}
+                    placeholder="0.00"
+                    ariaLabel={`A domicilio caja ${i + 1}`}
+                    disabled={inputsDisabled}
+                    width="100%"
+                  />
+                </div>
               </div>
             </div>
           );

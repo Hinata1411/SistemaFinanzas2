@@ -17,7 +17,14 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '../../services/firebase';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
-import './RegistrarCierre.css';
+import './styles/base.css';
+import './styles/layout-tabs.css';
+import './styles/arqueo.css';
+import './styles/gastos.css';
+import './styles/pedidos-expresso.css';
+import './styles/resumen.css';
+import './styles/general.css';
+
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 import { todayISO } from '../../utils/dates';
@@ -30,7 +37,18 @@ import CierreGrid from './CierreGrid';
 import GastosList from './GastosList';
 import ResumenPanel from './ResumenPanel';
 import CajaChicaModal from './CajaChicaModal';
-import CategoriasModal from './CategoriasModal';
+
+const formatThousands = (s) => {
+  // s: string sin comas. Devuelve string con comas (solo visual)
+  if (s === '' || s == null) return '';
+  const parts = String(s).split('.');
+  const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return parts.length > 1 ? `${intPart}.${parts[1]}` : intPart;
+};
+
+const parseMoneyInput = (s) =>
+  parseFloat(String(s || '').replace(/,/g, '')) || 0;
+
 
 const isAjusteCajaChica = (name) =>
   (name || '').toString().trim().toLowerCase() === 'ajuste de caja chica';
@@ -199,7 +217,15 @@ export default function RegistrarCierre() {
   const [cajaChicaUsada, setCajaChicaUsada] = useState(0);
   const [faltantePagado, setFaltantePagado] = useState(0);
 
-  const [pedidosYaCantidad, setPedidosYaCantidad] = useState(0);
+  // texto crudo que escribe el usuario (sin comas)
+  const [pedidosYaText, setPedidosYaText] = useState('');
+
+  // número derivado para cálculos/guardar
+  const pedidosYaCantidad = React.useMemo(
+    () => parseMoneyInput(pedidosYaText),
+    [pedidosYaText]
+  );
+
 
   useEffect(() => {
     if (!editId) return;
@@ -228,7 +254,9 @@ export default function RegistrarCierre() {
         const py = (d.extras && d.extras.pedidosYaCantidad != null)
           ? d.extras.pedidosYaCantidad
           : (d.pedidosYaCantidad != null ? d.pedidosYaCantidad : 0);
-        setPedidosYaCantidad(n(py));
+
+        // guardamos como texto limpio (sin comas), así el input puede formatear
+        setPedidosYaText(String(py || ''));
 
         const ax = d.extras?.americanExpress;
         if (ax && typeof ax === 'object') {
@@ -243,7 +271,6 @@ export default function RegistrarCierre() {
 
   const [busy, setBusy] = useState(false);
 
-  const [showCatModal, setShowCatModal] = useState(false);
   const [showCajaChica, setShowCajaChica] = useState(false);
 
   const activeFromHook = useMemo(
@@ -260,10 +287,6 @@ export default function RegistrarCierre() {
        cajaChicaActual)
     : cajaChicaActual;
 
-    // Guarda categorías por sucursal en: sucursales/{id}/config/categorias_gastos
-    const persistDocPath = activeSucursalId
-      ? `sucursales/${activeSucursalId}/config/categorias_gastos`
-      : null;
 
   const totalAperturas = (arqueo || []).reduce((s, c) => s + (Number.isFinite(+c?.apertura) ? +c.apertura : 1000), 0);
 
@@ -382,16 +405,6 @@ export default function RegistrarCierre() {
     setGastos((prev) => prev.filter((_, idx) => idx !== i));
   };
 
-  const handleChangeCategorias = (nextCategorias, oldName, newName) => {
-    if (isViewing) return;
-    setCategorias(nextCategorias);
-    if (oldName && newName) {
-      setGastos((prev) => prev.map((g) => (g.categoria === oldName ? { ...g, categoria: newName } : g)));
-    } else if (oldName && !newName) {
-      const fallback = nextCategorias[0] || '';
-      setGastos((prev) => prev.map((g) => (g.categoria === oldName ? { ...g, categoria: fallback } : g)));
-    }
-  };
 
   const handlePagarFaltante = async () => {
     if (!isAdmin) return Swal.fire('Solo administradores', 'No puedes pagar faltante.', 'info');
@@ -510,7 +523,7 @@ export default function RegistrarCierre() {
         kpiDepositosAtSave: kpiBase,
         cajaChicaDisponibleAtSave: originalDoc?.cajaChicaDisponibleAtSave ?? cajaChicaActual,
         extras: {
-          pedidosYaCantidad: Number.isFinite(pedidosYaCantidad) ? parseInt(pedidosYaCantidad, 10) : 0,
+          pedidosYaCantidad: pedidosYaCantidad,
           americanExpress: {
             items: amexItems,
             total: amexTotal,
@@ -702,13 +715,12 @@ export default function RegistrarCierre() {
             setGasto={setGasto}
             addGasto={addGasto}
             removeGasto={removeGasto}
-            showCategoriasBtn={isAdmin && !isViewing}
-            onOpenCategorias={() => setShowCatModal(true)}
             onUseCajaChica={() => setShowCajaChica(true)}
             activeSucursalNombre={activeSucursalDoc?.nombre ?? activeFromHook?.nombre}
             cajaChicaDisponible={cajaChicaDisponibleUI}
             faltantePorGastos={faltantePorGastos}
             readOnly={isViewing}
+            isAdmin={isAdmin} 
           />
         </div>
       )}
@@ -718,21 +730,47 @@ export default function RegistrarCierre() {
           <div className="rc-card-hd">
             <h3>Pedidos Ya</h3>
           </div>
-          <div className="rc-card-bd" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+
+          <div
+            className="rc-card-bd"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              flexWrap: 'wrap',
+            }}
+          >
             <label className="rc-cell-label strong">Cantidad vendida</label>
+
+            {/* Prefijo Q. afuera */}
+            <span style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--dark)' }}>
+              Q.
+            </span>
+
             <input
-              className="rc-input rc-no-spin rc-no-step"
-              type="number"
-              min="0"
-              step="1"
-              inputMode="numeric"
-              value={Number.isFinite(pedidosYaCantidad) ? pedidosYaCantidad : 0}
-              onChange={(e) => setPedidosYaCantidad(Math.max(0, parseInt(e.target.value || '0', 10) || 0))}
-              onWheel={blockWheel}
-              onKeyDown={blockArrows}
-              disabled={isViewing}
-              style={{ width: 140, textAlign: 'center' }}
-            />
+            className="rc-input rc-no-spin"
+            type="text"
+            inputMode="decimal"
+            value={formatThousands(pedidosYaText)}   // 👈 se muestran comas SOLO en UI
+            placeholder="0.00"
+            onChange={(e) => {
+              // 1) quitar comas previas y normalizar coma a punto
+              let raw = e.target.value.replace(/,/g, '').replace(',', '.');
+
+              // 2) permitir vacío o patrón decimal válido
+              if (raw === '' || /^\d*\.?\d*$/.test(raw)) {
+                // guardamos SIEMPRE sin comas (texto crudo)
+                setPedidosYaText(raw);
+              }
+            }}
+            disabled={isViewing}
+            style={{
+              width: 220,
+              height: 52,
+              fontSize: '1.2rem',
+              textAlign: 'center',
+            }}
+          />
           </div>
         </section>
       )}
@@ -740,35 +778,48 @@ export default function RegistrarCierre() {
       {activeTab === TABS.AMEX && showAmexBtn && (
         <section className="rc-card">
           <div className="rc-card-hd">
-            <h3>Venta American Express</h3>
+            <h3>American Express</h3>
           </div>
+          <div className="amex-grid">
+            {AMEX_FLAVORS.map((name) => {
+              const val = amexItems?.[name]; // <-- usa tu estado real
+              return (
+                <div
+                  key={name}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '4px 6px' }}
+                >
+                  <span style={{ fontWeight: 700, color: 'var(--slate)' }}>{name}</span>
 
-          <div className="amex-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            {AMEX_FLAVORS.map((name) => (
-              <div key={name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '4px 6px' }}>
-                <span style={{ fontWeight: 700, color: 'var(--slate)' }}>{name}</span>
-
-                <input
-                  className="rc-input rc-no-spin rc-no-step"
-                  type="number"
-                  min="0"
-                  step="1"
-                  inputMode="numeric"
-                  value={n(amexItems?.[name]) || 0}
-                  onChange={(e) => setAmexQty(name, e.target.value)}
-                  onWheel={blockWheel}
-                  onKeyDown={blockArrows}
-                  disabled={isViewing}
-                  style={{ width: 68, textAlign: 'center', background: '#cfeee0', border: '1px solid #cfe8db', borderRadius: 12, fontWeight: 800 }}
-                  aria-label={`Cantidad ${name}`}
-                />
-              </div>
-            ))}
+                  <input
+                    className="rc-input amex-input rc-no-spin"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={(val === 0 || val === '0' || val == null) ? '' : String(val)}
+                    placeholder="0"
+                    onChange={(e) => {
+                      const clean = e.target.value.replace(/[^\d]/g, '');
+                      // '' para ver placeholder si está vacío o es "0"; si no, entero >= 0
+                      setAmexQty(name, (clean === '' || clean === '0') ? '' : parseInt(clean, 10));
+                    }}
+                    onWheel={blockWheel}
+                    onKeyDown={blockArrows}
+                    disabled={isViewing}
+                    aria-label={`Cantidad ${name}`}
+                    style={{ width: 100, textAlign: 'center', background: '#cfeee0', border: '1px solid #cfe8db', borderRadius: 12, fontWeight: 800 }}
+                  />
+                </div>
+              );
+            })}
           </div>
-
-          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <b style={{ fontSize: 16 }}>Total</b>
-            <span style={{ fontWeight: 800 }}>Q {Number(amexTotal || 0).toFixed(2)}</span>
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-end' }}>
+            <b style={{ fontSize: 20 }}>Total</b>
+            <span style={{ fontSize: 20, fontWeight: 800 }}>
+              Q { (Number(amexTotal) || 0).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              }) }
+            </span>
           </div>
         </section>
       )}
@@ -809,14 +860,6 @@ export default function RegistrarCierre() {
           )}
         </>
       )}
-
-      <CategoriasModal
-        open={showCatModal}
-        onClose={() => setShowCatModal(false)}
-        categorias={categorias}
-        onChangeCategorias={handleChangeCategorias}  // mantiene gastos referenciados si renombrás o eliminás
-        persistDocPath={persistDocPath}
-      />
 
       <CajaChicaModal
         open={showCajaChica}

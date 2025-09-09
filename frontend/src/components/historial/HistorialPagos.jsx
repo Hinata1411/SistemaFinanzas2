@@ -306,25 +306,26 @@ export default function Pagos() {
 
       {/* Filtros */}
       <div className="ventas-filtros">
+         <div className="filtro">
+          <label>Fecha:</label>
+          <input type="date" value={fechaFiltro} onChange={(e)=> setFechaFiltro(e.target.value)} />
+        </div>
         <div className="filtro">
           <label>Sucursal:</label>
           {isAdmin ? (
             <select value={currentSucursalValue} onChange={(e)=> setSucursalFiltro(e.target.value)}>
               <option value="all">Todas</option>
-              {sucursalesList.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+              {sucursalesList.map(s => <option key={s.id} value={s.id}>{s.ubicacion}</option>)}
             </select>
           ) : (
             <select value={currentSucursalValue} disabled>
               {uiSucursalesList.map(s => (
-                <option key={s.id} value={s.id}>{s.nombre}</option>
+                <option key={s.id} value={s.id}>{s.ubicacion}</option>
               ))}
             </select>
           )}
         </div>
-        <div className="filtro">
-          <label>Fecha:</label>
-          <input type="date" value={fechaFiltro} onChange={(e)=> setFechaFiltro(e.target.value)} />
-        </div>
+       
       </div>
 
       {/* Tabla con estilos de Ventas */}

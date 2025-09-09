@@ -259,6 +259,10 @@ export default function HistorialCuadres() {
       </header>
 
       <div className="ventas-filtros">
+         <div className="filtro">
+          <label>Fecha:</label>
+          <input type="date" value={fechaFiltro} onChange={(e)=> setFechaFiltro(e.target.value)} />
+        </div>
         <div className="filtro">
           <label>Sucursal:</label>
           {isAdmin ? (
@@ -277,10 +281,7 @@ export default function HistorialCuadres() {
             </select>
           )}
         </div>
-        <div className="filtro">
-          <label>Fecha:</label>
-          <input type="date" value={fechaFiltro} onChange={(e)=> setFechaFiltro(e.target.value)} />
-        </div>
+       
       </div>
 
       <VentasTable
