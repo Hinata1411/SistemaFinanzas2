@@ -163,7 +163,6 @@ export default function RegistrarCierre() {
   }, []);
   const isAdmin = me.role === 'admin';
 
-  const isViewer = me.role === 'viewer'; // informativo, por si lo usas en otros lados
   const isReadOnlyUI = isViewing; 
 
   // Sucursales
