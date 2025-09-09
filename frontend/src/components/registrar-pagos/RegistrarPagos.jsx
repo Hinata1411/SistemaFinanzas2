@@ -18,6 +18,14 @@ import { recomputeSucursalKPI } from '../../utils/kpi';
 import CategoriasModal from '../registrar-cierre/CategoriasModal';
 import AttachmentViewerModal from '../registrar-cierre/AttachmentViewerModal';
 
+
+/* Iconos */
+const ICONS = {
+  attach: '/img/camara.png',
+  view: '/img/img.png',
+};
+
+
 /* ===========================
    Constantes / helpers módulo
    =========================== */
@@ -30,7 +38,7 @@ const money = (v) =>
   new Intl.NumberFormat('es-GT', { style: 'currency', currency: 'GTQ', maximumFractionDigits: 2 })
     .format(Number(v) || 0);
 
-const okTypes = ['image/png', 'image/jpeg', 'application/pdf'];
+const okTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'application/pdf'];
 const n = (v) => {
   const x = typeof v === 'number' ? v : parseFloat(v || 0);
   return Number.isFinite(x) ? x : 0;
@@ -71,7 +79,7 @@ export default function RegistrarPagos() {
   const [pagosMap, setPagosMap] = useState({});
 
   // visor
-  const [viewer, setViewer] = useState({ open:false, url:'', mime:'', name:'' });
+  const [viewer, setViewer] = useState({ open:false, url:'', mime:'', name:'', rowIndex:-1 });
 
   // Para deltas al editar y snapshots
   const [originalDoc, setOriginalDoc] = useState(null);
@@ -464,10 +472,25 @@ export default function RegistrarPagos() {
   /* ===========================
      Visor adjuntos
      =========================== */
-  const openViewer = (url, mime, name) => setViewer({ open:true, url, mime:mime||'', name:name||'' });
-  const closeViewer = () => setViewer({ open:false, url:'', mime:'', name:'' });
+    const openViewer = ({ url, mime, name, rowIndex }) =>
+         setViewer({ open:true, url, mime:mime||'', name:name||'', rowIndex });
+    const closeViewer = () =>
+         setViewer({ open:false, url:'', mime:'', name:'', rowIndex:-1 });
 
-  /* ===========================
+    const handleModalChange = () => {
+      if (readOnly) return;
+      if (viewer.rowIndex < 0) return;
+      handlePickFile(viewer.rowIndex);
+    };
+
+    const handleModalRemove = () => {
+      if (readOnly) return;
+      if (viewer.rowIndex < 0) return;
+        clearFile(viewer.rowIndex);
+        closeViewer();
+    };
+
+    /* ===========================
      Guardar
      =========================== */
   const onSave = async () => {
@@ -744,47 +767,49 @@ export default function RegistrarPagos() {
 
                   {/* Comprobante (Img/PDF) */}
                   <td data-label="Comprobante" className="img-cell">
-                    <div>
-                      {hasFile ? (
-                        <>
+                    <div className="rc-proof-cell">
+                      {(() => {
+                        const viewUrl = r.filePreview || r.fileUrl || '';
+                        const hasFile = !!viewUrl;
+                        return hasFile ? (
                           <button
-                            className="rc-btn rc-btn-outline"
                             type="button"
-                            onClick={()=>openViewer(r.filePreview || r.fileUrl || '', r.fileMime || '', r.fileName || '')}
-                            disabled={!(r.filePreview || r.fileUrl)}
-                            title="Ver comprobante"
+                            className="rc-iconbtn"
+                            onClick={() =>
+                              openViewer({
+                                url: viewUrl,
+                                mime: r.fileMime || '',
+                                name: r.fileName || '',
+                                rowIndex: i,
+                              })
+                            }
+                            title="Abrir comprobante"
                           >
-                            {isPdf ? 'PDF' : 'Ver'}
+                            <img src={ICONS.view} alt="Ver" width={25} height={25} />
                           </button>
-
-                          {!readOnly && (
-                            <>
-                              <button className="rc-btn rc-btn-outline" type="button" onClick={()=>handlePickFile(i)}>
-                                Cambiar
-                              </button>
-                              <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>clearFile(i)}>
-                                Quitar
-                              </button>
-                            </>
-                          )}
-                        </>
-                      ) : (
-                        !readOnly && (
-                          <>
-                            <input
-                              id={`pago-file-${active}-${i}`}
-                              type="file"
-                              accept="image/*,application/pdf"
-                              onChange={(e)=>handleFileChange(i,e)}
-                              style={{ display:'none' }}
-                              disabled={readOnly}
-                            />
-                            <button className="rc-btn rc-btn-outline" type="button" onClick={()=>handlePickFile(i)}>
-                              Adjuntar
+                        ) : (
+                          !readOnly && (
+                            <button
+                              type="button"
+                              className="rc-iconbtn"
+                              onClick={() => handlePickFile(i)}
+                              title="Adjuntar comprobante"
+                            >
+                              <img src={ICONS.attach} alt="Adjuntar" width={25} height={25} />
                             </button>
-                          </>
-                        )
-                      )}
+                          )
+                        );
+                      })()}
+
+                      {/* input oculto por fila */}
+                      <input
+                        id={`pago-file-${active}-${i}`}
+                        type="file"
+                        accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
+                        onChange={(e) => handleFileChange(i, e)}
+                        style={{ display: 'none' }}
+                        disabled={readOnly}
+                      />
                     </div>
                   </td>
 
@@ -868,6 +893,8 @@ export default function RegistrarPagos() {
         mime={viewer.mime}
         name={viewer.name}
         onClose={closeViewer}
+        onChangeFile={handleModalChange}
+        onRemoveFile={handleModalRemove}
       />
     </div>
   );
