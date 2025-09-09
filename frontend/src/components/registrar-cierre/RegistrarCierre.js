@@ -407,10 +407,15 @@ export default function RegistrarCierre() {
 
 
   const handlePagarFaltante = async () => {
-    if (!isAdmin) return Swal.fire('Solo administradores', 'No puedes pagar faltante.', 'info');
-    if (isViewing) return Swal.fire('Solo lectura', 'No puedes pagar faltante en modo ver.', 'info');
+    if (!isAdmin) {
+      return Swal.fire('Solo administradores', 'No puedes pagar faltante.', 'info');
+    }
+    if (isViewing) {
+      return Swal.fire('Solo lectura', 'No puedes pagar faltante en modo ver.', 'info');
+    }
     if (faltanteEfectivo <= 0) return;
-    const confirmar = await Swal.fire({
+
+    const { isConfirmed } = await Swal.fire({
       title: 'Pagar faltante',
       text: `Se sumará ${Number(faltanteEfectivo).toFixed(2)} al depósito.`,
       icon: 'question',
@@ -418,11 +423,61 @@ export default function RegistrarCierre() {
       confirmButtonText: 'Sí, pagar',
       cancelButtonText: 'Cancelar',
     });
-    if (confirmar.isConfirmed) {
-      setFaltantePagado(faltanteEfectivo);
-      await Swal.fire({ icon: 'success', title: 'Faltante pagado', text: `Se agregó Q ${faltanteEfectivo.toFixed(2)} al total a depositar.`, timer: 1400, showConfirmButton: false });
+    if (!isConfirmed) return;
+
+    // 1) Actualiza estado local para que el admin lo vea de inmediato
+    const nuevoFaltantePagado = faltanteEfectivo;
+    setFaltantePagado(nuevoFaltantePagado);
+
+    // 2) Si es un cuadre EXISTENTE, persistimos de una vez en Firestore
+    if (isEditingExisting && editId) {
+      try {
+        const sucId = activeSucursalDoc?.id ?? activeFromHook?.id;
+
+        // Recalcula el totalGeneral con el nuevo faltantePagado (mismo cálculo del hook)
+        const totalGeneralRecalc =
+          (totals?.totalArqueoEfectivoNeto || 0)
+          - (totals?.totalGastos || 0)
+          + n(cajaChicaUsada)
+          + n(nuevoFaltantePagado);
+
+        // Un único update para mantener coherencia en el documento
+        await updateDoc(doc(db, 'cierres', editId), {
+          faltantePagado: nuevoFaltantePagado,
+          'totales.totalGeneral': totalGeneralRecalc,
+          updatedAt: serverTimestamp(),
+        });
+
+        // (Opcional pero recomendado) Mantén el KPI de la sucursal alineado
+        if (sucId) {
+          await updateDoc(doc(db, 'sucursales', sucId), {
+            kpiDepositos: totalGeneralRecalc,
+          });
+        }
+
+        await Swal.fire({
+          icon: 'success',
+          title: 'Faltante pagado',
+          text: `Se agregó Q ${nuevoFaltantePagado.toFixed(2)} al total a depositar y se guardó en el cuadre.`,
+          timer: 1500,
+          showConfirmButton: false,
+        });
+      } catch (e) {
+        console.error(e);
+        await Swal.fire('Error', e.message || 'No se pudo guardar el faltante pagado.', 'error');
+      }
+    } else {
+      // Si es un cuadre NUEVO (sin editId), se guardará al presionar "Guardar"
+      await Swal.fire({
+        icon: 'success',
+        title: 'Faltante pagado',
+        text: `Se agregará Q ${nuevoFaltantePagado.toFixed(2)} cuando guardes el cuadre.`,
+        timer: 1400,
+        showConfirmButton: false,
+      });
     }
   };
+
 
   const validate = () => {
     const activeId = activeSucursalDoc?.id ?? activeFromHook?.id;
