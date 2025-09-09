@@ -56,10 +56,6 @@ export const calcCuadreMetrics = (c) => {
 };
 
 /* ===== Encabezado y footer ===== */
-/**
- * Muestra título "Cuadre - {Sucursal}" y debajo, a la izquierda,
- * "Fecha: {fecha formateada}".
- */
 export const addHeader = (pdf, { title, fecha, sucursal, formatDate }) => {
   const w = pdf.internal.pageSize.getWidth();
   pdf.setFillColor(245, 248, 252);
@@ -78,7 +74,6 @@ export const addHeader = (pdf, { title, fecha, sucursal, formatDate }) => {
   pdf.setFontSize(11);
   pdf.setTextColor(90, 90, 90);
   if (fechaLabel) pdf.text(`Fecha: ${fechaLabel}`, 40, 50);
-  // Nota: ya NO mostramos la sucursal a la derecha: el nombre va en el título.
 };
 
 export const addFooterPageNumbers = (pdf) => {
@@ -93,13 +88,9 @@ export const addFooterPageNumbers = (pdf) => {
   }
 };
 
-/**
- * Helper opcional para generar el nombre de descarga: "Cuadre - {fecha}.pdf"
- */
 export const getCuadreDownloadName = (fecha, formatDate) => {
   const fechaLabel = typeof formatDate === 'function' ? formatDate(fecha) : (fecha || '');
   const base = `Cuadre - ${fechaLabel}`.trim();
-  // Sanitizar para sistemas de archivos
   return `${base}`.replace(/[^\w .-]/g, '_') + '.pdf';
 };
 
@@ -107,20 +98,33 @@ export const getCuadreDownloadName = (fecha, formatDate) => {
 export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate, options = {}) => {
   const { showPedidosYa: optPY = false, showAmex: optAmex = false } = options;
 
-  // Encabezado con el nuevo formato (sin title explícito para usar "Cuadre - {Sucursal}")
+  // Encabezado
   addHeader(pdf, {
     fecha: c.fecha,
     sucursal: sucursalNombre || '—',
     formatDate,
   });
 
-  let y = 76;
+  let y = 76; // debajo del encabezado
   const width = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
   const bottomMargin = 30;
 
-  /* === Arqueo Físico (con Apertura y Total neto) === */
+  /* === Leyenda superior derecha === */
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(10);
+  pdf.setTextColor(90, 90, 90);
+  pdf.text('Montos en Quetzales (Q)', width - 40, 68, { align: 'right' });
+  pdf.setTextColor(33, 37, 41);
+
+  /* === Arqueo físico === */
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(12);
+  pdf.text('Arqueo físico', 40, y);
+  y += 6;
+
   const arqueo = c.arqueo || [{}, {}, {}];
+
   const arqueoRows = [0, 1, 2].map((i) => {
     const a = arqueo[i] || {};
     const apertura = Number.isFinite(+a.apertura) ? +a.apertura : 0;
@@ -134,24 +138,22 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate, options 
     const sub1   = n(a.q1)   * 1;
 
     const subtotal = sub200 + sub100 + sub50 + sub20 + sub10 + sub5 + sub1;
-    const totalNeto = subtotal - apertura;
+    const efectivoNeto = subtotal - apertura; // (menos apertura)
+
+    const tarjeta   = n(a.tarjeta);
+    const motorista = n(a.motorista);
 
     return [
       `Caja ${i + 1}`,
-      apertura.toFixed(2),
-      sub200.toFixed(2),
-      sub100.toFixed(2),
-      sub50.toFixed(2),
-      sub20.toFixed(2),
-      sub10.toFixed(2),
-      sub5.toFixed(2),
-      sub1.toFixed(2),
-      totalNeto.toFixed(2),
-      n(a.tarjeta).toFixed(2),
-      n(a.motorista).toFixed(2),
+      toMoney(apertura),
+      toMoney(sub200), toMoney(sub100), toMoney(sub50), toMoney(sub20), toMoney(sub10), toMoney(sub5), toMoney(sub1),
+      toMoney(efectivoNeto),
+      toMoney(tarjeta),
+      toMoney(motorista),
     ];
   });
 
+  // Totales Arqueo (solo al pie)
   const mArqEfTotal = arqueo.reduce((s, x) => {
     const apertura = Number.isFinite(+x.apertura) ? +x.apertura : 0;
     return s + (subtotalCaja(x) - apertura);
@@ -162,14 +164,11 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate, options 
   autoTable(pdf, {
     startY: y,
     head: [[
-      'Arqueo Físico',
-      'Apertura',
-      'Q200', 'Q100', 'Q50', 'Q20', 'Q10', 'Q5', 'Q1',
-      'Total efectivo', 'Tarjeta', 'Motorista'
+      'Cajas', 'Apertura', 'Q200', 'Q100', 'Q50', 'Q20', 'Q10', 'Q5', 'Q1', 'Efectivo\n(Menos apertura)', 'Tarjeta', 'Motorista'
     ]],
     body: arqueoRows,
-    styles: { fontSize: 9, cellPadding: 3, lineWidth: 0.2, lineColor: [230, 236, 240] },
-    headStyles: { fillColor: [13, 71, 161], textColor: 255 },
+    styles: { fontSize: 8, cellPadding: 2, lineWidth: 0.2, lineColor: [230, 236, 240] },
+    headStyles: { fontSize: 8, fillColor: [13, 71, 161], textColor: 255 },
     columnStyles: {
       1:  { halign: 'right' },
       2:  { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' },
@@ -179,38 +178,47 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate, options 
     },
     theme: 'grid',
     foot: [[
-      '', '', '', '', '', '', '', '', '',
-      { content: mArqEfTotal.toFixed(2), styles: { halign: 'right' } },
-      { content: mArqTar.toFixed(2),     styles: { halign: 'right' } },
-      { content: mArqMot.toFixed(2),     styles: { halign: 'right' } },
+      '', '', '', '', '', '', '', '',
+      { content: 'Totales', styles: { halign: 'right' } },
+      { content: toMoney(mArqEfTotal), styles: { halign: 'right' } },
+      { content: toMoney(mArqTar),     styles: { halign: 'right' } },
+      { content: toMoney(mArqMot),     styles: { halign: 'right' } },
     ]],
-    footStyles: { fillColor: [236, 239, 241], textColor: [33, 37, 41], halign: 'right' },
+    footStyles: { fontSize: 8, fillColor: [236, 239, 241], textColor: [33, 37, 41], halign: 'right' },
   });
 
   y = pdf.lastAutoTable.finalY + 10;
 
-  /* === Cierre de Sistema === */
+  /* === Cierre de sistema === */
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(12);
+  pdf.text('Cierre de sistema', 40, y);
+  y += 6;
+
   const cierre = c.cierre || [{}, {}, {}];
   const cierreRows = [0, 1, 2].map((i) => {
     const cc = cierre[i] || {};
-    const total = n(cc.efectivo) + n(cc.tarjeta) + n(cc.motorista);
+    const ef  = n(cc.efectivo);
+    const tar = n(cc.tarjeta);
+    const mot = n(cc.motorista);
+    const tot = ef + tar + mot;
     return [
       `Caja ${i + 1}`,
-      n(cc.efectivo).toFixed(2),
-      n(cc.tarjeta).toFixed(2),
-      n(cc.motorista).toFixed(2),
-      total.toFixed(2),
+      toMoney(ef),
+      toMoney(tar),
+      toMoney(mot),
+      toMoney(tot),
     ];
   });
 
   const mCieEf  = cierre.reduce((s, x) => s + n(x.efectivo), 0);
   const mCieTar = cierre.reduce((s, x) => s + n(x.tarjeta), 0);
   const mCieMot = cierre.reduce((s, x) => s + n(x.motorista), 0);
-  const mCieTot = mCieEf + mCieTar;
+  const mCieTot = mCieEf + mCieTar + mCieMot;
 
   autoTable(pdf, {
     startY: y,
-    head: [['Cierre de Sistema', 'Efectivo', 'Tarjeta', 'Motorista', 'Total']],
+    head: [['Cajas', 'Efectivo', 'Tarjeta', 'Motorista', 'Total']],
     body: cierreRows,
     styles: { fontSize: 9, cellPadding: 3, lineWidth: 0.2, lineColor: [230, 236, 240] },
     headStyles: { fillColor: [25, 118, 210], textColor: 255 },
@@ -220,44 +228,48 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate, options 
     theme: 'grid',
     foot: [[
       { content: 'Totales', styles: { halign: 'right' } },
-      { content: mCieEf.toFixed(2),  styles: { halign: 'right' } },
-      { content: mCieTar.toFixed(2), styles: { halign: 'right' } },
-      { content: mCieMot.toFixed(2), styles: { halign: 'right' } },
-      { content: mCieTot.toFixed(2), styles: { halign: 'right' } },
+      { content: toMoney(mCieEf),  styles: { halign: 'right' } },
+      { content: toMoney(mCieTar), styles: { halign: 'right' } },
+      { content: toMoney(mCieMot), styles: { halign: 'right' } },
+      { content: toMoney(mCieTot), styles: { halign: 'right' } },
     ]],
     footStyles: { fillColor: [236, 239, 241], textColor: [33, 37, 41], halign: 'right' },
   });
 
   y = pdf.lastAutoTable.finalY + 10;
 
-  /* === Gastos (SOLO categoría, descripción y cantidad) === */
+  /* === Gastos (solo Descripción y Cantidad) === */
   const gastos = Array.isArray(c.gastos) ? c.gastos : [];
   const gastosRows = gastos.map((g) => [
-    (g.categoria || '').toString(),
     (g.descripcion || '').toString(),
-    n(g.cantidad).toFixed(2),
+    toMoney(n(g.cantidad)),
   ]);
 
   const totalGastos = gastos.reduce((s, g) => s + n(g.cantidad), 0);
 
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(12);
+  pdf.text('Gastos', 40, y);
+  y += 6;
+
   autoTable(pdf, {
     startY: y,
-    head: [['Gastos', 'Descripción', 'Cantidad']],
-    body: gastosRows.length ? gastosRows : [['—', '—', '0.00']],
+    head: [['Descripción', 'Cantidad']],
+    body: gastosRows.length ? gastosRows : [['—', toMoney(0)]],
     styles: { fontSize: 9, cellPadding: 3, lineWidth: 0.2, lineColor: [230, 236, 240] },
     headStyles: { fillColor: [21, 101, 192], textColor: 255 },
-    columnStyles: { 2: { halign: 'right' } },
+    columnStyles: { 1: { halign: 'right' } },
     theme: 'grid',
     foot: [[
-      '', { content: 'Total', styles: { halign: 'right' } },
-      { content: totalGastos.toFixed(2), styles: { halign: 'right' } }
+      { content: 'Total', styles: { halign: 'right' } },
+      { content: toMoney(totalGastos), styles: { halign: 'right' } }
     ]],
     footStyles: { fillColor: [236, 239, 241], textColor: [33, 37, 41] },
   });
 
   y = pdf.lastAutoTable.finalY + 12;
 
-  /* === Resumen === */
+  /* === Resumen (igual que antes) === */
   {
     const m = calcCuadreMetrics(c);
 
@@ -329,17 +341,15 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate, options 
     pdf.setDrawColor(230, 236, 240);
     pdf.roundedRect(40, boxTop, width - 80, boxHeight, 4, 4);
 
-    // >>> ACTUALIZACIÓN CLAVE: avanzar 'y' usando la altura real del cuadro
     y = boxTop + boxHeight + 12;
   }
 
-  // Salto de página si el comentario quedaría muy abajo
+  // Comentario (nueva página si hace falta)
   if (y > pageHeight - bottomMargin) {
     pdf.addPage();
-    y = 40; // margen superior razonable para la nueva página
+    y = 40;
   }
 
-  // === Comentario (debajo del Resumen, sin traslape) ===
   const comentarioPlano = (c.comentario || '').toString().trim();
   if (comentarioPlano) {
     autoTable(pdf, {
