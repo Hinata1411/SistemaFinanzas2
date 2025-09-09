@@ -214,7 +214,7 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate, options 
   const mCieEf  = cierre.reduce((s, x) => s + n(x.efectivo), 0);
   const mCieTar = cierre.reduce((s, x) => s + n(x.tarjeta), 0);
   const mCieMot = cierre.reduce((s, x) => s + n(x.motorista), 0);
-  const mCieTot = mCieEf + mCieTar + mCieMot;
+  const mCieTot = mCieEf + mCieTar;
 
   autoTable(pdf, {
     startY: y,
