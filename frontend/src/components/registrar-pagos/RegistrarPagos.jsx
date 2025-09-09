@@ -687,11 +687,11 @@ export default function RegistrarPagos() {
 
         <table className="rc-table rc-gastos-table rc-pagos-table">
           <colgroup>
-            <col style={{width:'200px'}}/>{/* Categoría */}
-            <col style={{width:'auto'}}/>{/* Descripción */}
-            <col style={{width:'140px'}}/>{/* Monto */}
-            <col style={{width:'200px'}}/>{/* Ref */}
-            <col style={{width:'180px'}}/>{/* Img */}
+            <col style={{width:'140px'}}/>{/* Categoría */}
+            <col style={{width:'230px'}}/>{/* Descripción */}
+            <col style={{width:'120px'}}/>{/* Monto */}
+            <col style={{width:'150px'}}/>{/* Ref */}
+            <col style={{width:'140px'}}/>{/* Img */}
             <col style={{width:'120px'}}/>{/* Acciones */}
           </colgroup>
 

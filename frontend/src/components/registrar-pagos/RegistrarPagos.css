@@ -20,6 +20,20 @@
   margin: 0;
 }
 
+/* Ocupa todo el ancho disponible en esta vista */
+.registrar-pagos,
+.registrar-pagos .rc-header,
+.registrar-pagos .rc-tabs-row,
+.registrar-pagos .rc-card {
+  max-width: none;
+  width: 100%;
+}
+
+/* Si el contenedor padre es un grid de 2 columnas, que esta vista las cruce */
+.registrar-pagos { grid-column: 1 / -1; }
+.registrar-pagos .rc-card { grid-column: 1 / -1; }
+
+
 /* Leyenda de la tabla (alineada y centrada) */
 .registrar-pagos .rc-gastos-legend {
   display: grid;
