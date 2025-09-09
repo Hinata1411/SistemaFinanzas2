@@ -311,9 +311,6 @@ export default function RegistrarPagos() {
   if (!isAdmin && !isViewing) {
     return <div className="rc-tab-empty">Solo administradores</div>;
   }
-
-  const branchLabel = (s) => s?.ubicacion || s?.nombre || s?.id || '—';
-
   /* ===========================
      Mutadores tabla
      =========================== */
