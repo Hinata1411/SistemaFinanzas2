@@ -1,4 +1,4 @@
-// src/RegistrarPagos.jsx
+// src/components/registrar-pagos/RegistrarPagos.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
@@ -18,9 +18,17 @@ import { recomputeSucursalKPI } from '../../utils/kpi';
 import CategoriasModal from '../registrar-cierre/CategoriasModal';
 import AttachmentViewerModal from '../registrar-cierre/AttachmentViewerModal';
 
-// ====== Helpers ======
+/* ===========================
+   Constantes / helpers módulo
+   =========================== */
+
+const INIT_CATS = [
+  'Varios', 'Servicios', 'Transporte', 'Publicidad', 'Mantenimiento', 'Ajuste de caja chica'
+];
+
 const money = (v) =>
-  new Intl.NumberFormat('es-GT', { style: 'currency', currency: 'GTQ', maximumFractionDigits: 2 }).format(Number(v) || 0);
+  new Intl.NumberFormat('es-GT', { style: 'currency', currency: 'GTQ', maximumFractionDigits: 2 })
+    .format(Number(v) || 0);
 
 const okTypes = ['image/png', 'image/jpeg', 'application/pdf'];
 const n = (v) => {
@@ -28,7 +36,10 @@ const n = (v) => {
   return Number.isFinite(x) ? x : 0;
 };
 
-// ====== Componente ======
+/* ===========================
+   Componente
+   =========================== */
+
 export default function RegistrarPagos() {
   const [sp] = useSearchParams();
   const navigate = useNavigate();
@@ -52,7 +63,6 @@ export default function RegistrarPagos() {
   const [cajaChicaBySuc, setCajaChicaBySuc] = useState({});        // { [id]: number }
 
   // categorías
-  const INIT_CATS = ['Varios','Servicios','Transporte','Publicidad','Mantenimiento','Ajuste de caja chica'];
   const [categorias, setCategorias] = useState(INIT_CATS);
   const [showCatModal, setShowCatModal] = useState(false);
 
@@ -66,55 +76,56 @@ export default function RegistrarPagos() {
   // Para deltas al editar y snapshots
   const [originalDoc, setOriginalDoc] = useState(null);
 
-  // Helpers para inicializar el mapa de pagos
-  const makeEmptyItem = (cats) => ({
-    descripcion: '',
-    monto: '',
-    ref: '',
-    categoria: (cats && cats[0]) || 'Varios',
-    fileBlob: null,
-    fileUrl: '',
-    fileName: '',
-    fileMime: '',
-    filePreview: '',
-    locked: false,
-  });
-
-  const buildInitialPagosMap = (sucs, cats) => {
-    const m = {};
-    (sucs || []).forEach((s) => {
-      m[s.id] = { items: [makeEmptyItem(cats)], cajaChicaUsada: 0 };
-    });
-    return m;
-  };
-
-  // 👇 Importante: definir resetForm ANTES de los useEffect que lo usan
+  /* ===========
+     resetForm
+     =========== */
   const resetForm = React.useCallback(() => {
-    // Revocar previews anteriores (por si venías de ver/editar)
-    try {
-      Object.values(pagosMap).forEach((suc) => {
-        (suc?.items || []).forEach((it) => {
-          if (it?.filePreview) URL.revokeObjectURL(it.filePreview);
-        });
-      });
-    } catch {}
-
     setOriginalDoc(null);
     setFecha(getTodayISO());
     setCategorias(INIT_CATS);
-    setPagosMap(buildInitialPagosMap(sucursales, INIT_CATS)); // inicial con las sucursales cargadas (si ya están)
+
+    // Construir mapa inicial con una fila vacía por sucursal visible
+    setPagosMap(() => {
+      const m = {};
+      (sucursales || []).forEach((s) => {
+        m[s.id] = {
+          items: [{
+            descripcion: '',
+            monto: '',
+            ref: '',
+            categoria: (INIT_CATS[0] || 'Varios'),
+            fileBlob: null,
+            fileUrl: '',
+            fileName: '',
+            fileMime: '',
+            filePreview: '',
+            locked: false,
+          }],
+          cajaChicaUsada: 0,
+        };
+      });
+      return m;
+    });
+
     setShowCatModal(false);
     setViewer({ open: false, url: '', mime: '', name: '' });
-    // Nota: NO tocamos activeSucursalId para respetar lo que esté seleccionado/visible
-  }, [sucursales, INIT_CATS]); // dependemos de sucursales para sembrar filas si ya están
+    // Nota: NO tocamos activeSucursalId para respetar la selección actual (si ya existe)
+  }, [sucursales]);
 
+  // Resetea si entras a /RegistrarPagos (sin id)
   useEffect(() => {
     if (!editId) resetForm();
   }, [editId, mode, resetForm]);
 
+  /* ===========================
+     Auth
+     =========================== */
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) { setMe({ loaded:true, role:'viewer', uid:null, username:'' }); return; }
+      if (!user) {
+        setMe({ loaded:true, role:'viewer', uid:null, username:'' });
+        return;
+      }
       try {
         const us = await getDoc(doc(db, 'usuarios', user.uid));
         const ud = us.exists() ? us.data() : {};
@@ -126,7 +137,9 @@ export default function RegistrarPagos() {
     return () => unsub();
   }, []);
 
-  // Cargar sucursales + KPI + caja chica EN TIEMPO REAL
+  /* ===========================
+     Sucursales + KPI + CajaChica (RT)
+     =========================== */
   useEffect(() => {
     if (!me.loaded) return;
 
@@ -156,8 +169,7 @@ export default function RegistrarPagos() {
         kpi[s.id]  = Number(s?.kpiDepositos || 0);
       });
 
-      // 3) Si vienes a VER un documento (mode=view), respeta el snapshot guardado SOLO para esa sucursal
-      //    (Si estás editando, mejor usar el KPI vivo para que refleje cambios posteriores, p.ej. al borrar pagos/cuadres)
+      // 3) En modo ver, para la sucursal del documento, ancla KPI/caja chica al snapshot guardado
       if (isViewing && originalDoc?.sucursalId) {
         const sid = originalDoc.sucursalId;
         kpi[sid] = Number(originalDoc?.kpiDepositosAtSave ?? originalDoc?.sobranteParaManana ?? 0);
@@ -173,11 +185,19 @@ export default function RegistrarPagos() {
     });
 
     return () => unsub();
-    // Importante: dependencias que realmente cambian el comportamiento del efecto
-  }, [me.loaded, editId, isViewing, originalDoc?.sucursalId, originalDoc?.kpiDepositosAtSave, originalDoc?.sobranteParaManana, originalDoc?.cajaChicaDisponibleAtSave]);
+  }, [
+    me.loaded,
+    editId,
+    isViewing,
+    originalDoc?.sucursalId,
+    originalDoc?.kpiDepositosAtSave,
+    originalDoc?.sobranteParaManana,
+    originalDoc?.cajaChicaDisponibleAtSave
+  ]);
 
-  
-  // Inicializar pagosMap por sucursal
+  /* ===========================
+     Inicializa slots en pagosMap al cargar sucursales
+     =========================== */
   useEffect(() => {
     if (!sucursales.length) return;
     setPagosMap((prev) => {
@@ -186,8 +206,8 @@ export default function RegistrarPagos() {
         if (!copy[s.id]) {
           copy[s.id] = {
             items: [
-              { descripcion:'', monto:'', ref:'', categoria: categorias[0] || 'Varios',
-                fileBlob:null, fileUrl:'', fileName:'', fileMime:'', locked:false }
+              { descripcion:'', monto:'', ref:'', categoria: INIT_CATS[0] || 'Varios',
+                fileBlob:null, fileUrl:'', fileName:'', fileMime:'', filePreview:'', locked:false }
             ],
             cajaChicaUsada: 0,
           };
@@ -195,10 +215,13 @@ export default function RegistrarPagos() {
       });
       return copy;
     });
+    // nolint intencional: dependemos solo del tamaño para evitar reprocesar
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sucursales.length]);
 
-  // Precarga cuando venimos de HistorialPagos: ?id=<doc>&mode=<view|edit>
+  /* ===========================
+     Precarga desde HistorialPagos (view/edit)
+     =========================== */
   useEffect(() => {
     if (!editId) return;
     (async () => {
@@ -215,7 +238,7 @@ export default function RegistrarPagos() {
         setActiveSucursalId(d.sucursalId || null);
         setFecha(d.fecha || getTodayISO());
 
-        // Asegurar slot
+        // Asegurar slot y cargar items del doc
         setPagosMap(prev => {
           const copy = { ...prev };
           if (!copy[d.sucursalId]) {
@@ -237,11 +260,10 @@ export default function RegistrarPagos() {
           return copy;
         });
 
-        // Forzar que el KPI muestre lo que se guardó en este documento (snapshot)
+        // Para la UI: ancla KPI/caja chica a los snapshots de ESTE doc
         const kpiVal = Number(d?.kpiDepositosAtSave ?? d?.sobranteParaManana ?? 0);
         setKpiDepositosBySuc(prev => ({ ...prev, [d.sucursalId]: kpiVal }));
 
-        // Si guardaste snapshot de caja chica, úsalo para la UI en modo ver
         if (typeof d?.cajaChicaDisponibleAtSave === 'number') {
           setCajaChicaBySuc(prev => ({ ...prev, [d.sucursalId]: Number(d.cajaChicaDisponibleAtSave) }));
         }
@@ -252,9 +274,11 @@ export default function RegistrarPagos() {
     })();
   }, [editId]);
 
+  /* ===========================
+     Limpia previews al desmontar / cambiar
+     =========================== */
   useEffect(() => {
     return () => {
-      // revoca todos los previews que estén en memoria
       Object.values(pagosMap).forEach(suc => {
         (suc?.items || []).forEach(it => {
           if (it?.filePreview) {
@@ -265,14 +289,13 @@ export default function RegistrarPagos() {
     };
   }, [pagosMap]);
 
-
-
-  // Derivados
+  /* ===========================
+     Derivados
+     =========================== */
   const active = activeSucursalId;
   const state = pagosMap[active] || { items:[], cajaChicaUsada:0 };
   const readOnly = isViewing;
 
-  // Total utilizado
   const totalUtilizado = useMemo(
     () =>
       (state.items || []).reduce(
@@ -291,6 +314,9 @@ export default function RegistrarPagos() {
 
   const branchLabel = (s) => s?.ubicacion || s?.nombre || s?.id || '—';
 
+  /* ===========================
+     Mutadores tabla
+     =========================== */
   const setRow = (i, field, val) => {
     if (readOnly) return;
     setPagosMap(prev => {
@@ -308,7 +334,7 @@ export default function RegistrarPagos() {
       const m = { ...prev };
       const arr = [...(m[active]?.items || [])].map(x => ({ ...x, locked:true }));
       arr.push({
-        descripcion:'', monto:'', ref:'', categoria: categorias[0] || 'Varios',
+        descripcion:'', monto:'', ref:'', categoria: INIT_CATS[0] || 'Varios',
         fileBlob:null, filePreview:'', fileUrl:'', fileName:'', fileMime:'', locked:false
       });
       m[active] = { ...(m[active]||{}), items: arr };
@@ -327,6 +353,9 @@ export default function RegistrarPagos() {
     });
   };
 
+  /* ===========================
+     Archivos
+     =========================== */
   const handlePickFile = (i) => {
     if (readOnly) return;
     const el = document.getElementById(`pago-file-${active}-${i}`);
@@ -375,7 +404,9 @@ export default function RegistrarPagos() {
     setRow(i, 'fileUrl', '');
   };
 
-  // KPI que se muestra en la UI. En edición/visualización del MISMO doc, se ancla al snapshot guardado.
+  /* ===========================
+     KPI UI (anclado en view/edit del mismo doc)
+     =========================== */
   const getKpiDepositosUI = () => {
     if (!active) return 0;
     const live = Number(kpiDepositosBySuc[active] || 0);
@@ -391,12 +422,11 @@ export default function RegistrarPagos() {
   };
 
   const kpiDepositos = getKpiDepositosUI();
+  const cajaChicaDisponible = active ? Number(cajaChicaBySuc[active] || 0) : 0;
 
-
-  const cajaChicaDisponible = active ? Number(cajaChicaBySuc[active] || 0) : 0; // esta puede quedarse "viva"
-
-
- 
+  /* ===========================
+     Totales / Caja chica
+     =========================== */
   const sobranteBruto = kpiDepositos - totalUtilizado;
   const deficit = Math.min(0, sobranteBruto);
   const sobranteFinal = Math.max(0, sobranteBruto + (state.cajaChicaUsada || 0));
@@ -434,10 +464,15 @@ export default function RegistrarPagos() {
     await Swal.fire({ icon: 'success', title: 'Caja chica aplicada', timer: 1000, showConfirmButton:false });
   };
 
+  /* ===========================
+     Visor adjuntos
+     =========================== */
   const openViewer = (url, mime, name) => setViewer({ open:true, url, mime:mime||'', name:name||'' });
   const closeViewer = () => setViewer({ open:false, url:'', mime:'', name:'' });
 
-  // Guardar nuevo o actualizar existente
+  /* ===========================
+     Guardar
+     =========================== */
   const onSave = async () => {
     try {
       if (!active) return Swal.fire('Sucursal', 'Selecciona una sucursal', 'warning');
@@ -464,20 +499,18 @@ export default function RegistrarPagos() {
         return { ...rest };
       }));
 
-      // 👇 Primero define lo que usarás en los cálculos
       const totalUtilizadoCalc = ready.reduce((s, it) => s + n(it.monto), 0);
       const cajaChicaUsada = n(state.cajaChicaUsada || 0);
 
-      // 👇 Base que ves en pantalla (anclada al snapshot si estás editando ese doc)
+      // Base que ves en pantalla (anclada al snapshot si estás editando ese doc)
       const kpiBase = getKpiDepositosUI();
-
       const sobranteParaManana = Math.max(0, (kpiBase - totalUtilizadoCalc) + cajaChicaUsada);
 
       const actor = { uid: me.uid, username: me.username };
 
       // snapshots visibles en ver/editar
-      const kpiSnapshot = kpiBase; // lo que se ve en “Dinero para depósitos”
-      const cajaChicaSnapshot = active ? Number(cajaChicaBySuc[active] || 0) : 0; // disponible al guardar
+      const kpiSnapshot = kpiBase;
+      const cajaChicaSnapshot = active ? Number(cajaChicaBySuc[active] || 0) : 0;
 
       if (isEditingExisting) {
         const prevCaja = n(originalDoc?.cajaChicaUsada);
@@ -502,7 +535,7 @@ export default function RegistrarPagos() {
           setCajaChicaBySuc(prev => ({ ...prev, [active]: n(prev[active]) + deltaCajaChica }));
         }
 
-        // ✅ Recalcular KPI según documento más reciente (pago/cierre)
+        // Recalcular KPI según documento más reciente (pago/cierre)
         await recomputeSucursalKPI(active);
 
         await Swal.fire({ icon: 'success', title: 'Actualizado', text: 'Los pagos se guardaron correctamente.' });
@@ -527,7 +560,7 @@ export default function RegistrarPagos() {
           await updateDoc(doc(db, 'sucursales', active), { cajaChica: increment(deltaCajaChica) });
         }
 
-        // ✅ Recalcular KPI (el nuevo pago normalmente será el más reciente)
+        // Recalcular KPI (el nuevo pago normalmente será el más reciente)
         await recomputeSucursalKPI(active);
 
         setCajaChicaBySuc(prev => ({ ...prev, [active]: Number(prev[active] || 0) + deltaCajaChica }));
@@ -541,7 +574,9 @@ export default function RegistrarPagos() {
     }
   };
 
-      
+  /* ===========================
+     Render
+     =========================== */
 
   const headerSuffix = isEditingExisting ? '(editando)' : isViewing ? '(viendo)' : '';
 
@@ -586,7 +621,7 @@ export default function RegistrarPagos() {
           className="rc-tabs rc-tabs-browser"
           role="tablist"
           aria-label="Sucursales"
-          style={{ flexWrap:'nowrap' }}   /* refuerzo anti-colapso */
+          style={{ flexWrap:'nowrap' }}
         >
           {sucursales.map((s) => (
             <button
@@ -598,9 +633,9 @@ export default function RegistrarPagos() {
               aria-selected={active === s.id}
               disabled={readOnly}
               title={readOnly ? 'Vista de solo lectura' : ''}
-              style={{ flex:'0 0 auto' }} /* refuerzo anti-wrap */
+              style={{ flex:'0 0 auto' }}
             >
-              {branchLabel(s)}
+              {s?.ubicacion || s?.nombre || s?.id}
             </button>
           ))}
         </div>
@@ -640,166 +675,165 @@ export default function RegistrarPagos() {
             <col style={{width:'120px'}}/>{/* Acciones */}
           </colgroup>
 
-        <thead>
-          <tr>
-            <th style={{textAlign:'center'}}>Categoría</th>
-            <th style={{textAlign:'center'}}>Descripción</th>
-            <th style={{textAlign:'center'}}>Cantidad</th>
-            <th style={{textAlign:'center'}}>No. de ref</th>
-            <th style={{textAlign:'center'}}>Comprobante</th>
-            <th style={{textAlign:'center'}}>Acciones</th>
-          </tr>
-        </thead>
+          <thead>
+            <tr>
+              <th style={{textAlign:'center'}}>Categoría</th>
+              <th style={{textAlign:'center'}}>Descripción</th>
+              <th style={{textAlign:'center'}}>Cantidad</th>
+              <th style={{textAlign:'center'}}>No. de ref</th>
+              <th style={{textAlign:'center'}}>Comprobante</th>
+              <th style={{textAlign:'center'}}>Acciones</th>
+            </tr>
+          </thead>
 
-        <tbody>
-          {(!state.items || !state.items.length) && (
-            <tr><td colSpan={6} className="rc-empty">Sin pagos</td></tr>
-          )}
+          <tbody>
+            {(!state.items || !state.items.length) && (
+              <tr><td colSpan={6} className="rc-empty">Sin pagos</td></tr>
+            )}
 
-          {state.items?.map((r, i) => {
-            const isPdf = (r.fileMime || '').includes('pdf');
-            const hasFile = !!(r.filePreview || r.fileUrl || r.fileBlob);
-            return (
-              <tr key={`${active}-${i}`}>
+            {state.items?.map((r, i) => {
+              const isPdf = (r.fileMime || '').includes('pdf');
+              const hasFile = !!(r.filePreview || r.fileUrl || r.fileBlob);
+              return (
+                <tr key={`${active}-${i}`}>
+                  {/* Categoría */}
+                  <td data-label="Categoría">
+                    <select
+                      className="rc-input rc-select"
+                      value={r.categoria}
+                      onChange={(e)=>setRow(i,'categoria',e.target.value)}
+                      disabled={readOnly}
+                    >
+                      {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                  </td>
 
-                {/* Categoría */}
-                <td data-label="Categoría">
-                  <select
-                    className="rc-input rc-select"
-                    value={r.categoria}
-                    onChange={(e)=>setRow(i,'categoria',e.target.value)}
-                    disabled={readOnly}
-                  >
-                    {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                  </select>
-                </td>
+                  {/* Descripción */}
+                  <td data-label="Descripción">
+                    <input
+                      className="rc-input rc-desc"
+                      placeholder="Descripción"
+                      value={r.descripcion}
+                      onChange={(e)=>setRow(i,'descripcion',e.target.value)}
+                      disabled={readOnly}
+                      readOnly={readOnly}
+                    />
+                  </td>
 
-                {/* Descripción */}
-                <td data-label="Descripción">
-                  <input
-                    className="rc-input rc-desc"
-                    placeholder="Descripción"
-                    value={r.descripcion}
-                    onChange={(e)=>setRow(i,'descripcion',e.target.value)}
-                    disabled={readOnly}
-                    readOnly={readOnly}
-                  />
-                </td>
+                  {/* Monto */}
+                  <td data-label="Monto a depositar">
+                    <input
+                      className="rc-input rc-qty no-spin"
+                      type="number" min="0" step="0.01" inputMode="decimal"
+                      value={r.monto ?? ''}
+                      onChange={(e)=>setRow(i,'monto',e.target.value)}
+                      onWheel={(e)=>e.currentTarget.blur()}
+                      disabled={readOnly}
+                      readOnly={readOnly}
+                    />
+                  </td>
 
-                {/* Monto */}
-                <td data-label="Monto a depositar">
-                  <input
-                    className="rc-input rc-qty no-spin"
-                    type="number" min="0" step="0.01" inputMode="decimal"
-                    value={r.monto ?? ''}
-                    onChange={(e)=>setRow(i,'monto',e.target.value)}
-                    onWheel={(e)=>e.currentTarget.blur()}
-                    disabled={readOnly}
-                    readOnly={readOnly}
-                  />
-                </td>
+                  {/* Ref */}
+                  <td data-label="Ref">
+                    <input
+                      className="rc-input"
+                      placeholder="Referencia"
+                      value={r.ref || ''}
+                      onChange={(e)=>setRow(i,'ref',e.target.value)}
+                      disabled={readOnly}
+                      readOnly={readOnly}
+                    />
+                  </td>
 
-                {/* Ref */}
-                <td data-label="Ref">
-                  <input
-                    className="rc-input"
-                    placeholder="Referencia"
-                    value={r.ref || ''}
-                    onChange={(e)=>setRow(i,'ref',e.target.value)}
-                    disabled={readOnly}
-                    readOnly={readOnly}
-                  />
-                </td>
+                  {/* Comprobante (Img/PDF) */}
+                  <td data-label="Comprobante" className="img-cell">
+                    <div>
+                      {hasFile ? (
+                        <>
+                          <button
+                            className="rc-btn rc-btn-outline"
+                            type="button"
+                            onClick={()=>openViewer(r.filePreview || r.fileUrl || '', r.fileMime || '', r.fileName || '')}
+                            disabled={!(r.filePreview || r.fileUrl)}
+                            title="Ver comprobante"
+                          >
+                            {isPdf ? 'PDF' : 'Ver'}
+                          </button>
 
-                {/* Comprobante (Img/PDF) */}
-                <td data-label="Comprobante" className="img-cell">
-                  <div>
-                    {hasFile ? (
-                      <>
-                        <button
-                          className="rc-btn rc-btn-outline"
-                          type="button"
-                          onClick={()=>openViewer(r.filePreview || r.fileUrl || '', r.fileMime || '', r.fileName || '')}
-                          disabled={!(r.filePreview || r.fileUrl)}
-                          title="Ver comprobante"
-                        >
-                          {isPdf ? 'PDF' : 'Ver'}
-                        </button>
-
-                        {!readOnly && (
+                          {!readOnly && (
+                            <>
+                              <button className="rc-btn rc-btn-outline" type="button" onClick={()=>handlePickFile(i)}>
+                                Cambiar
+                              </button>
+                              <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>clearFile(i)}>
+                                Quitar
+                              </button>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        !readOnly && (
                           <>
+                            <input
+                              id={`pago-file-${active}-${i}`}
+                              type="file"
+                              accept="image/*,application/pdf"
+                              onChange={(e)=>handleFileChange(i,e)}
+                              style={{ display:'none' }}
+                              disabled={readOnly}
+                            />
                             <button className="rc-btn rc-btn-outline" type="button" onClick={()=>handlePickFile(i)}>
-                              Cambiar
-                            </button>
-                            <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>clearFile(i)}>
-                              Quitar
+                              Adjuntar
                             </button>
                           </>
-                        )}
-                      </>
-                    ) : (
-                      !readOnly && (
-                        <>
-                          <input
-                            id={`pago-file-${active}-${i}`}
-                            type="file"
-                            accept="image/*,application/pdf"
-                            onChange={(e)=>handleFileChange(i,e)}
-                            style={{ display:'none' }}
-                            disabled={readOnly}
-                          />
-                          <button className="rc-btn rc-btn-outline" type="button" onClick={()=>handlePickFile(i)}>
-                            Adjuntar
-                          </button>
-                        </>
-                      )
-                    )}
-                  </div>
-                </td>
+                        )
+                      )}
+                    </div>
+                  </td>
 
-                {/* Acciones */}
-                <td data-label="Acciones" style={{textAlign:'center'}}>
-                  <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>removeRow(i)} disabled={readOnly}>✕</button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
+                  {/* Acciones */}
+                  <td data-label="Acciones" style={{textAlign:'center'}}>
+                    <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>removeRow(i)} disabled={readOnly}>✕</button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
 
-        <tfoot>
-          <tr>
-            <td></td>
-            <td style={{ fontWeight:800, textAlign:'right', color:'var(--dark)' }}>
-              Total utilizado
-            </td>
-            <td style={{ fontWeight:800, textAlign:'right', color:'var(--dark)' }}>
-              {money(totalUtilizado)}
-            </td>
-            <td colSpan={4}></td>
-          </tr>
+          <tfoot>
+            <tr>
+              <td></td>
+              <td style={{ fontWeight:800, textAlign:'right', color:'var(--dark)' }}>
+                Total utilizado
+              </td>
+              <td style={{ fontWeight:800, textAlign:'right', color:'var(--dark)' }}>
+                {money(totalUtilizado)}
+              </td>
+              <td colSpan={4}></td>
+            </tr>
 
-          <tr>
-            <td></td>
-            <td style={{ fontWeight:800, textAlign:'right', color:'var(--dark)' }}>
-              Sobrante para mañana
-            </td>
-            <td style={{ fontWeight:800, textAlign:'right', color: sobranteFinal >= 0 ? 'var(--accent)' : 'var(--dark)' }}>
-              {money(sobranteFinal)}
-            </td>
-            <td colSpan={4} style={{ textAlign:'right' }}>
-              {mostrarUsarCajaChica && !readOnly && (
-                <button className="rc-btn rc-btn-primary" type="button" onClick={usarCajaChica}>
-                  Usar caja chica
-                </button>
-              )}
-              {state.cajaChicaUsada > 0 && (
-                <span style={{ marginLeft:12, fontWeight:700, color:'var(--dark)' }}>
-                  Se tomó de caja chica: {money(state.cajaChicaUsada)}
-                </span>
-              )}
-            </td>
-          </tr>
-        </tfoot>
+            <tr>
+              <td></td>
+              <td style={{ fontWeight:800, textAlign:'right', color:'var(--dark)' }}>
+                Sobrante para mañana
+              </td>
+              <td style={{ fontWeight:800, textAlign:'right', color: sobranteFinal >= 0 ? 'var(--accent)' : 'var(--dark)' }}>
+                {money(sobranteFinal)}
+              </td>
+              <td colSpan={4} style={{ textAlign:'right' }}>
+                {mostrarUsarCajaChica && !readOnly && (
+                  <button className="rc-btn rc-btn-primary" type="button" onClick={usarCajaChica}>
+                    Usar caja chica
+                  </button>
+                )}
+                {state.cajaChicaUsada > 0 && (
+                  <span style={{ marginLeft:12, fontWeight:700, color:'var(--dark)' }}>
+                    Se tomó de caja chica: {money(state.cajaChicaUsada)}
+                  </span>
+                )}
+              </td>
+            </tr>
+          </tfoot>
         </table>
 
         {!readOnly && (
