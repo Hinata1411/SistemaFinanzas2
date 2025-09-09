@@ -152,8 +152,10 @@ export default function GastosList({
 
           {gastos.map((g, i) => {
             const locked = !!g.locked;
-            const disabled = readOnly || locked;
-            const hasFile = !!(g.filePreview || g.fileUrl);
+            const disabled = readOnly || locked;     // para inputs/edición
+            const canEdit = !readOnly && !locked;    // adjuntar/eliminar solo cuando se puede editar
+            const viewUrl = g.filePreview || g.fileUrl || g.fileURL || g.comprobanteUrl || '';
+            const hasFile = !!viewUrl;
 
             return (
               <tr key={i}>
@@ -222,19 +224,19 @@ export default function GastosList({
                         className="rc-iconbtn"
                         onClick={() =>
                           openViewer({
-                            url: g.filePreview || g.fileUrl,
-                            mime: g.fileMime,
-                            name: g.fileName,
+                            url: viewUrl,
+                            mime: g.fileMime || '',
+                            name: g.fileName || '',
                             rowIndex: i,
                           })
                         }
                         title="Abrir comprobante"
-                        disabled={disabled}
+                        disabled={false} // se puede ver aunque esté locked
                       >
                         <img src={ICONS.view} alt="Ver" width={25} height={25} />
                       </button>
                     ) : (
-                      !disabled && (
+                      canEdit && (
                         <button
                           type="button"
                           className="rc-iconbtn"
