@@ -87,25 +87,40 @@ export function useRegistrarCierreTotals({
     [gastos]
   );
 
-  // Diferencias (con efectivo NETO)
-  const diferenciaEfectivo = useMemo(
-    () => totalArqueoEfectivoNeto - totalCierreEfectivo,
-    [totalArqueoEfectivoNeto, totalCierreEfectivo]
+  // ===== NUEVO: Diferencia REAL con efectivo + tarjeta =====
+  const totalArqueoEfectivoMasTarjeta = useMemo(
+    () => totalArqueoEfectivoNeto + totalArqueoTarjeta,
+    [totalArqueoEfectivoNeto, totalArqueoTarjeta]
   );
 
+  const totalCierreEfectivoMasTarjeta = useMemo(
+    () => totalCierreEfectivo + totalCierreTarjeta,
+    [totalCierreEfectivo, totalCierreTarjeta]
+  );
+
+  const diferenciaReal = useMemo(
+    () => totalArqueoEfectivoMasTarjeta - totalCierreEfectivoMasTarjeta,
+    [totalArqueoEfectivoMasTarjeta, totalCierreEfectivoMasTarjeta]
+  );
+
+  // Mantengo los nombres existentes para no romper UI:
+  // "diferenciaEfectivo" ahora representa la diferencia REAL (efectivo+tarjeta)
+  const diferenciaEfectivo = diferenciaReal;
+
+  // Faltante REAL (si la diferencia es negativa)
   const faltanteEfectivo = useMemo(
-    () => Math.max(0, -diferenciaEfectivo),
-    [diferenciaEfectivo]
+    () => Math.max(0, -diferenciaReal),
+    [diferenciaReal]
   );
 
-  // Faltante por gastos (con neto)
+  // Faltante por gastos (se mantiene con efectivo neto, como tenías)
   const faltantePorGastos = useMemo(() => {
     const diff =
       totalGastos - totalArqueoEfectivoNeto - n(cajaChicaUsada) - n(faltantePagado);
     return diff > 0 ? diff : 0;
   }, [totalGastos, totalArqueoEfectivoNeto, cajaChicaUsada, faltantePagado]);
 
-  // Total a depositar (con neto)
+  // Total a depositar (se mantiene con efectivo neto)
   const totalGeneral = useMemo(
     () => totalArqueoEfectivoNeto - totalGastos + n(cajaChicaUsada) + n(faltantePagado),
     [totalArqueoEfectivoNeto, totalGastos, cajaChicaUsada, faltantePagado]
@@ -113,12 +128,12 @@ export function useRegistrarCierreTotals({
 
   const flags = useMemo(
     () => ({
-      diffEsPositivo: diferenciaEfectivo >= 0,
-      diffLabel: diferenciaEfectivo >= 0 ? 'Sobrante' : 'Faltante',
-      diffAbs: Math.abs(diferenciaEfectivo),
+      diffEsPositivo: diferenciaReal >= 0,
+      diffLabel: diferenciaReal >= 0 ? 'Sobrante' : 'Faltante',
+      diffAbs: Math.abs(diferenciaReal),
       isDepositNegative: totalGeneral < 0,
     }),
-    [diferenciaEfectivo, totalGeneral]
+    [diferenciaReal, totalGeneral]
   );
 
   return {
@@ -137,8 +152,11 @@ export function useRegistrarCierreTotals({
       totalGastos,
       totalAjusteCajaChica,
 
-      diferenciaEfectivo,
-      faltanteEfectivo,
+      // Diferencias (ahora REAL efectivo+tarjeta)
+      diferenciaEfectivo,   // mismo nombre; valor = diferenciaReal
+      diferenciaReal,       // extra opcional por si quieres mostrarlo
+
+      faltanteEfectivo,     // ahora faltante REAL (efectivo+tarjeta)
       faltantePorGastos,
 
       totalGeneral,
