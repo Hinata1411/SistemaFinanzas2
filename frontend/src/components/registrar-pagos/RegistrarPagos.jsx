@@ -712,8 +712,6 @@ export default function RegistrarPagos() {
             )}
 
             {state.items?.map((r, i) => {
-              const isPdf = (r.fileMime || '').includes('pdf');
-              const hasFile = !!(r.filePreview || r.fileUrl || r.fileBlob);
               return (
                 <tr key={`${active}-${i}`}>
                   {/* Categoría */}
