@@ -1,6 +1,6 @@
 // src/utils/kpi.js
 import {
-  collection, getDocs, getDoc, query, where, doc, updateDoc
+  collection, getDocs, query, where, doc, updateDoc
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
 
@@ -14,7 +14,7 @@ const num = (v) => {
   if (typeof v !== 'string') return 0;
 
   const s0 = v.trim();
-  const s1 = s0.replace(/[^\d.,\-]/g, '');
+  const s1 = s0.replace(/[^\d.,-]/g, '');
 
   let s2;
   if (!s1.includes('.') && (s1.match(/,/g)?.length === 1)) {
