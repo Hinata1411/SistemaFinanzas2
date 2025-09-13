@@ -230,7 +230,6 @@ export default function Finanzas() {
   const togglePago = (sucursalId, idx) => {
     const iso = todayISO();
     const items = todayPayments[sucursalId] || [];
-    const thisText = items[idx];
 
     // 1) Actualiza estado (índices)
     setCheckedPayments((prev) => {
