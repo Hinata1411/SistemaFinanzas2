@@ -18,7 +18,6 @@ import { recomputeSucursalKPI } from '../../utils/kpi';
 import CategoriasModal from '../registrar-cierre/CategoriasModal';
 import AttachmentViewerModal from '../registrar-cierre/AttachmentViewerModal';
 
-
 /* Iconos */
 const ICONS = {
   attach: '/img/camara.png',
@@ -31,7 +30,6 @@ const ICONS = {
 /* ===========================
    Constantes / helpers módulo
    =========================== */
-
 const INIT_CATS = [
   'Varios', 'Servicios', 'Transporte', 'Publicidad', 'Mantenimiento', 'Ajuste de caja chica'
 ];
@@ -49,7 +47,6 @@ const n = (v) => {
 /* ===========================
    Componente
    =========================== */
-
 export default function RegistrarPagos() {
   const [sp] = useSearchParams();
   const navigate = useNavigate();
@@ -225,7 +222,6 @@ export default function RegistrarPagos() {
       });
       return copy;
     });
-    // nolint intencional: dependemos solo del tamaño para evitar reprocesar
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sucursales.length]);
 
@@ -321,8 +317,95 @@ export default function RegistrarPagos() {
   if (!isAdmin && !isViewing) {
     return <div className="rc-tab-empty">Solo administradores</div>;
   }
+
   /* ===========================
-     Mutadores tabla
+     Totales / Caja chica
+     =========================== */
+  // Caja chica **RESTA** al dinero para depositar
+  const kpiDepositos = (() => {
+    if (!active) return 0;
+    const live = Number(kpiDepositosBySuc[active] || 0);
+    const isSameSucursal = originalDoc?.sucursalId === active;
+
+    if ((isViewing || isEditingExisting) && isSameSucursal) {
+      const snap = Number(
+        originalDoc?.kpiDepositosAtSave ?? originalDoc?.sobranteParaManana ?? 0
+      );
+      return Number.isFinite(snap) ? snap : live;
+    }
+    return live;
+  })();
+
+  const cajaChicaDisponible = active ? Number(cajaChicaBySuc[active] || 0) : 0;
+
+  const sobranteFinal = Math.max(
+    0,
+    (kpiDepositos - totalUtilizado) - (state.cajaChicaUsada || 0)
+  );
+
+  const usarCajaChica = async () => {
+    if (readOnly) return;
+
+    const yaUsado = n(state.cajaChicaUsada || 0);
+    const maxPermitido = Math.max(0, cajaChicaDisponible - yaUsado);
+
+    if (maxPermitido <= 0) {
+      return Swal.fire('Caja chica', 'No hay caja chica disponible', 'info');
+    }
+
+    const { value } = await Swal.fire({
+      title: 'Usar caja chica',
+      input: 'number',
+      inputLabel: `Disponible: ${money(cajaChicaDisponible)} · Ya usado aquí: ${money(yaUsado)} · Restante: ${money(maxPermitido)}`,
+      inputAttributes: { min: '0', step: '0.01' },
+      inputValue: maxPermitido.toFixed(2),
+      showCancelButton: true,
+      confirmButtonText: 'Aplicar',
+      cancelButtonText: 'Cancelar',
+      preConfirm: (raw) => {
+        const v = parseFloat(raw || 0);
+        if (!Number.isFinite(v) || v <= 0) return 'Ingresa un monto válido';
+        if (v > maxPermitido) return `No puedes usar más de ${money(maxPermitido)}`;
+        return v;
+      }
+    });
+
+    if (!value || typeof value === 'string') return;
+
+    setPagosMap(prev => {
+      const m = { ...prev };
+      m[active] = { ...(m[active] || {}), cajaChicaUsada: Number(yaUsado + value) };
+      return m;
+    });
+
+    await Swal.fire({ icon: 'success', title: 'Caja chica aplicada', timer: 1000, showConfirmButton: false });
+  };
+
+
+  /* ===========================
+     Visor adjuntos (¡REINSERTADO!)
+     =========================== */
+  const openViewer = ({ url, mime, name, rowIndex }) =>
+    setViewer({ open: true, url, mime: mime || '', name: name || '', rowIndex });
+
+  const closeViewer = () =>
+    setViewer({ open: false, url: '', mime: '', name: '', rowIndex: -1 });
+
+  const handleModalChange = () => {
+    if (readOnly) return;
+    if (viewer.rowIndex < 0) return;
+    handlePickFile(viewer.rowIndex);
+  };
+
+  const handleModalRemove = () => {
+    if (readOnly) return;
+    if (viewer.rowIndex < 0) return;
+    clearFile(viewer.rowIndex);
+    closeViewer();
+  };
+
+  /* ===========================
+     Archivos
      =========================== */
   const setRow = (i, field, val) => {
     if (readOnly) return;
@@ -360,9 +443,6 @@ export default function RegistrarPagos() {
     });
   };
 
-  /* ===========================
-     Archivos
-     =========================== */
   const handlePickFile = (i) => {
     if (readOnly) return;
     const el = document.getElementById(`pago-file-${active}-${i}`);
@@ -412,87 +492,6 @@ export default function RegistrarPagos() {
   };
 
   /* ===========================
-     KPI UI (anclado en view/edit del mismo doc)
-     =========================== */
-  const getKpiDepositosUI = () => {
-    if (!active) return 0;
-    const live = Number(kpiDepositosBySuc[active] || 0);
-    const isSameSucursal = originalDoc?.sucursalId === active;
-
-    if ((isViewing || isEditingExisting) && isSameSucursal) {
-      const snap = Number(
-        originalDoc?.kpiDepositosAtSave ?? originalDoc?.sobranteParaManana ?? 0
-      );
-      return Number.isFinite(snap) ? snap : live;
-    }
-    return live;
-  };
-
-  const kpiDepositos = getKpiDepositosUI();
-  const cajaChicaDisponible = active ? Number(cajaChicaBySuc[active] || 0) : 0;
-
-  /* ===========================
-     Totales / Caja chica
-     =========================== */
-  const sobranteBruto = kpiDepositos - totalUtilizado;
-  const deficit = Math.min(0, sobranteBruto);
-  const sobranteFinal = Math.max(0, sobranteBruto + (state.cajaChicaUsada || 0));
-  const mostrarUsarCajaChica = deficit < 0;
-
-  const usarCajaChica = async () => {
-    if (readOnly) return;
-    const maxNecesario = Math.abs(deficit);
-    const maxPermitido = Math.min(maxNecesario, cajaChicaDisponible);
-    if (maxPermitido <= 0) return Swal.fire('Caja chica', 'No hay caja chica disponible', 'info');
-
-    const { value } = await Swal.fire({
-      title: 'Usar caja chica',
-      input: 'number',
-      inputLabel: `Necesario: ${money(maxNecesario)} · Disponible: ${money(cajaChicaDisponible)}`,
-      inputAttributes: { min: '0', step: '0.01' },
-      inputValue: maxPermitido.toFixed(2),
-      showCancelButton: true,
-      confirmButtonText: 'Aplicar',
-      cancelButtonText: 'Cancelar',
-      preConfirm: (raw) => {
-        const v = parseFloat(raw || 0);
-        if (isNaN(v) || v <= 0) return 'Ingresa un monto válido';
-        if (v > maxPermitido) return `No puedes usar más de ${money(maxPermitido)}`;
-        return v;
-      }
-    });
-    if (!value || typeof value === 'string') return;
-
-    setPagosMap(prev => {
-      const m = { ...prev };
-      m[active] = { ...(m[active]||{}), cajaChicaUsada: Number((m[active]?.cajaChicaUsada || 0) + value) };
-      return m;
-    });
-    await Swal.fire({ icon: 'success', title: 'Caja chica aplicada', timer: 1000, showConfirmButton:false });
-  };
-
-  /* ===========================
-     Visor adjuntos
-     =========================== */
-    const openViewer = ({ url, mime, name, rowIndex }) =>
-         setViewer({ open:true, url, mime:mime||'', name:name||'', rowIndex });
-    const closeViewer = () =>
-         setViewer({ open:false, url:'', mime:'', name:'', rowIndex:-1 });
-
-    const handleModalChange = () => {
-      if (readOnly) return;
-      if (viewer.rowIndex < 0) return;
-      handlePickFile(viewer.rowIndex);
-    };
-
-    const handleModalRemove = () => {
-      if (readOnly) return;
-      if (viewer.rowIndex < 0) return;
-        clearFile(viewer.rowIndex);
-        closeViewer();
-    };
-
-    /* ===========================
      Guardar
      =========================== */
   const onSave = async () => {
@@ -525,8 +524,13 @@ export default function RegistrarPagos() {
       const cajaChicaUsada = n(state.cajaChicaUsada || 0);
 
       // Base que ves en pantalla (anclada al snapshot si estás editando ese doc)
-      const kpiBase = getKpiDepositosUI();
-      const sobranteParaManana = Math.max(0, (kpiBase - totalUtilizadoCalc) + cajaChicaUsada);
+      const kpiBase = kpiDepositos;
+
+      // Caja chica **RESTA** al sobrante (dinero a depositar)
+      const sobranteParaManana = Math.max(
+        0,
+        (kpiBase - totalUtilizadoCalc) - cajaChicaUsada
+      );
 
       const actor = { uid: me.uid, username: me.username };
 
@@ -599,7 +603,6 @@ export default function RegistrarPagos() {
   /* ===========================
      Render
      =========================== */
-
   const headerSuffix = isEditingExisting ? '(editando)' : isViewing ? '(viendo)' : '';
 
   return (
@@ -617,21 +620,21 @@ export default function RegistrarPagos() {
                 type="date"
                 value={fecha}
                 onChange={(e)=>setFecha(e.target.value)}
-                disabled={readOnly}
-                readOnly={readOnly}
+                disabled={isViewing}
+                readOnly={isViewing}
               />
             </div>
 
             {/* Acciones */}
             <div className="rc-tabs-actions" style={{ gridColumn:'1 / -1', display:'flex', gap:8, flexWrap:'wrap', marginTop:8 }}>
-              {!readOnly && (
+              {!isViewing && (
                 <button type="button" className="rc-btn rc-btn-accent" onClick={onSave}>
                   {isEditingExisting ? 'Actualizar pagos' : 'Guardar pagos'}
                 </button>
               )}
-            </div> 
+            </div>
 
-             {/* KPI compacto */}
+            {/* KPI compacto */}
             <section className="rc-card" style={{ marginTop: 8 }}>
               <div className="rc-card-bd" style={{ display:'flex', gap:18, alignItems:'center', flexWrap:'wrap' }}>
                 <div>
@@ -657,7 +660,6 @@ export default function RegistrarPagos() {
               </div>
             </section>
 
-            
           </div>
         </div>
       </div>
@@ -674,12 +676,12 @@ export default function RegistrarPagos() {
             <button
               key={s.id}
               className={`rc-tab ${active === s.id ? 'active' : ''}`}
-              onClick={()=>!readOnly && setActiveSucursalId(s.id)}
+              onClick={()=>!isViewing && setActiveSucursalId(s.id)}
               type="button"
               role="tab"
               aria-selected={active === s.id}
-              disabled={readOnly}
-              title={readOnly ? 'Vista de solo lectura' : ''}
+              disabled={isViewing}
+              title={isViewing ? 'Vista de solo lectura' : ''}
               style={{ flex:'0 0 auto' }}
             >
               {s?.ubicacion || s?.nombre || s?.id}
@@ -687,8 +689,6 @@ export default function RegistrarPagos() {
           ))}
         </div>
       </div>
-
-     
 
       {/* TABLA */}
       <section className="rc-card">
@@ -729,7 +729,7 @@ export default function RegistrarPagos() {
                       className="rc-input rc-select"
                       value={r.categoria}
                       onChange={(e)=>setRow(i,'categoria',e.target.value)}
-                      disabled={readOnly}
+                      disabled={isViewing}
                     >
                       {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                     </select>
@@ -742,8 +742,8 @@ export default function RegistrarPagos() {
                       placeholder="Descripción"
                       value={r.descripcion}
                       onChange={(e)=>setRow(i,'descripcion',e.target.value)}
-                      disabled={readOnly}
-                      readOnly={readOnly}
+                      disabled={isViewing}
+                      readOnly={isViewing}
                     />
                   </td>
 
@@ -755,8 +755,8 @@ export default function RegistrarPagos() {
                       value={r.monto ?? ''}
                       onChange={(e)=>setRow(i,'monto',e.target.value)}
                       onWheel={(e)=>e.currentTarget.blur()}
-                      disabled={readOnly}
-                      readOnly={readOnly}
+                      disabled={isViewing}
+                      readOnly={isViewing}
                     />
                   </td>
 
@@ -767,8 +767,8 @@ export default function RegistrarPagos() {
                       placeholder="Referencia"
                       value={r.ref || ''}
                       onChange={(e)=>setRow(i,'ref',e.target.value)}
-                      disabled={readOnly}
-                      readOnly={readOnly}
+                      disabled={isViewing}
+                      readOnly={isViewing}
                     />
                   </td>
 
@@ -795,7 +795,7 @@ export default function RegistrarPagos() {
                             <img src={ICONS.view} alt="Ver" width={25} height={25} />
                           </button>
                         ) : (
-                          !readOnly && (
+                          !isViewing && (
                             <button
                               type="button"
                               className="rc-iconbtn"
@@ -815,14 +815,14 @@ export default function RegistrarPagos() {
                         accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
                         onChange={(e) => handleFileChange(i, e)}
                         style={{ display: 'none' }}
-                        disabled={readOnly}
+                        disabled={isViewing}
                       />
                     </div>
                   </td>
 
                   {/* Acciones */}
                   <td data-label="Acciones" style={{textAlign:'center'}}>
-                    <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>removeRow(i)} disabled={readOnly}>✕</button>
+                    <button className="rc-btn rc-btn-ghost" type="button" onClick={()=>removeRow(i)} disabled={isViewing}>✕</button>
                   </td>
                 </tr>
               );
@@ -850,7 +850,7 @@ export default function RegistrarPagos() {
                 {money(sobranteFinal)}
               </td>
               <td colSpan={4} style={{ textAlign:'right' }}>
-                {mostrarUsarCajaChica && !readOnly && (
+                {!isViewing && (
                   <button className="rc-btn rc-btn-primary" type="button" onClick={usarCajaChica}>
                     Usar caja chica
                   </button>
@@ -865,7 +865,7 @@ export default function RegistrarPagos() {
           </tfoot>
         </table>
 
-        {!readOnly && (
+        {!isViewing && (
           <div className="rc-gastos-actions" style={{ marginTop:10 }}>
             <button type="button" className="rc-btn rc-btn-outline" onClick={addRow}>+ Agregar pago</button>
           </div>
@@ -878,7 +878,7 @@ export default function RegistrarPagos() {
         onClose={()=>setShowCatModal(false)}
         categorias={categorias}
         onChangeCategorias={(nextCats, oldName, newName) => {
-          if (readOnly) return;
+          if (isViewing) return;
           setCategorias(nextCats);
           if (oldName) {
             setPagosMap(prev => {

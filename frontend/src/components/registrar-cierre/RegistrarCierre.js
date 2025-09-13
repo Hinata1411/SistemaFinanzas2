@@ -24,6 +24,8 @@ import './styles/gastos.css';
 import './styles/pedidos-expresso.css';
 import './styles/resumen.css';
 import './styles/general.css';
+import { recomputeSucursalKPI } from '../../utils/kpi';
+
 
 import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
@@ -489,9 +491,7 @@ export default function RegistrarCierre() {
 
         // (Opcional pero recomendado) Mantén el KPI de la sucursal alineado
         if (sucId) {
-          await updateDoc(doc(db, 'sucursales', sucId), {
-            kpiDepositos: totalGeneralRecalc,
-          });
+          await recomputeSucursalKPI(sucId);
         }
 
         await Swal.fire({
@@ -640,7 +640,7 @@ export default function RegistrarCierre() {
         }
 
         // deja el KPI de la sucursal igual al total del cuadre editado
-        await updateDoc(doc(db, 'sucursales', sucId), { kpiDepositos: kpiBase });
+        await recomputeSucursalKPI(sucId);
 
         await Swal.fire({ icon: 'success', title: 'Actualizado', text: 'El cuadre se actualizó correctamente.', timer: 1600, showConfirmButton: false });
       } else {
@@ -656,7 +656,7 @@ export default function RegistrarCierre() {
         if (delta !== 0) {
           await updateDoc(doc(db, 'sucursales', sucId), { cajaChica: increment(delta) });
         }
-        await updateDoc(doc(db, 'sucursales', sucId), { kpiDepositos: kpiBase });
+        await recomputeSucursalKPI(sucId);
         await Swal.fire({ icon: 'success', title: 'Guardado', text: 'El cuadre se guardó correctamente.', timer: 1600, showConfirmButton: false });
       }
       navigate('/Finanzas/HistorialCuadres');

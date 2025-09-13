@@ -1,6 +1,6 @@
-// src/Finanzas.js
+// src/components/finanzas/Finanzas.js
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { collection, getDocs, getDoc, doc, query, where, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, query, where } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '../../services/firebase';
 import MyCalendar from '../calendario/MyCalendar';
@@ -9,49 +9,14 @@ import './Finanzas.css';
 /* ========= Helpers estables (fuera del componente) ========= */
 const nnum = (v) => (typeof v === 'number' ? v : parseFloat(v || 0)) || 0;
 
-/** Extractor robusto de “Total a depositar” (mismo criterio que Resumen y compat con alias) */
+// Coincidir con RegistrarPagos: detectar categoría "Ajuste de caja chica"
+const isAjusteCat = (c) => (c || '').toString().trim().toLowerCase() === 'ajuste de caja chica';
+
+/** SOLO lee totales.totalGeneral (igual que queremos ahora). */
 const extractTotalADepositar = (d) => {
   const t = d?.totales || {};
-
-  // 1) MISMO CAMPO QUE MUESTRAS EN ResumenPanel
-  const fromTotalsGeneral =
-    t?.totalGeneral ??
-    t?.total_general ??
-    null;
-
-  if (fromTotalsGeneral != null && !isNaN(fromTotalsGeneral)) {
-    const val = nnum(fromTotalsGeneral);
-    if (val !== 0) return val; // si es 0 legítimo, seguimos probando alias (por compat)
-  }
-
-  // 2) ALIAS COMUNES DE "TOTAL A DEPOSITAR"
-  const aliases =
-    d?.totalADepositar ??
-    d?.total_a_depositar ??
-    d?.totalDepositar ??
-    d?.total_depositar ??
-    t?.totalADepositar ??
-    t?.total_a_depositar ??
-    t?.totalDepositar ??
-    t?.total_depositar ??
-    t?.depositoEfectivo ??
-    t?.efectivoParaDepositos ??
-    t?.efectivo_para_depositos ??
-    t?.totalDeposito ??
-    t?.total_deposito ??
-    null;
-
-  if (aliases != null && !isNaN(aliases)) {
-    const val = nnum(aliases);
-    if (val !== 0) return val;
-  }
-
-  // 3) FALLBACK (solo si no hay nada previo): sumar EFECTIVO de cierre/arques
-  if (Array.isArray(d?.cierre) && d.cierre.length) {
-    return d.cierre.reduce((acc, c) => acc + nnum(c?.efectivo), 0);
-  }
-  if (Array.isArray(d?.arqueo) && d.arqueo.length) {
-    return d.arqueo.reduce((acc, c) => acc + nnum(c?.efectivo), 0);
+  if (t?.totalGeneral != null && !isNaN(t.totalGeneral)) {
+    return nnum(t.totalGeneral);
   }
   return 0;
 };
@@ -100,14 +65,6 @@ export default function Finanzas() {
     });
     return () => unsub();
   }, []);
-
-  // Utils
-  const todayISO = () => {
-    const d = new Date();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${d.getFullYear()}-${m}-${day}`;
-  };
 
   const money = (n) =>
     new Intl.NumberFormat('es-GT', { style: 'currency', currency: 'GTQ', maximumFractionDigits: 2 }).format(n || 0);
@@ -191,54 +148,45 @@ export default function Finanzas() {
         return;
       }
 
-      const hoy = todayISO();
-
-      // Para cada sucursal: caja chica + KPI (base último pago + cierres desde entonces)
+      // === KPI por sucursal con la MISMA fórmula global que RegistrarPagos ===
+      // KPI = Σ(cierres.totalGeneral) − Σ(pagos NO-ajuste) + Σ(ajustes de caja chica) + Σ(cajaChicaUsada)  (>= 0)
       const results = await Promise.all(sucIds.map(async (id) => {
         try {
-          // 1) Doc sucursal (caja chica)
+          // 1) Doc sucursal (caja chica disponible)
           const sSnap = await getDoc(doc(db, 'sucursales', id));
           const sData = sSnap.exists() ? (sSnap.data() || {}) : {};
-          const cajaChica = Number(sData.cajaChica || 0);
+          const cajaChicaDisp = Number(sData.cajaChica || 0);
 
-          // 2) Último pago (base KPI)
-          const pagosRef = collection(db, 'pagos');
-          const qPago = query(
-            pagosRef,
-            where('sucursalId', '==', id),
-            orderBy('fecha', 'desc'),
-            limit(1)
-          );
-          const pagoSnap = await getDocs(qPago);
-          const lastPago = pagoSnap.docs[0]?.data() || null;
-          const lastFechaPago = lastPago?.fecha || null;
-          const base = Number(lastPago?.sobranteParaManana || 0);
-
-          // 3) Cierres desde > lastFechaPago hasta <= hoy
+          // 2) CIERRES: sumar total a depositar
           const cierresRef = collection(db, 'cierres');
-          let qCierres;
-          if (lastFechaPago) {
-            qCierres = query(
-              cierresRef,
-              where('sucursalId','==', id),
-              where('fecha','>', lastFechaPago),
-              where('fecha','<=', hoy)
-            );
-          } else {
-            qCierres = query(
-              cierresRef,
-              where('sucursalId','==', id),
-              where('fecha','<=', hoy)
-            );
-          }
+          const qCierres = query(cierresRef, where('sucursalId', '==', id));
           const cierresSnap = await getDocs(qCierres);
           let sumaCierres = 0;
           cierresSnap.forEach(d => { sumaCierres += extractTotalADepositar(d.data() || {}); });
 
-          // KPI final
-          const ventas = base + sumaCierres;
+          // 3) PAGOS: separar Ajuste vs No-Ajuste + cajaChicaUsada
+          const pagosRef = collection(db, 'pagos');
+          const qPagos = query(pagosRef, where('sucursalId', '==', id));
+          const pagosSnap = await getDocs(qPagos);
 
-          return { id, cajaChica, ventas };
+          let sumNoAjuste = 0;
+          let sumAjuste = 0;
+          let sumCajaChicaUsada = 0;
+
+          pagosSnap.forEach((snap) => {
+            const p = snap.data() || {};
+            const items = Array.isArray(p.items) ? p.items : [];
+            items.forEach((it) => {
+              const monto = nnum(it?.monto);
+              if (isAjusteCat(it?.categoria)) sumAjuste += monto;
+              else sumNoAjuste += monto;
+            });
+            sumCajaChicaUsada += nnum(p?.cajaChicaUsada);
+          });
+
+          const kpi = Math.max(0, (sumaCierres - sumNoAjuste) + sumAjuste + sumCajaChicaUsada);
+
+          return { id, cajaChica: cajaChicaDisp, ventas: kpi };
         } catch {
           return { id, cajaChica: 0, ventas: 0 };
         }
@@ -260,7 +208,6 @@ export default function Finanzas() {
     };
 
     recalc();
-  // ❌ NO incluir extractTotalADepositar en deps (es helper estable fuera)
   }, [selectedSucursal, sucursales, ready, isAdmin]);
 
   const abrirModalActividad = () => {
