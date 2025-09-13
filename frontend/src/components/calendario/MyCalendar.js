@@ -29,6 +29,10 @@ const emptyEvent = {
   ownerEmail:   ''
 };
 
+// Dia
+const WEEKDAYS = ['dom','lun','mar','mié','jue','vie','sáb'];
+
+
 const capitalize = s => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 const dd = n => String(n).padStart(2, '0');
 
@@ -274,16 +278,11 @@ const MyCalendar = forwardRef(({ showAddButton = true }, ref) => {
     return false;
   });
 
-  // Días 
-  const weekdays = ['dom','lun','mar','mié','jue','vie','sáb'];
-
 const formats = useMemo(() => ({
   // Encabezado de la fila de días (semana/mes) abreviado
-  weekdayFormat: (date) => weekdays[moment(date).day()],
+   weekdayFormat: (date) => WEEKDAYS[moment(date).day()],
 
-  // 🔹 En DAY queremos el nombre del día dentro de la grilla
-  //    (si no es DAY, dejamos tu formato “Lun 09”)
-  dayHeaderFormat: (date) => `${capitalize(weekdays[moment(date).day()])} ${dd(moment(date).date())}`,
+  dayHeaderFormat: (date) => `${capitalize(WEEKDAYS[moment(date).day()])} ${dd(moment(date).date())}`,
 
   // 🔹 Este era el responsable de mostrar “13”
   //     Lo cambiamos SOLO en la vista day
@@ -306,7 +305,7 @@ const formats = useMemo(() => ({
     return `Agenda: ${s.format('D [de] MMMM')} – ${e.format('D [de] MMMM')}`;
   },
 
-  agendaDateFormat: (date) => `${capitalize(weekdays[moment(date).day()])} ${dd(moment(date).date())}`,
+  agendaDateFormat: (date) => `${capitalize(WEEKDAYS[moment(date).day()])} ${dd(moment(date).date())}`,
 
   agendaTimeRangeFormat: ({ start, end }) =>
     `${moment(start).format('HH:mm')} – ${moment(end).format('HH:mm')}`,
