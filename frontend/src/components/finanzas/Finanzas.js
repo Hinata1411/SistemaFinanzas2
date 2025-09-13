@@ -6,13 +6,10 @@ import { db, auth } from '../../services/firebase';
 import MyCalendar from '../calendario/MyCalendar';
 import './Finanzas.css';
 
-/* ========= Helpers estables (fuera del componente) ========= */
+/* ========= Helpers ========= */
 const nnum = (v) => (typeof v === 'number' ? v : parseFloat(v || 0)) || 0;
-
-// Coincidir con RegistrarPagos: detectar categoría "Ajuste de caja chica"
 const isAjusteCat = (c) => (c || '').toString().trim().toLowerCase() === 'ajuste de caja chica';
 
-/** SOLO lee totales.totalGeneral (igual que queremos ahora). */
 const extractTotalADepositar = (d) => {
   const t = d?.totales || {};
   if (t?.totalGeneral != null && !isNaN(t.totalGeneral)) {
@@ -21,35 +18,55 @@ const extractTotalADepositar = (d) => {
   return 0;
 };
 
+const todayISO = () => {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+};
+
+/* ======== Persistencia local del checklist (sin latencia) ======== */
+const checklistKey = (sucursalId, iso) => `finanzas_checked_${sucursalId || 'NA'}_${iso}`;
+const loadCheckedTexts = (sucursalId, iso) => {
+  try {
+    const raw = localStorage.getItem(checklistKey(sucursalId, iso));
+    const arr = JSON.parse(raw || '[]');
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+};
+const saveCheckedTexts = (sucursalId, iso, texts) => {
+  try {
+    localStorage.setItem(checklistKey(sucursalId, iso), JSON.stringify(texts || []));
+  } catch {}
+};
+
 export default function Finanzas() {
+  // Rol dinámico (Admin/Viewer)
+  const [isAdmin, setIsAdmin] = useState(false);
+
   const [ready, setReady] = useState(false);
-
-  // KPI totales (compat) -> solo setters para evitar warning "unused var"
-  const [, setCajaChica] = useState(0);
-  const [, setEfectivoDepositos] = useState(0);
-
-  // KPI por sucursal: { [id]: { cajaChica: number, ventas: number } }
-  const [kpiBySucursal, setKpiBySucursal] = useState({});
-
-  // Sucursales
   const [sucursales, setSucursales] = useState([]);
-  const [selectedSucursal, setSelectedSucursal] = useState('all'); // 'all' | sucursalId
+  const [selectedSucursal, setSelectedSucursal] = useState('');
+  const [userSucursalId, setUserSucursalId] = useState(null);
+  const [userLoaded, setUserLoaded] = useState(false);
 
-  // Abrir modal de calendario
+  // KPI por sucursal
+  const [kpiBySucursal, setKpiBySucursal] = useState({});
+  // “Pagos del día” (por sucursal)
+  const [todayPayments, setTodayPayments] = useState({});
+  // Estado local para checklist (id sucursal → índices completados)
+  const [checkedPayments, setCheckedPayments] = useState({});
+
   const calendarRef = useRef(null);
 
-  // Rol
-  const role = (localStorage.getItem('role') || 'viewer').toLowerCase();
-  const isAdmin = role === 'admin';
-
-  // Perfil (para fijar la sucursal del viewer)
-  const [userLoaded, setUserLoaded] = useState(false);
-  const [userSucursalId, setUserSucursalId] = useState(null);
-
+  // Perfil (obtener sucursal del usuario y rol)
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         setUserSucursalId(null);
+        setIsAdmin(false);
         setUserLoaded(true);
         return;
       }
@@ -57,8 +74,11 @@ export default function Finanzas() {
         const snap = await getDoc(doc(db, 'usuarios', user.uid));
         const data = snap.exists() ? snap.data() : {};
         setUserSucursalId(data.sucursalId || null);
+        const role = (data.rol || data.role || '').toString().toLowerCase();
+        setIsAdmin(role === 'admin');
       } catch {
         setUserSucursalId(null);
+        setIsAdmin(false);
       } finally {
         setUserLoaded(true);
       }
@@ -67,9 +87,13 @@ export default function Finanzas() {
   }, []);
 
   const money = (n) =>
-    new Intl.NumberFormat('es-GT', { style: 'currency', currency: 'GTQ', maximumFractionDigits: 2 }).format(n || 0);
+    new Intl.NumberFormat('es-GT', {
+      style: 'currency',
+      currency: 'GTQ',
+      maximumFractionDigits: 2
+    }).format(n || 0);
 
-  // Cargar sucursales y set defaults
+  // Cargar sucursales
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -80,32 +104,12 @@ export default function Finanzas() {
           return {
             id: snap.id,
             nombre: d.nombre || d.name || snap.id,
-            ubicacion: d.ubicacion || d.location || '',   // ubicación visible
+            ubicacion: d.ubicacion || d.location || '',
           };
         });
-
         if (!cancelled) {
           setSucursales(list);
-
-          // Persistimos para MyCalendar
-          if (list.length) {
-            localStorage.setItem('sucursales', JSON.stringify(list));
-          }
-
-          // Selección inicial
-          if (isAdmin) {
-            setSelectedSucursal('all');
-            localStorage.setItem('activeSucursalId', 'all');
-          } else {
-            // Preferimos la sucursal del perfil; fallback a lo almacenado o primera
-            const stored = localStorage.getItem('activeSucursalId');
-            const first = list[0]?.id;
-            const initial = (userSucursalId && list.some(s => s.id === userSucursalId))
-              ? userSucursalId
-              : (stored && stored !== 'all' ? stored : (first || ''));
-            setSelectedSucursal(initial || '');
-            localStorage.setItem('activeSucursalId', initial || '');
-          }
+          if (list.length) localStorage.setItem('sucursales', JSON.stringify(list));
         }
       } catch (e) {
         console.warn('No se pudieron cargar sucursales:', e?.message || e);
@@ -115,176 +119,223 @@ export default function Finanzas() {
       }
     })();
     return () => { cancelled = true; };
-  // 👇 incluimos userSucursalId para que, si llega después de las sucursales, reevalúe selección
-  }, [isAdmin, userSucursalId]);
+  }, []);
 
-  // Si el perfil llega después y soy viewer, forzar selección a su sucursal
+  // Fijar la sucursal inicial
   useEffect(() => {
-    if (!isAdmin && userLoaded && userSucursalId && sucursales.length) {
-      if (selectedSucursal !== userSucursalId && sucursales.some(s => s.id === userSucursalId)) {
-        setSelectedSucursal(userSucursalId);
-        localStorage.setItem('activeSucursalId', userSucursalId);
-      }
-    }
-  }, [isAdmin, userLoaded, userSucursalId, sucursales, selectedSucursal]);
+    if (!ready || !userLoaded) return;
+    let initial = userSucursalId;
+    if (!initial && sucursales.length) initial = sucursales[0].id;
+    setSelectedSucursal(initial || '');
+    if (initial) localStorage.setItem('activeSucursalId', initial);
+  }, [ready, userLoaded, userSucursalId, sucursales]);
 
-  // Recalcular KPIs (totales + por sucursal) y ajustar filtro del calendario
+  // Recalcular KPI
   useEffect(() => {
-    if (!ready) return;
-
-    // Para MyCalendar: 'all' = todas las sucursales (solo útil a admin)
-    localStorage.setItem('activeSucursalId', selectedSucursal);
+    if (!ready || !selectedSucursal) return;
 
     const recalc = async () => {
-      const ids = selectedSucursal === 'all'
-        ? (isAdmin ? sucursales.map(s => s.id) : [localStorage.getItem('activeSucursalId') || ''])
-        : [selectedSucursal];
+      const id = selectedSucursal;
 
-      const sucIds = ids.filter(Boolean);
-      if (!sucIds.length) {
-        setCajaChica(0);
-        setEfectivoDepositos(0);
-        setKpiBySucursal({});
-        return;
-      }
+      try {
+        const sSnap = await getDoc(doc(db, 'sucursales', id));
+        const sData = sSnap.exists() ? (sSnap.data() || {}) : {};
+        const cajaChicaDisp = Number(sData.cajaChica || 0);
 
-      // === KPI por sucursal con la MISMA fórmula global que RegistrarPagos ===
-      // KPI = Σ(cierres.totalGeneral) − Σ(pagos NO-ajuste) + Σ(ajustes de caja chica) + Σ(cajaChicaUsada)  (>= 0)
-      const results = await Promise.all(sucIds.map(async (id) => {
-        try {
-          // 1) Doc sucursal (caja chica disponible)
-          const sSnap = await getDoc(doc(db, 'sucursales', id));
-          const sData = sSnap.exists() ? (sSnap.data() || {}) : {};
-          const cajaChicaDisp = Number(sData.cajaChica || 0);
+        const cierresRef = collection(db, 'cierres');
+        const qCierres = query(cierresRef, where('sucursalId', '==', id));
+        const cierresSnap = await getDocs(qCierres);
+        let sumaCierres = 0;
+        cierresSnap.forEach(d => { sumaCierres += extractTotalADepositar(d.data() || {}); });
 
-          // 2) CIERRES: sumar total a depositar
-          const cierresRef = collection(db, 'cierres');
-          const qCierres = query(cierresRef, where('sucursalId', '==', id));
-          const cierresSnap = await getDocs(qCierres);
-          let sumaCierres = 0;
-          cierresSnap.forEach(d => { sumaCierres += extractTotalADepositar(d.data() || {}); });
+        const pagosRef = collection(db, 'pagos');
+        const qPagos = query(pagosRef, where('sucursalId', '==', id));
+        const pagosSnap = await getDocs(qPagos);
 
-          // 3) PAGOS: separar Ajuste vs No-Ajuste + cajaChicaUsada
-          const pagosRef = collection(db, 'pagos');
-          const qPagos = query(pagosRef, where('sucursalId', '==', id));
-          const pagosSnap = await getDocs(qPagos);
+        let sumNoAjuste = 0;
+        let sumAjuste = 0;
+        let sumCajaChicaUsada = 0;
 
-          let sumNoAjuste = 0;
-          let sumAjuste = 0;
-          let sumCajaChicaUsada = 0;
-
-          pagosSnap.forEach((snap) => {
-            const p = snap.data() || {};
-            const items = Array.isArray(p.items) ? p.items : [];
-            items.forEach((it) => {
-              const monto = nnum(it?.monto);
-              if (isAjusteCat(it?.categoria)) sumAjuste += monto;
-              else sumNoAjuste += monto;
-            });
-            sumCajaChicaUsada += nnum(p?.cajaChicaUsada);
+        pagosSnap.forEach((snap) => {
+          const p = snap.data() || {};
+          const items = Array.isArray(p.items) ? p.items : [];
+          items.forEach((it) => {
+            const monto = nnum(it?.monto);
+            if (isAjusteCat(it?.categoria)) sumAjuste += monto;
+            else sumNoAjuste += monto;
           });
+          sumCajaChicaUsada += nnum(p?.cajaChicaUsada);
+        });
 
-          const kpi = Math.max(0, (sumaCierres - sumNoAjuste) + sumAjuste + sumCajaChicaUsada);
+        const kpi = Math.max(0, (sumaCierres - sumNoAjuste) + sumAjuste + sumCajaChicaUsada);
 
-          return { id, cajaChica: cajaChicaDisp, ventas: kpi };
-        } catch {
-          return { id, cajaChica: 0, ventas: 0 };
-        }
-      }));
-
-      // Construir mapas y totales
-      const map = {};
-      let totalCaja = 0;
-      let totalVentas = 0;
-      results.forEach(({ id, cajaChica, ventas }) => {
-        map[id] = { cajaChica, ventas };
-        totalCaja += cajaChica;
-        totalVentas += ventas;
-      });
-
-      setKpiBySucursal(map);
-      setCajaChica(totalCaja);
-      setEfectivoDepositos(totalVentas);
+        setKpiBySucursal({ [id]: { cajaChica: cajaChicaDisp, ventas: kpi } });
+      } catch {
+        setKpiBySucursal({ [selectedSucursal]: { cajaChica: 0, ventas: 0 } });
+      }
     };
 
     recalc();
-  }, [selectedSucursal, sucursales, ready, isAdmin]);
+  }, [ready, selectedSucursal]);
+
+  // “Pagos del día”
+  useEffect(() => {
+    if (!ready || !selectedSucursal) return;
+
+    (async () => {
+      const id = selectedSucursal;
+      const iso = todayISO();
+      try {
+        const qs = await getDocs(
+          query(collection(db, 'pagos'), where('sucursalId', '==', id), where('fecha', '==', iso))
+        );
+        const arr = [];
+        qs.forEach(s => {
+          const d = s.data() || {};
+          (d.items || []).forEach(it => {
+            const name = (it.descripcion || '').trim() || (it.categoria || '').trim();
+            if (name) arr.push(name);
+          });
+        });
+
+        // Persistencia: cargar lo marcado desde localStorage (por sucursal+fecha)
+        const storedCheckedTexts = loadCheckedTexts(id, iso);
+        const storedSet = new Set(storedCheckedTexts);
+
+        // Mapear a índices actuales (si coincide por texto)
+        const indicesChecked = [];
+        arr.forEach((txt, idx) => {
+          if (storedSet.has(txt)) indicesChecked.push(idx);
+        });
+
+        setTodayPayments({ [id]: arr.slice(0, 10) });
+        setCheckedPayments((prev) => ({ ...prev, [id]: indicesChecked }));
+      } catch {
+        setTodayPayments({ [id]: [] });
+        setCheckedPayments((prev) => ({ ...prev, [id]: [] }));
+      }
+    })();
+  }, [ready, selectedSucursal]);
 
   const abrirModalActividad = () => {
     calendarRef.current?.openAddModal?.();
   };
 
-  // Etiqueta visible: ubicación (fallback a nombre/id)
   const branchLabel = (s) => s.ubicacion || s.nombre || s.id;
 
-  // Opciones del selector: admin ve "Todas"; viewer solo su sucursal
-  const branchOptions = useMemo(() => {
-    if (isAdmin) {
-      return [{ id: 'all', nombre: 'Todas las ubicaciones', ubicacion: '' }, ...sucursales];
-    }
-    // viewer: solo la sucursal del perfil (si existe) o la actualmente seleccionada
-    const viewerId = userSucursalId || selectedSucursal;
-    const only = sucursales.filter(s => s.id === viewerId);
-    return only.length ? only : sucursales.slice(0, 1);
-  }, [isAdmin, sucursales, selectedSucursal, userSucursalId]);
-
-  // Qué sucursales mostrar como tarjetas KPI (depende del filtro)
   const visibleCards = useMemo(() => {
-    if (selectedSucursal === 'all') {
-      // Admin con "todas": todas las sucursales
-      return isAdmin ? sucursales : sucursales.filter(s => s.id === (localStorage.getItem('activeSucursalId') || ''));
-    }
-    // Específica: solo esa
     return sucursales.filter(s => s.id === selectedSucursal);
-  }, [selectedSucursal, sucursales, isAdmin]);
+  }, [selectedSucursal, sucursales]);
+
+  const togglePago = (sucursalId, idx) => {
+    const iso = todayISO();
+    const items = todayPayments[sucursalId] || [];
+    const thisText = items[idx];
+
+    // 1) Actualiza estado (índices)
+    setCheckedPayments((prev) => {
+      const current = new Set(prev[sucursalId] || []);
+      if (current.has(idx)) current.delete(idx);
+      else current.add(idx);
+      const updated = { ...prev, [sucursalId]: [...current] };
+
+      // 2) Persistencia por texto (más robusto si cambia el orden)
+      const checkedIdx = updated[sucursalId] || [];
+      const checkedTexts = checkedIdx.map(i => items[i]).filter(Boolean);
+      saveCheckedTexts(sucursalId, iso, checkedTexts);
+
+      return updated;
+    });
+  };
 
   return (
     <div className="home-shell">
-      {/* TOPBAR: título izq + filtro + botón der */}
+      {/* TOPBAR */}
       <section className="topbar">
         <header className="home-header">
           <h1>Sistema Finanzas</h1>
+
+          {/* Botón admin (solo Admin) */}
+          {isAdmin && (
+            <button className="add-task-btn" onClick={abrirModalActividad}>
+              ➕ Añadir tarea
+            </button>
+          )}
+
+          {/* Selector de sucursal (solo Admin) */}
+          {isAdmin && (
+            <div className="branch-selector">
+              <label htmlFor="branchSelect" className="branch-selector__label">Seleccionar sucursal</label>
+              <select
+                id="branchSelect"
+                className="branch-selector__select"
+                value={selectedSucursal}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedSucursal(val);
+                  localStorage.setItem('activeSucursalId', val);
+                }}
+              >
+                {sucursales.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {branchLabel(s)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </header>
-
-        {/* FILTRO DE SUCURSAL (muestra UBICACIÓN) */}
-        <div className="branch-filter">
-          <label htmlFor="branchSel">Sucursal:</label>
-          <select
-            id="branchSel"
-            value={selectedSucursal}
-            onChange={(e) => setSelectedSucursal(e.target.value)}
-            disabled={!isAdmin}  // viewer bloqueado
-          >
-            {branchOptions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.id === 'all' ? 'Todas las ubicaciones' : branchLabel(s)}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {isAdmin && (
-          <button className="add-task-btn" onClick={abrirModalActividad}>
-            ➕ Añadir tarea
-          </button>
-        )}
       </section>
 
-      {/* CONTENIDO: KPIs por sucursal (izq) + calendario (der) */}
+      {/* CONTENIDO: KPI izq + calendario der */}
       <section className="content-row">
         <div className="kpi-left">
-          {/* === KPI por sucursal === */}
           {visibleCards.map((s) => {
             const stats = kpiBySucursal[s.id] || { cajaChica: 0, ventas: 0 };
+            const pagosHoy = todayPayments[s.id] || [];
+            const checked = new Set(checkedPayments[s.id] || []);
+
             return (
               <div className="kpi-card" key={s.id}>
-                <div className="kpi-title">Sucursal: {branchLabel(s)}</div>
+                {/* Encabezado sucursal */}
+                <div className="kpi-branch">Sucursal: {branchLabel(s)}</div>
 
-                <div className="kpi-title">Caja chica disponible</div>
-                <div className="kpi-value">{money(stats.cajaChica)}</div>
+                {/* Chip: Dinero para depósitos */}
+                <div className="kpi-chip kpi-chip--green">
+                  <span className="chip-legend">Dinero para depósitos</span>
+                  <strong className="chip-value">{money(stats.ventas)}</strong>
+                  <img className="chip-icon" src="/img/billetes-de-banco.png" alt="Depósitos" />
+                </div>
 
-                <div className="kpi-title">Dinero para depósitos</div>
-                <div className="kpi-value">{money(stats.ventas)}</div>
+                {/* Chip: Caja chica */}
+                <div className="kpi-chip kpi-chip--green">
+                  <span className="chip-legend">Caja chica disponible</span>
+                  <strong className="chip-value">{money(stats.cajaChica)}</strong>
+                  <img className="chip-icon" src="/img/billetes-de-banco.png" alt="Caja chica" />
+                </div>
+
+                {/* Pagos del día (solo Viewer) */}
+                {!isAdmin && (
+                  <div className="kpi-daycard">
+                    <div className="kpi-daycard-title">Pagos del día</div>
+                    <ul className="kpi-checklist">
+                      {pagosHoy.length
+                        ? pagosHoy.map((txt, idx) => (
+                            <li key={`${txt}-${idx}`}>
+                              <label className={`pago-item ${checked.has(idx) ? 'checked' : ''}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={checked.has(idx)}
+                                  onChange={() => togglePago(s.id, idx)}
+                                />
+                                <span>{txt}</span>
+                              </label>
+                            </li>
+                          ))
+                        : <li className="muted">Sin pagos hoy</li>}
+                    </ul>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -292,7 +343,7 @@ export default function Finanzas() {
 
         <div className="home-calendar-card">
           {ready ? (
-            <MyCalendar ref={calendarRef} showAddButton={false} />
+            <MyCalendar ref={calendarRef} showAddButton={isAdmin} />
           ) : (
             <div className="text-muted">Cargando sucursales…</div>
           )}
