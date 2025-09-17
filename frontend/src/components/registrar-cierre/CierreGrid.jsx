@@ -22,12 +22,6 @@ const formatThousands = (txt) => {
   return decPart !== '' ? `${intFmt}.${decPart}` : intFmt;
 };
 
-/**
- * MoneyInput con estado local:
- * - Permite escribir "14." y "14.4" sin que el re-render borre el punto.
- * - Muestra comas en la UI (pero onChange entrega el valor crudo, sin comas).
- * - No añade ".00" automáticamente.
- */
 const MoneyInput = ({
   value,
   onChange,
@@ -59,8 +53,8 @@ const MoneyInput = ({
 
         // Permitir vacío, enteros y decimales con punto (incluye "14." temporal)
         if (next === '' || /^\d*\.?\d*$/.test(next)) {
-          setDraft(next);     // lo que el usuario está editando (crudo)
-          onChange(next);     // el padre recibe SIEMPRE crudo, sin comas
+          setDraft(next);     
+          onChange(next);
         }
       }}
       onKeyDown={(e) => {
