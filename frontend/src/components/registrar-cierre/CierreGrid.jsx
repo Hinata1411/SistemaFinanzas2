@@ -9,7 +9,25 @@ const ICONS = {
 
 const isEmpty = (v) => v === '' || v === null || v === undefined;
 
+/* Formatea SOLO para UI con separadores de miles, sin forzar .00 */
+const formatThousands = (txt) => {
+  const s = String(txt ?? '');
+  if (!s) return '';
+  const [intPartRaw, decPart = ''] = s.split('.');
+  // Permitimos que el usuario deje el entero vacío si empieza con "."
+  const intPart = intPartRaw.replace(/\D/g, '');
+  const intFmt = intPart
+    ? intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    : ''; // si está vacío, no mostramos "0" automáticamente
+  return decPart !== '' ? `${intFmt}.${decPart}` : intFmt;
+};
 
+/**
+ * MoneyInput con estado local:
+ * - Permite escribir "14." y "14.4" sin que el re-render borre el punto.
+ * - Muestra comas en la UI (pero onChange entrega el valor crudo, sin comas).
+ * - No añade ".00" automáticamente.
+ */
 const MoneyInput = ({
   value,
   onChange,
@@ -20,9 +38,8 @@ const MoneyInput = ({
 }) => {
   const [draft, setDraft] = React.useState('');
 
-  // Sincroniza el draft con el prop 'value' cuando no estás editando
+  // Sincroniza el draft con el prop 'value' cuando cambia desde el padre
   React.useEffect(() => {
-    // sincroniza cuando cambia desde el padre
     if (value === '' || value === null || value === undefined) {
       setDraft('');
     } else {
@@ -35,19 +52,19 @@ const MoneyInput = ({
       className="rc-input no-spin"
       type="text"
       inputMode="decimal"
-      value={draft}
+      value={formatThousands(draft)}
       onChange={(e) => {
         // Quita comas visibles y normaliza coma a punto
         let next = e.target.value.replace(/,/g, '').replace(',', '.');
 
         // Permitir vacío, enteros y decimales con punto (incluye "14." temporal)
         if (next === '' || /^\d*\.?\d*$/.test(next)) {
-          setDraft(next);    // mantiene lo que el usuario ve (incluye "14.")
-          onChange(next);    // el padre recibe SIEMPRE crudo, sin comas
+          setDraft(next);     // lo que el usuario está editando (crudo)
+          onChange(next);     // el padre recibe SIEMPRE crudo, sin comas
         }
       }}
       onKeyDown={(e) => {
-        // Evita notación científica y steps
+        // Evita notación científica y signos
         if (['e','E','+','-'].includes(e.key)) e.preventDefault();
       }}
       onWheel={(e) => e.currentTarget.blur()}
