@@ -1,5 +1,5 @@
 // src/components/registrar-cierre/CierreGrid.jsx
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 
 const ICONS = {
   bill:  '/img/billetes-de-banco.png',
@@ -9,22 +9,7 @@ const ICONS = {
 
 const isEmpty = (v) => v === '' || v === null || v === undefined;
 
-/* Formatea SOLO para UI con separadores de miles, sin forzar .00 */
-const formatThousands = (txt) => {
-  const s = String(txt ?? '');
-  if (!s) return '';
-  const [intPart, decPart = ''] = s.split('.');
-  const cleanInt = intPart.replace(/\D/g, '');
-  const intFmt = cleanInt.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return decPart !== '' ? `${intFmt}.${decPart}` : intFmt;
-};
 
-/**
- * MoneyInput con estado local:
- * - Permite escribir  "14."  y "14.4" sin que el re-render borre el punto.
- * - Muestra comas en la UI (no guarda comas).
- * - onChange SIEMPRE entrega el valor crudo sin comas (string).
- */
 const MoneyInput = ({
   value,
   onChange,
