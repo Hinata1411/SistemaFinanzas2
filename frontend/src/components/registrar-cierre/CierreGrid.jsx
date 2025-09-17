@@ -1,5 +1,5 @@
 // src/components/registrar-cierre/CierreGrid.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 const ICONS = {
   bill:  '/img/billetes-de-banco.png',
@@ -9,20 +9,22 @@ const ICONS = {
 
 const isEmpty = (v) => v === '' || v === null || v === undefined;
 
-const formatMoneyNoSymbol = (val) => {
-  if (isEmpty(val)) return '';
-  const num = Number(String(val).replace(/,/g, ''));
-  if (Number.isNaN(num)) return '';
-  return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/* Formatea SOLO para UI con separadores de miles, sin forzar .00 */
+const formatThousands = (txt) => {
+  const s = String(txt ?? '');
+  if (!s) return '';
+  const [intPart, decPart = ''] = s.split('.');
+  const cleanInt = intPart.replace(/\D/g, '');
+  const intFmt = cleanInt.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return decPart !== '' ? `${intFmt}.${decPart}` : intFmt;
 };
 
-const sanitizeToNumberString = (str) => {
-  const cleaned = String(str ?? '').replace(/[^0-9.]/g, '');
-  const parts = cleaned.split('.');
-  if (parts.length > 2) return `${parts[0]}.${parts.slice(1).join('')}`;
-  return cleaned;
-};
-
+/**
+ * MoneyInput con estado local:
+ * - Permite escribir  "14."  y "14.4" sin que el re-render borre el punto.
+ * - Muestra comas en la UI (no guarda comas).
+ * - onChange SIEMPRE entrega el valor crudo sin comas (string).
+ */
 const MoneyInput = ({
   value,
   onChange,
@@ -30,31 +32,53 @@ const MoneyInput = ({
   ariaLabel,
   disabled,
   width = 200,
-}) => (
-  <input
-    className="rc-input no-spin"
-    type="text"
-    inputMode="decimal"
-    value={formatMoneyNoSymbol(value)}
-    onChange={(e) => onChange(sanitizeToNumberString(e.target.value))}
-    onKeyDown={(e) => {
-      if (['ArrowUp','ArrowDown','PageUp','PageDown'].includes(e.key)) e.preventDefault();
-      if (['e','E','+','-'].includes(e.key)) e.preventDefault();
-    }}
-    onWheel={(e) => e.currentTarget.blur()}
-    placeholder={placeholder}
-    aria-label={ariaLabel}
-    disabled={disabled}
-    style={{ width, textAlign: 'right' }}
-  />
-);
+}) => {
+  const [draft, setDraft] = React.useState('');
+
+  // Sincroniza el draft con el prop 'value' cuando no estás editando
+  React.useEffect(() => {
+    // sincroniza cuando cambia desde el padre
+    if (value === '' || value === null || value === undefined) {
+      setDraft('');
+    } else {
+      setDraft(String(value));
+    }
+  }, [value]);
+
+  return (
+    <input
+      className="rc-input no-spin"
+      type="text"
+      inputMode="decimal"
+      value={draft}
+      onChange={(e) => {
+        // Quita comas visibles y normaliza coma a punto
+        let next = e.target.value.replace(/,/g, '').replace(',', '.');
+
+        // Permitir vacío, enteros y decimales con punto (incluye "14." temporal)
+        if (next === '' || /^\d*\.?\d*$/.test(next)) {
+          setDraft(next);    // mantiene lo que el usuario ve (incluye "14.")
+          onChange(next);    // el padre recibe SIEMPRE crudo, sin comas
+        }
+      }}
+      onKeyDown={(e) => {
+        // Evita notación científica y steps
+        if (['e','E','+','-'].includes(e.key)) e.preventDefault();
+      }}
+      onWheel={(e) => e.currentTarget.blur()}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      disabled={disabled}
+      style={{ width, textAlign: 'right' }}
+    />
+  );
+};
 
 export default function CierreGrid({ cierre, setCier, readOnly = false }) {
   const inputsDisabled = readOnly;
 
   return (
     <section className="rc-card">
-      {/* ✅ Igual que en Arqueo */}
       <div className="rc-card-hd">
         <h3 style={{ margin: 0 }}>Cierre de Sistema</h3>
       </div>
@@ -74,7 +98,13 @@ export default function CierreGrid({ cierre, setCier, readOnly = false }) {
                   className="rc-cell-label"
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 >
-                  <img src={ICONS.bill} alt="Efectivo" width={35} height={35} style={{ objectFit: 'contain' }} />
+                  <img
+                    src={ICONS.bill}
+                    alt="Efectivo"
+                    width={35}
+                    height={35}
+                    style={{ objectFit: 'contain' }}
+                  />
                   Efectivo
                 </span>
 
@@ -97,7 +127,13 @@ export default function CierreGrid({ cierre, setCier, readOnly = false }) {
                   className="rc-cell-label rc-label-card"
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 >
-                  <img src={ICONS.card} alt="Tarjeta" width={35} height={35} style={{ objectFit: 'contain' }} />
+                  <img
+                    src={ICONS.card}
+                    alt="Tarjeta"
+                    width={35}
+                    height={35}
+                    style={{ objectFit: 'contain' }}
+                  />
                   Tarjeta
                 </span>
 
@@ -120,7 +156,13 @@ export default function CierreGrid({ cierre, setCier, readOnly = false }) {
                   className="rc-cell-label rc-label-moto"
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}
                 >
-                  <img src={ICONS.moto} alt="A domicilio" width={35} height={35} style={{ objectFit: 'contain' }} />
+                  <img
+                    src={ICONS.moto}
+                    alt="A domicilio"
+                    width={35}
+                    height={35}
+                    style={{ objectFit: 'contain' }}
+                  />
                   A domicilio
                 </span>
 
