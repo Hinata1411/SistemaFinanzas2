@@ -43,7 +43,11 @@ export const calcCuadreMetrics = (c) => {
     0
   );
 
-  const diffEf = totalArqueoEfectivo - cierreEf;
+  // === DIFERENCIA REAL (efectivo + tarjeta), alineado con el hook useRegistrarCierreTotals ===
+  const diffReal = (totalArqueoEfectivo + arqueoTar) - (cierreEf + cierreTar);
+  // Mantén el nombre original para no romper llamadas existentes:
+  const diffEf = diffReal;
+
   const totalDepositar = totalArqueoEfectivo - gastos + cajaChicaUsada + faltantePagado;
 
   return {
@@ -51,7 +55,9 @@ export const calcCuadreMetrics = (c) => {
     cierreEf, cierreTar, cierreMot,
     gastos, cajaChicaUsada, faltantePagado,
     pedidosYaMonto, amexTotal,
-    diffEf, totalDepositar,
+    diffEf,          // ahora = diferencia REAL (efectivo + tarjeta)
+    diffReal,        // disponible si quieres usarlo explícito
+    totalDepositar,
   };
 };
 
@@ -218,7 +224,7 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate, options 
 
   autoTable(pdf, {
     startY: y,
-    head: [['Cajas', 'Efectivo', 'Tarjeta', 'Motorista', 'Total']],
+    head: [['Cajas', 'Efectivo', 'Tarjeta', 'Motorista', 'Total'] ],
     body: cierreRows,
     styles: { fontSize: 9, cellPadding: 3, lineWidth: 0.2, lineColor: [230, 236, 240] },
     headStyles: { fillColor: [25, 118, 210], textColor: 255 },
@@ -269,7 +275,7 @@ export const renderCuadreSection = (pdf, c, sucursalNombre, formatDate, options 
 
   y = pdf.lastAutoTable.finalY + 12;
 
-  /* === Resumen (igual que antes) === */
+  /* === Resumen (igual que antes, pero m.diffEf ya es REAL) === */
   {
     const m = calcCuadreMetrics(c);
 
