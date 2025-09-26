@@ -10,6 +10,11 @@ const ICONS = {
   view: '/img/img.png',
 };
 
+// Detección simple de móvil
+const isMobileUA = () =>
+  typeof navigator !== 'undefined' &&
+  /Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent);
+
 export default function GastosList({
   gastos,
   categorias = [],
@@ -52,9 +57,33 @@ export default function GastosList({
     }
   };
 
-  const handlePickFile = (i) => {
+  // Abrir selector (cámara o galería en móvil; galería en desktop)
+  const handlePickFile = async (i) => {
     if (readOnly) return;
-    document.getElementById(`gasto-file-${i}`)?.click();
+
+    if (isMobileUA()) {
+      const res = await Swal.fire({
+        title: 'Agregar imagen',
+        text: 'Elige una opción',
+        showCancelButton: true,
+        cancelButtonText: 'Cancelar',
+        confirmButtonText: 'Elegir de galería',
+        showDenyButton: true,
+        denyButtonText: 'Tomar foto',
+        reverseButtons: true,
+      });
+
+      if (res.isDismissed) return;
+      // Deny = Tomar foto (cámara), Confirm = Galería
+      if (res.isDenied) {
+        document.getElementById(`gasto-file-camera-${i}`)?.click();
+      } else if (res.isConfirmed) {
+        document.getElementById(`gasto-file-gallery-${i}`)?.click();
+      }
+    } else {
+      // Desktop: ir directo a galería/selector de archivos
+      document.getElementById(`gasto-file-gallery-${i}`)?.click();
+    }
   };
 
   const handleFileChange = (i, e) => {
@@ -62,7 +91,6 @@ export default function GastosList({
     const file = e.target?.files?.[0];
     if (!file) return;
 
-    // Para mostrar opciones en móvil (tomar/galería) usamos image/* sin capture
     if (!file.type?.startsWith('image/')) {
       Swal.fire('Formato no permitido', 'Selecciona una imagen.', 'warning');
       e.target.value = '';
@@ -81,9 +109,8 @@ export default function GastosList({
     setGasto(i, 'fileName', file.name || '');
     setGasto(i, 'fileUrl', '');
 
-    if (viewer.open && viewer.rowIndex === i) {
-      setViewer((v) => ({ ...v, url: preview, mime: file.type, name: file.name }));
-    }
+    // Si el visor está abierto sobre esa fila, actualizarlo
+    setViewer((v) => (v.open && v.rowIndex === i ? { ...v, url: preview, mime: file.type, name: file.name } : v));
   };
 
   const clearFile = (i) => {
@@ -253,9 +280,20 @@ export default function GastosList({
                         </button>
                       )
                     )}
-                    {/* Un solo input: en móvil mostrará “Tomar foto / Elegir foto”, en desktop el selector normal */}
+
+                    {/* Inputs ocultos:
+                        - cámara (móvil) -> capture="environment"
+                        - galería (móvil/desktop) */}
                     <input
-                      id={`gasto-file-${i}`}
+                      id={`gasto-file-camera-${i}`}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={(e) => handleFileChange(i, e)}
+                      style={{ display: 'none' }}
+                    />
+                    <input
+                      id={`gasto-file-gallery-${i}`}
                       type="file"
                       accept="image/*"
                       onChange={(e) => handleFileChange(i, e)}
