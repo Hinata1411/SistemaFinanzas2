@@ -24,8 +24,8 @@ export default function GastosList({
   isAdmin = false,
 
   // Caja chica
-  cajaChicaUsada = 0,           // número en quetzales (0 si no hay)
-  onRemoveCajaChica = () => {}, // limpia/quita el uso de caja chica
+  cajaChicaUsada = 0,
+  onRemoveCajaChica = () => {},
 }) {
   const showCajaChicaBtn = !readOnly && Number(faltantePorGastos) > 0;
 
@@ -62,9 +62,9 @@ export default function GastosList({
     const file = e.target?.files?.[0];
     if (!file) return;
 
-    const okTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-    if (!okTypes.includes(file.type)) {
-      Swal.fire('Formato no permitido', 'Solo PNG, JPG o WEBP.', 'warning');
+    // Para mostrar opciones en móvil (tomar/galería) usamos image/* sin capture
+    if (!file.type?.startsWith('image/')) {
+      Swal.fire('Formato no permitido', 'Selecciona una imagen.', 'warning');
       e.target.value = '';
       return;
     }
@@ -77,8 +77,8 @@ export default function GastosList({
     const preview = URL.createObjectURL(file);
     setGasto(i, 'fileBlob', file);
     setGasto(i, 'filePreview', preview);
-    setGasto(i, 'fileMime', file.type);
-    setGasto(i, 'fileName', file.name);
+    setGasto(i, 'fileMime', file.type || '');
+    setGasto(i, 'fileName', file.name || '');
     setGasto(i, 'fileUrl', '');
 
     if (viewer.open && viewer.rowIndex === i) {
@@ -116,7 +116,6 @@ export default function GastosList({
       <div className="rc-card-hd">
         <h3 style={{ margin: 0 }}>Gastos</h3>
 
-        {/* Botón "Utilizar caja chica" solo si hay faltante y aún NO se usó */}
         {showCajaChicaBtn && !cajaChicaTieneMonto && (
           <button
             type="button"
@@ -254,10 +253,11 @@ export default function GastosList({
                         </button>
                       )
                     )}
+                    {/* Un solo input: en móvil mostrará “Tomar foto / Elegir foto”, en desktop el selector normal */}
                     <input
                       id={`gasto-file-${i}`}
                       type="file"
-                      accept="image/png,image/jpeg,image/jpg,image/webp"
+                      accept="image/*"
                       onChange={(e) => handleFileChange(i, e)}
                       style={{ display: 'none' }}
                     />
@@ -305,21 +305,18 @@ export default function GastosList({
             <td />
           </tr>
 
-          {/* Fila que muestra Caja Chica usada: texto en "No. de ref" y monto en "Comprobante" */}
+          {/* Fila Caja Chica usada: texto en "No. de ref" y monto en "Comprobante" */}
           {cajaChicaTieneMonto && (
             <tr className="rc-cajachica-row">
-              {isAdmin && <td />}{/* alinear columnas si hay Categoría */}
+              {isAdmin && <td />}{/* Categoría */}
               <td />{/* Descripción */}
               <td />{/* Cantidad */}
-              {/* No. de ref */}
               <td style={{ textAlign: 'left', fontWeight: 600 }}>
                 Caja chica usada
               </td>
-              {/* Comprobante (monto) */}
               <td style={{ textAlign: 'center', fontWeight: 700 }}>
                 {toMoney(cajaChicaUsada)}
               </td>
-              {/* Acciones */}
               <td style={{ textAlign: 'center' }}>
                 <div className="rc-inline-actions" style={{ display: 'inline-flex', gap: 8 }}>
                   <button
