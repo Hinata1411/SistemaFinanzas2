@@ -304,19 +304,25 @@ export default function HistorialCuadres() {
         </div>
       </div>
 
-      {/* TABLA NORMAL */}
-      <VentasTable
-        headers={HEADERS}
-        cuadres={cuadresOrdenados}          // ← usar ordenados en la tabla
-        sucursalesMap={sucursalesMap}
-        onVer={handleVer}
-        onEditar={handleEditar}
-        onDescargar={handleDescargarPDF}
-        onEliminar={handleEliminar}
-        canManage={canManage}
-        canDownload={canDownload}
-        isAdmin={isAdmin}
-      />
+      {/* Igual que HistorialPagos: si no hay registros, NO renderizar la tabla */}
+      <div className="ventas-tabla-wrap">
+        {cuadresOrdenados.length === 0 ? (
+          <div className="empty">Sin registros</div>
+        ) : (
+          <VentasTable
+            headers={HEADERS}
+            cuadres={cuadresOrdenados}
+            sucursalesMap={sucursalesMap}
+            onVer={handleVer}
+            onEditar={handleEditar}
+            onDescargar={handleDescargarPDF}
+            onEliminar={handleEliminar}
+            canManage={canManage}
+            canDownload={canDownload}
+            isAdmin={isAdmin}
+          />
+        )}
+      </div>
 
       {/* MODAL AGRUPADO */}
       {isAdmin && (

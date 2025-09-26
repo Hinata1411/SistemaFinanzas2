@@ -391,7 +391,7 @@ export default function Pagos() {
                             exportDepositosPdf(p, sucNom2, `Depositos_${sucNom2}_${p.fecha || ''}`);
                           }}
                         >
-                          Descargar depósitos
+                          Descargar
                         </button>
                       </div>
                     </td>
