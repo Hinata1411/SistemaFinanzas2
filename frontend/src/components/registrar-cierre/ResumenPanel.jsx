@@ -8,15 +8,11 @@ export default function ResumenPanel({
   cajaChicaUsada = 0,
   onPagarFaltante,
   faltantePagado = 0,
-
   pedidosYaCantidad = 0,
   amexTotal = 0,
   showPedidosYa = false,
   showAmex = false,
-
   totalAperturas = 0,
-
-  // 👇 nuevo
   isAdmin = false,
 }) {
   const {

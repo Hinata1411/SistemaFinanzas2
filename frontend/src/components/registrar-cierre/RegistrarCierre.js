@@ -101,6 +101,7 @@ const normalizeArqueo = (arr) => {
   });
 };
 
+
 const TABS = {
   ARQUEO: 'arqueo',
   CIERRE: 'cierre',
@@ -226,8 +227,6 @@ export default function RegistrarCierre() {
     setAmexTotal(0);
     // Nota: NO tocamos activeSucursalId para respetar la selección visible
   }, []);
-
-
 
   const [fecha, setFecha] = useState(todayISO());
 
@@ -393,6 +392,15 @@ export default function RegistrarCierre() {
   });
   const { faltanteEfectivo, faltantePorGastos } = totals;
 
+  // Monto sugerido = Total de gastos - Total de efectivo del Arqueo (neto)
+  const montoSugeridoCajaChica = useMemo(() => {
+    const tg  = Number(totals?.totalGastos) || 0;
+    const teN = Number(totals?.totalArqueoEfectivoNeto) || 0;
+    const val = tg - teN;
+    return val > 0 ? val : 0; // nunca negativo
+  }, [totals?.totalGastos, totals?.totalArqueoEfectivoNeto]);
+
+
 
   const setArq = (idx, field, value) => {
     if (isReadOnlyUI) return;
@@ -411,6 +419,10 @@ export default function RegistrarCierre() {
       return copy;
     });
   };
+
+  // Handlers para la fila "Caja chica usada"
+  const handleEditCajaChica = () => setShowCajaChica(true); // reabre el modal
+  const handleRemoveCajaChica = () => setCajaChicaUsada(0); // limpia el monto
 
   const addGasto = () => {
     if (isReadOnlyUI) return;
@@ -470,6 +482,7 @@ export default function RegistrarCierre() {
     const nuevoFaltantePagado = faltanteEfectivo;
     setFaltantePagado(nuevoFaltantePagado);
 
+    
     // 2) Si es un cuadre EXISTENTE, persistimos de una vez en Firestore
     if (isEditingExisting && editId) {
       try {
@@ -815,6 +828,9 @@ export default function RegistrarCierre() {
             faltantePorGastos={faltantePorGastos}
             readOnly={isReadOnlyUI}
             isAdmin={isAdmin} 
+            cajaChicaUsada={cajaChicaUsada}
+            onEditCajaChica={handleEditCajaChica}
+            onRemoveCajaChica={handleRemoveCajaChica}
           />
         </div>
       )}
@@ -954,12 +970,13 @@ export default function RegistrarCierre() {
           )}
         </>
       )}
-
+      
       <CajaChicaModal
         open={showCajaChica}
         onClose={() => setShowCajaChica(false)}
         cajaChicaDisponible={cajaChicaDisponibleUI}
         faltantePorGastos={faltantePorGastos}
+        montoSugerido={montoSugeridoCajaChica} 
         onApply={(monto) => { if (isViewing) return; setCajaChicaUsada((prev) => prev + monto); }}
       />
     </div>

@@ -22,6 +22,10 @@ export default function GastosList({
   faltantePorGastos,
   readOnly = false,
   isAdmin = false,
+
+  // Caja chica
+  cajaChicaUsada = 0,           // número en quetzales (0 si no hay)
+  onRemoveCajaChica = () => {}, // limpia/quita el uso de caja chica
 }) {
   const showCajaChicaBtn = !readOnly && Number(faltantePorGastos) > 0;
 
@@ -105,12 +109,15 @@ export default function GastosList({
     closeViewer();
   };
 
+  const cajaChicaTieneMonto = Number(cajaChicaUsada) > 0;
+
   return (
     <section className="rc-card">
       <div className="rc-card-hd">
         <h3 style={{ margin: 0 }}>Gastos</h3>
 
-        {showCajaChicaBtn && (
+        {/* Botón "Utilizar caja chica" solo si hay faltante y aún NO se usó */}
+        {showCajaChicaBtn && !cajaChicaTieneMonto && (
           <button
             type="button"
             className="rc-btn rc-btn-primary"
@@ -152,8 +159,8 @@ export default function GastosList({
 
           {gastos.map((g, i) => {
             const locked = !!g.locked;
-            const disabled = readOnly || locked;     // para inputs/edición
-            const canEdit = !readOnly && !locked;    // adjuntar/eliminar solo cuando se puede editar
+            const disabled = readOnly || locked;
+            const canEdit = !readOnly && !locked;
             const viewUrl = g.filePreview || g.fileUrl || g.fileURL || g.comprobanteUrl || '';
             const hasFile = !!viewUrl;
 
@@ -231,7 +238,7 @@ export default function GastosList({
                           })
                         }
                         title="Abrir comprobante"
-                        disabled={false} // se puede ver aunque esté locked
+                        disabled={false}
                       >
                         <img src={ICONS.view} alt="Ver" width={25} height={25} />
                       </button>
@@ -297,6 +304,36 @@ export default function GastosList({
             <td />
             <td />
           </tr>
+
+          {/* Fila que muestra Caja Chica usada: texto en "No. de ref" y monto en "Comprobante" */}
+          {cajaChicaTieneMonto && (
+            <tr className="rc-cajachica-row">
+              {isAdmin && <td />}{/* alinear columnas si hay Categoría */}
+              <td />{/* Descripción */}
+              <td />{/* Cantidad */}
+              {/* No. de ref */}
+              <td style={{ textAlign: 'left', fontWeight: 600 }}>
+                Caja chica usada
+              </td>
+              {/* Comprobante (monto) */}
+              <td style={{ textAlign: 'center', fontWeight: 700 }}>
+                {toMoney(cajaChicaUsada)}
+              </td>
+              {/* Acciones */}
+              <td style={{ textAlign: 'center' }}>
+                <div className="rc-inline-actions" style={{ display: 'inline-flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    className="rc-btn rc-btn-ghost"
+                    onClick={onRemoveCajaChica}
+                    title="Quitar caja chica"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </td>
+            </tr>
+          )}
         </tfoot>
       </table>
 

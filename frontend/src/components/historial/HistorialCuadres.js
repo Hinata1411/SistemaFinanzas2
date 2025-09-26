@@ -1,3 +1,4 @@
+// src/components/ventas/HistorialCuadres.jsx
 import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
@@ -36,6 +37,7 @@ const toMillis = (tsLike) => {
   const d = new Date(tsLike);
   return Number.isNaN(d.getTime()) ? 0 : d.getTime();
 };
+
 // Valor base del cuadre (prefiere totales.totalGeneral)
 const getKpiFromCuadre = (c) => {
   const raw = c?.totales?.totalGeneral;
@@ -47,8 +49,7 @@ const getKpiFromCuadre = (c) => {
 const getKpiFromPago = (p) =>
   Number(p?.sobranteParaManana ?? p?.kpiDepositosAtSave ?? 0);
 
-// Lee el doc MÁS RECIENTE entre pagos y cierres de una sucursal y fija el KPI.
-// Si no hay nada => 0.
+// Recalcula KPI sucursal usando el doc más reciente entre pagos/cierres
 const recomputeSucursalKPI = async (sucursalId) => {
   const candidatos = [];
 
@@ -139,7 +140,9 @@ export default function HistorialCuadres() {
   const canManage = isAdmin;    // Editar / Eliminar
   const canDownload = isAdmin;  // Descargar PDF (individual y agrupado)
 
+  // ⚠️ Si quieres empezar SIN filtro de fecha, usa: useState('')
   const [fechaFiltro, setFechaFiltro] = useState(getTodayLocalISO());
+  // const [fechaFiltro, setFechaFiltro] = useState('');
   const [sucursalFiltro, setSucursalFiltro] = useState('all');
 
   // Hook de cuadres (para viewer forzamos su sucursal asignada)
@@ -147,6 +150,19 @@ export default function HistorialCuadres() {
     fecha: fechaFiltro,
     sucursalId: isAdmin ? sucursalFiltro : (me.sucursalId || 'all'),
   });
+
+  // Lista ordenada: si NO hay fecha, ordena DESC por (createdAt|updatedAt|fecha)
+  const cuadresOrdenados = useMemo(() => {
+    if (!Array.isArray(cuadres)) return [];
+    if (!fechaFiltro) {
+      return [...cuadres].sort((a, b) => {
+        const ta = toMillis(a.createdAt || a.updatedAt || a.fecha);
+        const tb = toMillis(b.createdAt || b.updatedAt || b.fecha);
+        return tb - ta; // más reciente primero
+      });
+    }
+    return cuadres;
+  }, [cuadres, fechaFiltro]);
 
   // Sucursales visibles en filtro
   const uiSucursalesList = useMemo(() => {
@@ -169,46 +185,46 @@ export default function HistorialCuadres() {
     navigate(`/Finanzas/RegistrarCierre?id=${c.id}&mode=edit`);
   };
 
-  //Eliminar registro
-    const handleEliminar = async (id) => {
-      if (!canManage) {
-        Swal.fire('Solo lectura', 'No tienes permisos para eliminar.', 'info');
+  // Eliminar registro
+  const handleEliminar = async (id) => {
+    if (!canManage) {
+      Swal.fire('Solo lectura', 'No tienes permisos para eliminar.', 'info');
+      return;
+    }
+
+    const confirmar = await Swal.fire({
+      title:'¿Eliminar registro?',
+      text:'Esta acción no se puede deshacer.',
+      icon:'warning',
+      showCancelButton:true
+    });
+    if (!confirmar.isConfirmed) return;
+
+    try {
+      // 1) Lee el cuadre para saber sucursal
+      const cierreRef = doc(db, 'cierres', id);
+      const cierreSnap = await getDoc(cierreRef);
+      if (!cierreSnap.exists()) {
+        await Swal.fire('No encontrado', 'El cuadre ya no existe.', 'info');
         return;
       }
+      const cierre = cierreSnap.data() || {};
+      const sucursalId = cierre.sucursalId;
 
-      const confirmar = await Swal.fire({
-        title:'¿Eliminar registro?',
-        text:'Esta acción no se puede deshacer.',
-        icon:'warning',
-        showCancelButton:true
-      });
-      if (!confirmar.isConfirmed) return;
+      // 2) Borra y recalcula KPI
+      const batch = writeBatch(db);
+      batch.delete(cierreRef);
+      await batch.commit();
 
-      try {
-        // 1) Lee el cuadre para saber sucursal
-        const cierreRef = doc(db, 'cierres', id);
-        const cierreSnap = await getDoc(cierreRef);
-        if (!cierreSnap.exists()) {
-          await Swal.fire('No encontrado', 'El cuadre ya no existe.', 'info');
-          return;
-        }
-        const cierre = cierreSnap.data() || {};
-        const sucursalId = cierre.sucursalId;
+      await recomputeSucursalKPI(sucursalId);
 
-        // 2) Borra y luego recalcula KPI
-        const batch = writeBatch(db);
-        batch.delete(cierreRef);
-        await batch.commit();
-
-        await recomputeSucursalKPI(sucursalId);
-
-        await Swal.fire('Eliminado', 'El registro ha sido eliminado.', 'success');
-        await refetch();
-      } catch (e) {
-        console.error(e);
-        Swal.fire('Error', e?.message || 'No se pudo eliminar.', 'error');
-      }
-    };
+      await Swal.fire('Eliminado', 'El registro ha sido eliminado.', 'success');
+      await refetch();
+    } catch (e) {
+      console.error(e);
+      Swal.fire('Error', e?.message || 'No se pudo eliminar.', 'error');
+    }
+  };
 
   // PDFs
   const handleDescargarPDF = (c) => {
@@ -248,7 +264,7 @@ export default function HistorialCuadres() {
             <button
               className="btn btn-primary"
               onClick={() => {
-                setSelectedIds(cuadres.map(c=>c.id));
+                setSelectedIds(cuadresOrdenados.map(c => c.id)); // ← usar ordenados
                 setShowGroup(true);
               }}
             >
@@ -259,9 +275,14 @@ export default function HistorialCuadres() {
       </header>
 
       <div className="ventas-filtros">
-         <div className="filtro">
+        <div className="filtro">
           <label>Fecha:</label>
-          <input type="date" value={fechaFiltro} onChange={(e)=> setFechaFiltro(e.target.value)} />
+          <input
+            type="date"
+            value={fechaFiltro}
+            onChange={(e)=> setFechaFiltro(e.target.value)}
+            placeholder="(sin filtro)"
+          />
         </div>
         <div className="filtro">
           <label>Sucursal:</label>
@@ -281,12 +302,12 @@ export default function HistorialCuadres() {
             </select>
           )}
         </div>
-       
       </div>
 
+      {/* TABLA NORMAL */}
       <VentasTable
-        headers={HEADERS}              // ★ pasamos tus categorías
-        cuadres={cuadres}
+        headers={HEADERS}
+        cuadres={cuadresOrdenados}          // ← usar ordenados en la tabla
         sucursalesMap={sucursalesMap}
         onVer={handleVer}
         onEditar={handleEditar}
@@ -297,21 +318,24 @@ export default function HistorialCuadres() {
         isAdmin={isAdmin}
       />
 
+      {/* MODAL AGRUPADO */}
       {isAdmin && (
         <GroupDownloadModal
           visible={showGroup}
-          cuadres={cuadres}
+          cuadres={cuadresOrdenados} // ← usar ordenados también en el modal
           sucursalesMap={sucursalesMap}
           selectedIds={selectedIds}
           onToggleAll={() =>
-            setSelectedIds(selectedIds.length === cuadres.length ? [] : cuadres.map(c=>c.id))
+            setSelectedIds(
+              selectedIds.length === cuadresOrdenados.length ? [] : cuadresOrdenados.map(c => c.id)
+            )
           }
           onToggleOne={(id) =>
             setSelectedIds((prev)=> prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id])
           }
           onCancel={()=> setShowGroup(false)}
           onDownload={() => {
-            const docs = cuadres.filter(c => selectedIds.includes(c.id));
+            const docs = cuadresOrdenados.filter(c => selectedIds.includes(c.id));
             if (!docs.length) return Swal.fire('Selecciona al menos un registro','','warning');
             const nombre = `Cuadre-${fechaFiltro || 'todas'}`;
             exportGroupedPdf(docs, sucursalesMap, nombre, formatDate);
