@@ -124,11 +124,7 @@ export default function GastosList({
   const totalGastos = (gastos || []).reduce((sum, g) => sum + n(g.cantidad), 0);
   const colCount = isAdmin ? 6 : 5;
 
-  const handleModalChange = () => {
-    if (readOnly) return;
-    if (viewer.rowIndex < 0) return;
-    handlePickFile(viewer.rowIndex);
-  };
+ 
   const handleModalRemove = () => {
     if (readOnly) return;
     if (viewer.rowIndex < 0) return;
