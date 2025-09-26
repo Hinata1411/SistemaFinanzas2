@@ -384,15 +384,24 @@ export default function GastosList({
         </div>
       )}
 
-      <AttachmentViewerModal
-        open={viewer.open}
-        url={viewer.url}
-        mime={viewer.mime}
-        name={viewer.name}
-        onClose={closeViewer}
-        onChangeFile={handleModalChange}
-        onRemoveFile={handleModalRemove}
-      />
+     <AttachmentViewerModal
+      open={viewer.open}
+      url={viewer.url}
+      mime={viewer.mime}
+      name={viewer.name}
+      onClose={closeViewer}
+      onChangeFile={() => handlePickFile(viewer.rowIndex)} // desktop
+      onRemoveFile={handleModalRemove}
+      isMobile={/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)}
+      onPick={(mode) => {
+        const idx = viewer.rowIndex;
+        const inputId = mode === 'camera'
+          ? `gasto-file-camera-${idx}`
+          : `gasto-file-gallery-${idx}`;
+        document.getElementById(inputId)?.click();
+      }}
+    />
+
     </section>
   );
 }
