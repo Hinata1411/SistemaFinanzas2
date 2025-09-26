@@ -113,7 +113,7 @@ export default function GastosList({
         {showCajaChicaBtn && (
           <button
             type="button"
-            className="rc-btn rc-btn-outline"
+            className="rc-btn rc-btn-primary"
             onClick={onUseCajaChica}
             title={`Disponible en ${activeSucursalNombre || 'sucursal'}: ${toMoney(cajaChicaDisponible)}`}
           >

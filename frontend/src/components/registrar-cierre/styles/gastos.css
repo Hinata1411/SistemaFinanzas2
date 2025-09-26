@@ -31,6 +31,7 @@
   padding: 10px 12px;
 }
 
+
 /* Tamaño fijo del ícono a 25px (por si no pones width/height inline) */
 .rc-iconbtn img {
   width: 25px !important;
@@ -117,6 +118,17 @@
     padding-top:12px;
     padding-bottom:12px;
   }
+
+  .rc-btn-primary {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  width: 65%;
+  margin-left: auto; 
+  margin-top: 15px;
+}
+
 
   /* Footer como bloque */
   .rc-gastos-table tfoot,
