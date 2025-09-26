@@ -1,5 +1,5 @@
 // src/components/registrar-cierre/AttachmentViewerModal.jsx
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 
 export default function AttachmentViewerModal({
   open,
@@ -7,9 +7,16 @@ export default function AttachmentViewerModal({
   mime,
   name,
   onClose,
-  onChangeFile,   // <- callback para "Cambiar"
-  onRemoveFile,   // <- callback para "Quitar"
+  onChangeFile,   // Desktop/fallback: abrir file picker normal
+  onRemoveFile,   // Quitar archivo
+  // Opcionales para móvil:
+  isMobile = false,
+  // onPick('camera' | 'gallery') -> tú disparas el input correcto en la fila
+  onPick = null,
 }) {
+  const [showPicker, setShowPicker] = useState(false);
+  const cardRef = useRef(null);
+
   // Bloquear scroll del fondo
   useEffect(() => {
     if (!open) return;
@@ -28,7 +35,7 @@ export default function AttachmentViewerModal({
 
   if (!open) return null;
 
-  // En tu flujo solo subes imágenes; mantenemos este check por seguridad
+  // Imagen?
   const isImage =
     (mime && mime.startsWith('image/')) ||
     /\.(png|jpe?g|webp|gif)(\?|$)/i.test(url || '');
@@ -38,7 +45,7 @@ export default function AttachmentViewerModal({
       className="rc-modal-mask"
       role="dialog"
       aria-modal="true"
-      onClick={onClose}
+      onClick={() => { setShowPicker(false); onClose?.(); }}
       style={{
         position: 'fixed',
         inset: 0,
@@ -50,6 +57,7 @@ export default function AttachmentViewerModal({
       }}
     >
       <div
+        ref={cardRef}
         className="rc-modal-card rc-viewer-card"
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -61,9 +69,10 @@ export default function AttachmentViewerModal({
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '0 8px 28px rgba(0,0,0,.22)',
+          position: 'relative',
         }}
       >
-        {/* Header (ahora con Cambiar/Quitar/Cerrar) */}
+        {/* Header */}
         <div
           className="rc-modal-hd"
           style={{
@@ -89,43 +98,92 @@ export default function AttachmentViewerModal({
           </h4>
 
           <div className="rc-modal-actions" style={{ display: 'flex', gap: 8 }}>
+            {/* Cambiar */}
             {onChangeFile && (
               <button
                 type="button"
                 className="rc-btn rc-btn-outline"
-                onClick={onChangeFile}
+                onClick={() => {
+                  if (isMobile && typeof onPick === 'function') {
+                    // En móvil abrimos el menú inline (arriba de la imagen)
+                    setShowPicker((s) => !s);
+                  } else {
+                    // Desktop = comportamiento actual
+                    onChangeFile();
+                  }
+                }}
               >
                 Cambiar
               </button>
             )}
+
+            {/* Quitar */}
             {onRemoveFile && (
               <button
                 type="button"
                 className="rc-btn rc-btn-ghost"
-                onClick={onRemoveFile}
+                onClick={() => { setShowPicker(false); onRemoveFile(); }}
                 title="Quitar archivo"
               >
                 Quitar
               </button>
             )}
-            <button className="rc-btn rc-btn-primary" onClick={onClose}>
+
+            {/* Cerrar */}
+            <button className="rc-btn rc-btn-primary" onClick={() => { setShowPicker(false); onClose?.(); }}>
               Cerrar
             </button>
           </div>
         </div>
 
-        {/* Contenido: imagen contenida, con scroll dentro del modal */}
+        {/* Action sheet inline (solo si móvil) */}
+        {isMobile && typeof onPick === 'function' && showPicker && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 48,            // debajo del header
+              right: 12,
+              zIndex: 5,
+              background: '#fff',
+              border: '1px solid #e5e7eb',
+              borderRadius: 12,
+              boxShadow: '0 8px 24px rgba(0,0,0,.12)',
+              padding: 8,
+              display: 'grid',
+              gap: 6,
+              minWidth: 190,
+            }}
+          >
+            <button
+              className="rc-btn rc-btn-outline"
+              type="button"
+              onClick={() => { setShowPicker(false); onPick('camera'); }}
+            >
+              Tomar foto
+            </button>
+            <button
+              className="rc-btn rc-btn-outline"
+              type="button"
+              onClick={() => { setShowPicker(false); onPick('gallery'); }}
+            >
+              Elegir de galería
+            </button>
+          </div>
+        )}
+
+        {/* Contenido */}
         <div
           className="rc-viewer-body"
           style={{
             flex: '1 1 auto',
-            minHeight: 0,          // <- permite que el contenedor calcule alto correctamente
-            overflow: 'auto',      // <- scroll interno si la imagen desborda
+            minHeight: 0,
+            overflow: 'auto',
             background: '#0b0b0b',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}
+          onScroll={() => showPicker && setShowPicker(false)}
         >
           {isImage ? (
             <img
@@ -137,9 +195,10 @@ export default function AttachmentViewerModal({
                 maxHeight: '100%',
                 width: 'auto',
                 height: 'auto',
-                objectFit: 'contain', // se ajusta sin salirse del modal
+                objectFit: 'contain',
                 display: 'block',
               }}
+              onClick={() => showPicker && setShowPicker(false)}
             />
           ) : (
             <div className="rc-empty" style={{ color: '#fff', padding: 24 }}>
