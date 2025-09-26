@@ -74,7 +74,7 @@ export default function AttachmentViewerModal({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 9999,
+        zIndex: 20000,
       }}
     >
       <div
