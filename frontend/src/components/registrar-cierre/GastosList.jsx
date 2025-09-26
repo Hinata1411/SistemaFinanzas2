@@ -10,11 +10,6 @@ const ICONS = {
   view: '/img/img.png',
 };
 
-// Detección simple de móvil
-const isMobileUA = () =>
-  typeof navigator !== 'undefined' &&
-  /Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent);
-
 export default function GastosList({
   gastos,
   categorias = [],
@@ -57,48 +52,21 @@ export default function GastosList({
     }
   };
 
-  // Abrir selector (cámara o galería en móvil; galería en desktop)
-  const handlePickFile = async (i) => {
+  // ✅ Siempre abrir el selector nativo (Fototeca / Tomar foto / Seleccionar archivo)
+  const handlePickFile = (i) => {
     if (readOnly) return;
-
-    if (isMobileUA()) {
-      const res = await Swal.fire({
-        title: 'Agregar imagen',
-        text: 'Elige una opción',
-        showCancelButton: true,
-        cancelButtonText: 'Cancelar',
-        confirmButtonText: 'Elegir de galería',
-        showDenyButton: true,
-        denyButtonText: 'Tomar foto',
-        reverseButtons: true,
-      });
-
-      if (res.isDismissed) return;
-      // Deny = Tomar foto (cámara), Confirm = Galería
-      if (res.isDenied) {
-        document.getElementById(`gasto-file-camera-${i}`)?.click();
-      } else if (res.isConfirmed) {
-        document.getElementById(`gasto-file-gallery-${i}`)?.click();
-      }
-    } else {
-      // Desktop: ir directo a galería/selector de archivos
-      document.getElementById(`gasto-file-gallery-${i}`)?.click();
-    }
+    document.getElementById(`gasto-file-${i}`)?.click();
   };
 
-  const handleFileChange = (i, e) => {
-    if (readOnly) return;
-    const file = e.target?.files?.[0];
-    if (!file) return;
+  const applySelectedFile = (i, file) => {
+    if (readOnly || !file) return;
 
     if (!file.type?.startsWith('image/')) {
       Swal.fire('Formato no permitido', 'Selecciona una imagen.', 'warning');
-      e.target.value = '';
       return;
     }
     if (file.size > 8 * 1024 * 1024) {
       Swal.fire('Archivo muy grande', 'Máximo permitido: 8MB', 'warning');
-      e.target.value = '';
       return;
     }
 
@@ -109,8 +77,15 @@ export default function GastosList({
     setGasto(i, 'fileName', file.name || '');
     setGasto(i, 'fileUrl', '');
 
-    // Si el visor está abierto sobre esa fila, actualizarlo
+    // Si el visor está abierto sobre esa fila, refrescarlo
     setViewer((v) => (v.open && v.rowIndex === i ? { ...v, url: preview, mime: file.type, name: file.name } : v));
+  };
+
+  const handleFileChange = (i, e) => {
+    const file = e.target?.files?.[0];
+    applySelectedFile(i, file);
+    // limpiar el value para poder volver a elegir el mismo archivo si hace falta
+    e.target.value = '';
   };
 
   const clearFile = (i) => {
@@ -124,7 +99,6 @@ export default function GastosList({
   const totalGastos = (gastos || []).reduce((sum, g) => sum + n(g.cantidad), 0);
   const colCount = isAdmin ? 6 : 5;
 
- 
   const handleModalRemove = () => {
     if (readOnly) return;
     if (viewer.rowIndex < 0) return;
@@ -260,7 +234,6 @@ export default function GastosList({
                           })
                         }
                         title="Abrir comprobante"
-                        disabled={false}
                       >
                         <img src={ICONS.view} alt="Ver" width={25} height={25} />
                       </button>
@@ -277,19 +250,9 @@ export default function GastosList({
                       )
                     )}
 
-                    {/* Inputs ocultos:
-                        - cámara (móvil) -> capture="environment"
-                        - galería (móvil/desktop) */}
+                    {/* ✅ Un solo input por fila. iOS/Android muestran Fototeca/Tomar foto/etc. */}
                     <input
-                      id={`gasto-file-camera-${i}`}
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={(e) => handleFileChange(i, e)}
-                      style={{ display: 'none' }}
-                    />
-                    <input
-                      id={`gasto-file-gallery-${i}`}
+                      id={`gasto-file-${i}`}
                       type="file"
                       accept="image/*"
                       onChange={(e) => handleFileChange(i, e)}
@@ -339,12 +302,12 @@ export default function GastosList({
             <td />
           </tr>
 
-          {/* Fila Caja Chica usada: texto en "No. de ref" y monto en "Comprobante" */}
+          {/* Caja Chica: texto en "No. de ref" y monto en "Comprobante" */}
           {cajaChicaTieneMonto && (
             <tr className="rc-cajachica-row">
-              {isAdmin && <td />}{/* Categoría */}
-              <td />{/* Descripción */}
-              <td />{/* Cantidad */}
+              {isAdmin && <td />}
+              <td />
+              <td />
               <td style={{ textAlign: 'left', fontWeight: 600 }}>
                 Caja chica usada
               </td>
@@ -380,24 +343,29 @@ export default function GastosList({
         </div>
       )}
 
-     <AttachmentViewerModal
-      open={viewer.open}
-      url={viewer.url}
-      mime={viewer.mime}
-      name={viewer.name}
-      onClose={closeViewer}
-      onChangeFile={() => handlePickFile(viewer.rowIndex)} // desktop
-      onRemoveFile={handleModalRemove}
-      isMobile={/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)}
-      onPick={(mode) => {
-        const idx = viewer.rowIndex;
-        const inputId = mode === 'camera'
-          ? `gasto-file-camera-${idx}`
-          : `gasto-file-gallery-${idx}`;
-        document.getElementById(inputId)?.click();
-      }}
-    />
-
+      {/* Visor: el botón "Cambiar" abre un input DENTRO del modal y
+          nos devuelve el File para esta fila */}
+      <AttachmentViewerModal
+        open={viewer.open}
+        url={viewer.url}
+        mime={viewer.mime}
+        name={viewer.name}
+        onClose={closeViewer}
+        onRemoveFile={handleModalRemove}
+        onFileSelected={(file) => {
+          // aplica el archivo a la fila actual sin cerrar el visor
+          if (viewer.rowIndex < 0 || !file) return;
+          const i = viewer.rowIndex;
+          const preview = URL.createObjectURL(file);
+          setGasto(i, 'fileBlob', file);
+          setGasto(i, 'filePreview', preview);
+          setGasto(i, 'fileMime', file.type || '');
+          setGasto(i, 'fileName', file.name || '');
+          setGasto(i, 'fileUrl', '');
+          // refresca imagen mostrada
+          setViewer((v) => ({ ...v, url: preview, mime: file.type, name: file.name }));
+        }}
+      />
     </section>
   );
 }
