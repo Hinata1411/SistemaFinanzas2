@@ -1,5 +1,6 @@
 // src/components/registrar-cierre/AttachmentViewerModal.jsx
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 export default function AttachmentViewerModal({
   open,
@@ -7,12 +8,10 @@ export default function AttachmentViewerModal({
   mime,
   name,
   onClose,
-  onChangeFile,   // Desktop/fallback: abrir file picker normal
-  onRemoveFile,   // Quitar archivo
-  // Opcionales para móvil:
-  isMobile = false,
-  // onPick('camera' | 'gallery') -> tú disparas el input correcto en la fila
-  onPick = null,
+  onChangeFile,          // desktop/fallback
+  onRemoveFile,
+  isMobile = false,      // <-- pásalo desde la tabla
+  onPick = null,         // <-- onPick('camera'|'gallery')
 }) {
   const [showPicker, setShowPicker] = useState(false);
   const cardRef = useRef(null);
@@ -20,9 +19,9 @@ export default function AttachmentViewerModal({
   // Bloquear scroll del fondo
   useEffect(() => {
     if (!open) return;
-    const original = document.body.style.overflow;
+    const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = original; };
+    return () => { document.body.style.overflow = prev; };
   }, [open]);
 
   // Cerrar con Esc
@@ -35,10 +34,64 @@ export default function AttachmentViewerModal({
 
   if (!open) return null;
 
-  // Imagen?
   const isImage =
     (mime && mime.startsWith('image/')) ||
     /\.(png|jpe?g|webp|gif)(\?|$)/i.test(url || '');
+
+  // Posicionar el “action sheet” arriba de la imagen: usamos portal + fixed
+  const ActionSheet = showPicker && isMobile && typeof onPick === 'function'
+    ? createPortal(
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 10001,                 // por encima del modal
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'flex-start',
+            paddingTop: 72,                // “arriba” de la imagen
+            background: 'rgba(0,0,0,0.12)',// tenue para resaltar
+          }}
+        >
+          <div
+            style={{
+              background: '#fff',
+              border: '1px solid #e5e7eb',
+              borderRadius: 14,
+              boxShadow: '0 10px 28px rgba(0,0,0,.18)',
+              padding: 10,
+              width: 280,
+              display: 'grid',
+              gap: 8,
+            }}
+          >
+            <button
+              className="rc-btn rc-btn-outline"
+              type="button"
+              onClick={() => { setShowPicker(false); onPick('camera'); }}
+            >
+              Tomar foto
+            </button>
+            <button
+              className="rc-btn rc-btn-outline"
+              type="button"
+              onClick={() => { setShowPicker(false); onPick('gallery'); }}
+            >
+              Elegir de galería
+            </button>
+            <button
+              className="rc-btn rc-btn-ghost"
+              type="button"
+              onClick={() => setShowPicker(false)}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>,
+        document.body
+      )
+    : null;
 
   return (
     <div
@@ -53,7 +106,7 @@ export default function AttachmentViewerModal({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 9999,
+        zIndex: 10000,
       }}
     >
       <div
@@ -98,26 +151,21 @@ export default function AttachmentViewerModal({
           </h4>
 
           <div className="rc-modal-actions" style={{ display: 'flex', gap: 8 }}>
-            {/* Cambiar */}
             {onChangeFile && (
               <button
                 type="button"
                 className="rc-btn rc-btn-outline"
                 onClick={() => {
                   if (isMobile && typeof onPick === 'function') {
-                    // En móvil abrimos el menú inline (arriba de la imagen)
-                    setShowPicker((s) => !s);
+                    setShowPicker(true);     // ← muestra menu encima (portal)
                   } else {
-                    // Desktop = comportamiento actual
-                    onChangeFile();
+                    onChangeFile();          // desktop/fallback
                   }
                 }}
               >
                 Cambiar
               </button>
             )}
-
-            {/* Quitar */}
             {onRemoveFile && (
               <button
                 type="button"
@@ -128,48 +176,11 @@ export default function AttachmentViewerModal({
                 Quitar
               </button>
             )}
-
-            {/* Cerrar */}
             <button className="rc-btn rc-btn-primary" onClick={() => { setShowPicker(false); onClose?.(); }}>
               Cerrar
             </button>
           </div>
         </div>
-
-        {/* Action sheet inline (solo si móvil) */}
-        {isMobile && typeof onPick === 'function' && showPicker && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 48,            // debajo del header
-              right: 12,
-              zIndex: 5,
-              background: '#fff',
-              border: '1px solid #e5e7eb',
-              borderRadius: 12,
-              boxShadow: '0 8px 24px rgba(0,0,0,.12)',
-              padding: 8,
-              display: 'grid',
-              gap: 6,
-              minWidth: 190,
-            }}
-          >
-            <button
-              className="rc-btn rc-btn-outline"
-              type="button"
-              onClick={() => { setShowPicker(false); onPick('camera'); }}
-            >
-              Tomar foto
-            </button>
-            <button
-              className="rc-btn rc-btn-outline"
-              type="button"
-              onClick={() => { setShowPicker(false); onPick('gallery'); }}
-            >
-              Elegir de galería
-            </button>
-          </div>
-        )}
 
         {/* Contenido */}
         <div
@@ -207,6 +218,9 @@ export default function AttachmentViewerModal({
           )}
         </div>
       </div>
+
+      {/* Portal con el menú flotante */}
+      {ActionSheet}
     </div>
   );
 }
